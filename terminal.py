@@ -75,9 +75,10 @@ class MudTerminal:
 
     def writeline(self, line: str):
         """向终端中写入一行。与write的区别为，在line数据写入完毕后，会自动加入换行符。换行符由实例化类时的newline参数指定"""
+        #self.write("\x1b[s\x1b[1A")
         self.write(line)
-        self.write(self.clear_style)
         self.write(self.newline)
+        #self.write("\x1b[1B\x1b[u")
 
     def writelines(self, lines, newline_in_lines = False):
         """向终端中写入多行。多行内容由lines指定。newline_in_lines指定在lines的每一行结尾是否带有换行符"""
