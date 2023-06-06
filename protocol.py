@@ -667,9 +667,16 @@ class MudClientProtocol(Protocol):
         space_split = gmcp_data.find(" ")
         name = gmcp_data[:space_split]
         value_str = gmcp_data[space_split+1:]
-        value = eval(value_str)
+        
+        try:
+            value = eval(value_str)
+        except:
+            value = value_str
+
         self.gmcp.update({name: value})
         self.log.debug(f'收到GMCP子协商数据: {value} = {value}')
+        if isinstance(self.reader, MudStreamReader):
+            self.reader.feed_gmcp(name, value)
 
     def handle_msdp(self, cmd):
         """

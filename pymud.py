@@ -17,7 +17,7 @@ class PyMud:
     __appname__   = "PYMUD"
     __appdesc__   = "a MUD client written in Python"
     __version__   = "0.04b"
-    __release__   = "2023-5-29"
+    __release__   = "2023-6-04"
     __author__    = "北侠玩家 本牛(newstart)"
     __email__     = "crapex@crapex.cc"
 
@@ -37,9 +37,21 @@ class PyMud:
         "info",         # 输出蓝色info
         "warning",      # 输出黄色warning
         "error",        # 输出红色error
+        "gmcp",         # GMCP协议信息
+        "num",          # 重复多次指令
+        "repeat",       # 重复上一行输入的指令
     )
 
-    def __init__(self, terminal_factory = ConsoleTerminal, encoding = "utf-8", encoding_errors = "ignore", loop = None) -> None:
+    _commands_alias = {
+        "ali" : "alias",
+        "cmd" : "command",
+        "tm"  : "timer",
+        "tri" : "trigger",
+        "var" : "variable",
+        "rep" : "repeat",
+    }
+
+    def __init__(self, terminal_factory = ConsoleTerminal, encoding = "utf-8", encoding_errors = "ignore", loop = None, logdata = False, uiconsole = False) -> None:
         self.log = logging.getLogger("pymud.PyMud")         # 此模块的logger
         self.server_encoding = encoding                     # 服务器端编码字符集为 UTF8
         self.local_encoding = "utf-8"                       # 本地编码字符集为 UTF-8
@@ -47,6 +59,12 @@ class PyMud:
         
         self.loop = loop if isinstance(loop, asyncio.AbstractEventLoop) else asyncio.get_event_loop()
         
+        # 增加logdata标记，保存全部服务端数据，用于后续MXP和VT100学习处理
+        self.logdata = logdata
+        if self.logdata:
+            self.rawlogger = logging.getLogger("LOGDATA_RAW")
+            self.plainlogger = logging.getLogger("LOGDATA_PLAIN")
+
         self.newline = "\n"
         
         # 默认绑定的终端
@@ -70,6 +88,8 @@ class PyMud:
 
     def activate_session(self, session: Session):
         "激活指定session，并将该session设置为当前session"
+        if self.current_session:
+            self.current_session.deactivate()
         self.current_session = session.activate()
    
     def remove_session(self, session: Session):
@@ -80,6 +100,7 @@ class PyMud:
         if len(self._sessions.keys()) > 0:
             if self.current_session == session:
                 self.current_session = self._sessions.get(next(iter(self._sessions)))
+                self.current_session.activate()
         else:
             self.current_session = None
 
@@ -90,6 +111,7 @@ class PyMud:
         "      当不指定编码格式时, 默认使用utf-8编码 \n" \
         "      如， #session newstart mud.pkuxkx.net 8081 \n" \
         "      当不指定参数时，列出所有可用的会话 \n" \
+        "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
         "\x1b[1m相关\x1b[0m: help, exit"
 
         nothandle = True
@@ -136,6 +158,7 @@ class PyMud:
                                   self.terminal.getheight()
                                   )
                 self._sessions[session_name] = session
+                self.activate_session(session)
                 nothandle = False
             else:
                 self.terminal.writeline(f"已存在一个名为{session_name}的session，请更换名称再试.")
@@ -152,7 +175,10 @@ class PyMud:
             self._print_all_help()
         elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
             topic = args[0]
-            if topic in PyMud._commands:
+            if topic in PyMud._commands_alias.keys():
+                command = PyMud._commands_alias[topic]
+                docstring = self._cmds_handler[command].__doc__
+            elif topic in PyMud._commands:
                 docstring = self._cmds_handler[topic].__doc__
             else:
                 docstring = f"未找到主题{topic}, 请确认输入是否正确."
@@ -165,7 +191,7 @@ class PyMud:
         "\x1b[1m相关\x1b[0m: session"
     
     def handle_variable(self, *args):
-        "\x1b[1m命令\x1b[0m: #variable\n" \
+        "\x1b[1m命令\x1b[0m: #variable|#var\n" \
         "      列出当前会话中所有的变量清单\n" \
         "\x1b[1m相关\x1b[0m: alias, trigger, command"
 
@@ -252,7 +278,7 @@ class PyMud:
                 self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
 
     def handle_alias(self, *args):
-        "\x1b[1m命令\x1b[0m: #alias\n" \
+        "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
         "      不指定参数时, 列出当前会话中所有的别名清单\n" \
         "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
         "      为一个参数时, 第一个参数应为Alias的id, 第二个应为on/off, 可修改Alias的使能状态\n" \
@@ -264,7 +290,7 @@ class PyMud:
             self.info(self.MSG_NO_SESSION)
 
     def handle_timer(self, *args):
-        "\x1b[1m命令\x1b[0m: #timer\n" \
+        "\x1b[1m命令\x1b[0m: #timer|#tmr\n" \
         "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
         "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
         "      为一个参数时, 第一个参数应为Timer的id, 第二个应为on/off, 可修改Timer的使能状态\n" \
@@ -276,7 +302,7 @@ class PyMud:
             self.warning(self.MSG_NO_SESSION)
 
     def handle_command(self, *args):
-        "\x1b[1m命令\x1b[0m: #command\n" \
+        "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
         "      不指定参数时, 列出当前会话中所有的命令清单\n" \
         "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
         "      为一个参数时, 第一个参数应为Command的id, 第二个应为on/off, 可修改Command的使能状态\n" \
@@ -288,7 +314,7 @@ class PyMud:
             self.info(self.MSG_NO_SESSION)
 
     def handle_trigger(self, *args):
-        "\x1b[1m命令\x1b[0m: #trigger\n" \
+        "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
         "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
         "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
         "      为一个参数时, 第一个参数应为Trigger的id, 第二个应为on/off, 可修改Trigger的使能状态\n" \
@@ -296,6 +322,57 @@ class PyMud:
                 
         if self.current_session:
             self._handle_objs("Trigger", self.current_session._triggers, *args)
+        else:
+            self.info(self.MSG_NO_SESSION)
+
+    def handle_repeat(self, *args):
+        "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
+        "      重复向session输出上一次人工输入的命令 \n" \
+        "\x1b[1m相关\x1b[0m: num"
+
+        if self.current_session:
+            if hasattr(self.current_session, "last_command"):
+                self.current_session.exec_command(self.current_session.last_command)
+            else:
+                self.info("当前会话没有键入过指令，repeat无效")
+        else:
+            self.info(self.MSG_NO_SESSION)
+
+    def handle_num(self, times, *args):
+        "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
+        "      向session中输出{num}次{cmd} \n" \
+        "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
+        "\x1b[1m相关\x1b[0m: repeat"
+        if self.current_session:
+            if len(args) > 0:
+                cmd = " ".join(args)
+                for i in range(0, times):
+                    self.current_session.exec_command(cmd)
+        else:
+            self.info(self.MSG_NO_SESSION)
+
+    def handle_gmcp(self, *args):
+        "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
+        "      指定key时，显示由GMCP收到的key信息\n" \
+        "      不指定key时，显示所有GMCP收到的信息\n" \
+        "\x1b[1m相关\x1b[0m: 暂无"
+
+        if self.current_session:
+            #self.info("这个功能还没写好...")
+            gmcp = self.current_session.listgmcp()
+            #self._handle_objs("GMCP", gmcp, *args)
+            width = self.terminal.getwidth()
+            
+            title = f"  GMCP VALUES LIST IN SESSION {self.current_session.name}  "
+            left = (width - len(title)) // 2
+            right = width - len(title) - left
+            self.terminal.writeline("="*left + title + "="*right)
+   
+            # print vars in complex, 每个变量占1行
+            for k, v in gmcp.items():
+                self.terminal.writeline("  {0:>28} = {1}".format(k, v.__repr__()))
+
+            self.terminal.writeline("="*width)
         else:
             self.info(self.MSG_NO_SESSION)
 
@@ -369,14 +446,19 @@ class PyMud:
     def _print_all_help(self):
         """打印所有可用的help主题, 并根据终端尺寸进行排版"""
         width = self.terminal.getwidth()
-        cmd_count = len(self._commands)
-        left = (width - 9) // 2
-        right = width - 9 - left
-        self.terminal.writeline("#"*left + "  #HELP  " + "#"*right)
+        cmds = []
+        cmds.extend(self._commands)
+        cmds.extend(self._commands_alias.keys())
+        cmds.sort()
+
+        cmd_count = len(cmds)
+        left = (width - 8) // 2
+        right = width - 8 - left
+        self.terminal.writeline("#"*left + "  HELP  " + "#"*right)
         cmd_per_line = (width - 2) // 20
         lines = math.ceil(cmd_count / cmd_per_line)
         left_space = (width - cmd_per_line * 20) // 2
-        cmds = sorted(self._commands)
+
         for idx in range(0, lines):
             start = idx * cmd_per_line
             end   = (idx + 1) * cmd_per_line
@@ -384,7 +466,10 @@ class PyMud:
             line_cmds = cmds[start:end]
             self.terminal.write(" " * left_space)
             for cmd in line_cmds:
-                self.terminal.write(f"{cmd.upper():<20}")
+                if cmd in self._commands:
+                    self.terminal.write(f"{cmd.upper():<20}")
+                else:
+                    self.terminal.write(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
 
             self.terminal.writeline("")
 
@@ -399,14 +484,42 @@ class PyMud:
             elif len(cmd_line) > 0: 
                 if cmd_line[0] == "#":
                     cmd_line = cmd_line[1:]
-                    cmd_tuple = cmd_line.split()
-                    handler = self._cmds_handler.get(cmd_tuple[0], None)
-                    if handler and callable(handler):
-                        handler(*cmd_tuple[1:])
+
+                    if cmd_line in self._sessions.keys():
+                        self.info(f"当前会话切换为: {cmd_line}")
+                        self.activate_session(self._sessions[cmd_line])
                     else:
-                        self.info("未识别的命令: %s" % cmd_line)
+                        cmd_tuple = cmd_line.split()
+                        cmd = cmd_tuple[0]
+
+                        if cmd.isnumeric():
+                            times = 0
+                            try:
+                                times = int(cmd)
+                            except ValueError:
+                                pass
+
+                            if times > 0:
+                                self.handle_num(times, *cmd_tuple[1:])
+                            else:
+                                self.warning("#{num} {cmd}只能支持正整数!")
+
+                            continue
+
+                        elif cmd in self._commands_alias.keys():
+                            cmd = self._commands_alias[cmd]
+
+                        elif cmd in ("num", ):
+                            cmd = ""
+
+                        handler = self._cmds_handler.get(cmd, None)
+                        if handler and callable(handler):
+                            handler(*cmd_tuple[1:])
+                        else:
+                            self.warning("未识别的命令: %s" % cmd_line)
                 else:
                     if self.current_session:
+                        self.current_session.last_command = cmd_line
                         self.current_session.exec_command(cmd_line)
                         #    self.current_session.writeline(cmd_line)  
                     else:
@@ -456,36 +569,44 @@ class PyMud:
             session.close()
 
     def run_untile_exit(self):
-        task = self.loop.create_task(self._local_reader_task(), name = "localread")
-        self._tasks.append(task)
-        # 以用户结束命令输入作为程序终止点
-        self.loop.run_until_complete(self._localreader_end_future)
-        self.finalize()
-        self.info("感谢使用PYMUD, 期待下次再见 :)")
-        self.loop.run_until_complete(self.terminal.drain())
-        self.loop.close()
+        try:
+            task = self.loop.create_task(self._local_reader_task(), name = "localread")
+            self._tasks.append(task)
+            # 以用户结束命令输入作为程序终止点
+            self.loop.run_until_complete(self._localreader_end_future)
+            self.finalize()
+            self.info("感谢使用PYMUD, 期待下次再见 :)")
+            self.loop.run_until_complete(self.terminal.drain())
+            self.loop.close()
+                
+        except asyncio.CancelledError:
+            pass
 
         return 0
 
 if __name__ == "__main__":
-
     # 以此文件为入口时，main函数执行如下：
-    # 所有级别log都存入文件
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-                        datefmt='%m-%d %H:%M',
-                        filename='myapp.log',
-                        filemode='a')
-    # define a Handler which writes INFO messages or higher to the sys.stderr
-    # 高于loglevel的在控制台打印
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    # set a format which is simpler for console use
-    formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-    # tell the handler to use this format
-    console.setFormatter(formatter)
-    # add the handler to the root logger
-    logging.getLogger('').addHandler(console)
+    args = sys.argv
+    log = True if "log" in args else False
+
+    if log:
+        # INFO以上级别log都存入文件
+        logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                    datefmt='%m-%d %H:%M',
+                    filename='myapp.log',
+                    filemode='a')
+        # define a Handler which writes INFO messages or higher to the sys.stderr
+        # 高于loglevel的在控制台打印
+        console = logging.StreamHandler()
+        console.setLevel(logging.DEBUG)
+        # set a format which is simpler for console use
+        formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+        # tell the handler to use this format
+        console.setFormatter(formatter)
+        # add the handler to the root logger
+        logging.getLogger('').addHandler(console)
+
 
     loop = asyncio.get_event_loop()
     pymud = PyMud(loop = loop)

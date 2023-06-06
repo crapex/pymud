@@ -11,6 +11,7 @@ class Session:
 
     "转义字符串替代"
     _esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
+    #_esc_regx = re.compile("\x1b\\[[^m]+[m]")
 
     def __init__(self, app, name, host, port, terminal, encoding, encoding_errors, clientwidth, clientheight, *args, **kwargs):
         """
@@ -47,6 +48,9 @@ class Session:
         self._extra = args
         self._kwextra = kwargs
 
+        self.last_command = ""
+
+        self._bglines = []  # 非激活情况下的会话缓冲
         self._tasks = []
 
         self._uid = 0       # 适用于本会话的全局id标识
@@ -97,12 +101,24 @@ class Session:
             self.app.info("创建连接过程中发生错误，错误信息为 %r " % task.exception())
             self.close()
 
+    def _cleansession(self):
+        try:
+            self._tasks.clear()
+            self._timers.clear()
+            self._triggers.clear()
+            self._aliases.clear()
+            self._variables.clear()
+            self._commands.clear()
+        except asyncio.CancelledError:
+            pass
+
     def loadconfig(self, module):
         try:
             self.config_name = module
 
             if hasattr(self, "cfg_module") and self.cfg_module:
                 del self.cfg_module
+                self._cleansession()
 
             self.cfg_module = importlib.import_module(module)
             self.config = self.cfg_module.Configuration(self)
@@ -117,6 +133,7 @@ class Session:
         if hasattr(self, "config_name"):
             try:
                 del self.config
+                self._cleansession()
                 self.cfg_module = importlib.reload(self.cfg_module)
                 self.config = self.cfg_module.Configuration(self)
                 self.app.info(f"配置模块 {self.cfg_module} 重新加载完成.")
@@ -132,12 +149,21 @@ class Session:
             raw_line = await self.reader.readline()
             if self.active:
                 self.terminal.write(raw_line)
+                await self.terminal.drain()
             else:
-                self.app.info("session未被激活")
+                # 未激活时，不输出到终端显示，保存到背景缓冲
+                self._bglines.append(raw_line)
+                pass
+                #self.app.info("session未被激活")
 
             # 触发器处理
             # 触发器触发时的回调函数都是保存在触发器类型实例本身的，因此当执行trymatch时，会自动调用回调函数
             tri_line = self.getPlainText(raw_line, True)
+
+            if self.app.logdata:
+                self.app.rawlogger.info(raw_line)
+                self.app.plainlogger.info(tri_line + self.newline)
+
             all_tris = list(self._triggers.values())
             all_tris.sort(key = lambda tri: tri.priority)
             for tri in all_tris:
@@ -156,8 +182,16 @@ class Session:
                             break
                         else:
                             pass
-
+                
         self.close()
+
+    def listgmcp(self):
+        "返回当前GMCP列表中的所有内容"
+        return self.reader.list_gmcp()
+
+    async def readgmcp(self, key):
+        "返回当前GMCP列表中的指定key内容（仅当其更新后）"
+        return await self.reader.read_gmcp(key)
 
     def writeline(self, line: str):
         """
@@ -289,6 +323,17 @@ class Session:
     def activate(self):
         "激活本会话，即将本会话设置为当前会话。同时，返回会话本身。"
         self.active = True
+
+        # 将背景数据一次性写入终端，并清空背景数据
+        if len(self._bglines) > 0:
+            self.terminal.writelines(self._bglines, True)
+            self._bglines.clear()
+
+        return self
+
+    def deactivate(self):
+        "取消激活本会话，将当前会话设置为后台。同时，返回会话本身。"
+        self.active = False
         return self
 
     def is_active(self):

@@ -77,21 +77,21 @@ class BaseObject:
 
     def info(self, msg, *args):
         "若session存在，session中输出info；不存在则在logging中输出info"
-        if self.session:
+        if self.session and self.session.active:
             self.session.app.info(msg, *args)
         else:
             self.log.info(msg)
 
     def warning(self, msg, *args):
-        "若session存在，session中输出warning；同时在logging中输出warning"
-        if self.session:
+        "若session存在，session中输出warning；不存在则在logging中输出warning"
+        if self.session and self.session.active:
             self.session.app.warning(msg, *args)
-        
-        self.log.warning(msg)
+        else:
+            self.log.warning(msg)
 
     def error(self, msg, *args):
         "若session存在，session中输出error；同时在logging中输出error"
-        if self.session:
+        if self.session and self.session.active:
             self.session.app.error(msg, *args)
         
         self.log.error(msg)
@@ -228,7 +228,7 @@ class MatchObject(BaseObject):
         return self.state
     
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}'
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}"'
 
 class Alias(MatchObject):
     """别名，实现方式-MatchObject"""
