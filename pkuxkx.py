@@ -1,7 +1,7 @@
 # 示例脚本：如何在PyMud中玩PKUXKX
 
 import webbrowser
-from objects import Alias, Trigger, SimpleCommand, Timer
+from objects import Alias, Trigger, SimpleCommand, Timer, SimpleTrigger, SimpleAlias
 
 # 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑
 # 本示例脚本对PyMud支持的变量(Variable)、触发器(Trigger，包含单行与多行触发)、别名(Alias)、定时器(Timer)、命令(Command，本示例中使用了SimpleCommand子类)都进行了代码示例
@@ -60,6 +60,9 @@ class Configuration:
         # 特别说明：此处的hpbrief触发匹配，需要set hpbrief long后才可以支持
         self._triggers["tri_hp"]      = self.tri_hp      = Trigger(self.session, id = 'tri_hpbrief', patterns = (r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$',), group = "sys", onSuccess = self.ontri_hpbrief)
         
+        # 3. 现在支持简单Trigger了，例如
+        self._triggers["tri_gem"] = SimpleTrigger(self.session ,r'^[> ]*从.+身上.+[◎☆★].+', "pack gem", group = "sys")
+
         self.session.addTriggers(self._triggers)
 
 
@@ -107,6 +110,11 @@ class Configuration:
         #  get xxx from corpse的别名操作，匹配成功后会自动调用getfromcorpse函数
         #  例如， gp silver 相当于 get silver from corpse
         self._aliases['ali_get'] = Alias(self.session, "^gp\s(.+)$", id = "ali_get", onSuccess = self.getfromcorpse)
+
+        # 3. 现在支持简单Alias了，在其中也可以支持#wait（缩写为#wa操作）等待，当然，Trigger也支持
+        # 从扬州中心广场到西门的行走，每步中间插入100ms等待
+        self._triggers["ali_yz_xm"] = SimpleAlias(self.session ,'^yz_xm$', "w;#wa 100;w;#wa 100;w;#wa 100;w", group = "sys")
+
         self.session.addAliases(self._aliases)
 
     def _initTimers(self):
@@ -120,7 +128,7 @@ class Configuration:
         self.session.writeline(cmd)
 
     def onTimer(self, name, *args, **kwargs):
-        self.session.app.info("每2秒都会打印本信息", "定时器测试")
+        self.session.info("每2秒都会打印本信息", "定时器测试")
 
     def ontri_webpage(self, name, line, wildcards):
         webbrowser.open(line)
@@ -146,6 +154,6 @@ class Configuration:
         line2 = "【气血】 {0:<8} [{5:3.0f}%] / {1:<8} [{2:3.0f}%]  |【内力】 {3:<8} / {4:<8} [{6:3.0f}%]".format(var2[0], var2[1], 100 * float(var2[1]) / float(var2[2]), var2[3], var2[4], 100 * float(var2[0]) / float(var2[2]), 100 * float(var2[3]) / float(var2[4]))
         var3 = self.session.getVariables(("food", "water", "exp", "pot", "fighting", "busy"))
         line3 = "【食物】 {0:<4} 【饮水】{1:<4} 【经验】{2:<9} 【潜能】{3:<10}【{4}】【{5}】".format(var3[0], var3[1], var3[2], var3[3],  "未战斗" if var3[4] == "0" else "战斗中", "不忙" if var3[5] == "0" else "忙")
-        self.session.app.info(line1, "状态")
-        self.session.app.info(line2, "状态")
-        self.session.app.info(line3, "状态")
+        self.session.info(line1, "状态")
+        self.session.info(line2, "状态")
+        self.sessionpp.info(line3, "状态")

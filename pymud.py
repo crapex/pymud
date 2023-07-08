@@ -1,108 +1,469 @@
-import sys, logging, asyncio, math
-from collections.abc import Iterable
-from terminal import ConsoleTerminal
+import asyncio, functools, re 
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
+from prompt_toolkit import HTML
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.application import Application
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import Float, VSplit, HSplit, Window, WindowAlign
+from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.dimension import Dimension, D
+from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.styles import Style
+from prompt_toolkit.widgets import  MenuItem, TextArea, SystemToolbar, Frame
+from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
+from prompt_toolkit.cursor_shapes import CursorShape
+from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
+from prompt_toolkit.keys import Keys
+
+from prompt_toolkit.filters import (
+    Condition,
+    is_true,
+)
+
+from prompt_toolkit.layout.processors import (
+    DisplayMultipleCursors,
+    HighlightIncrementalSearchProcessor,
+    HighlightSearchProcessor,
+    HighlightSelectionProcessor,
+    Processor,
+    TransformationInput,
+    merge_processors,
+)
+from prompt_toolkit.layout.margins import (
+    ConditionalMargin,
+    NumberedMargin,
+    ScrollbarMargin,
+)
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+
+from objects import CodeBlock
+from extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl
 from session import Session
+from settings import Settings
+from dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog
 
-_INFO_STYLE     = "\x1b[32m"     #"\x1b[38;2;0;128;255m"
-_WARN_STYLE     = "\x1b[33m"
-_ERR_STYLE      = "\x1b[31m"
-_CLR_STYLE      = "\x1b[0m"
-
-class PyMud:
-    """
-    PyMUD: a MUD Client in Python.
-    以Python语言实现的MUD客户端
-    此类为pymud模块的核心主要类型, 主入口
-    """
-    __appname__   = "PYMUD"
-    __appdesc__   = "a MUD client written in Python"
-    __version__   = "0.04b"
-    __release__   = "2023-6-04"
-    __author__    = "北侠玩家 本牛(newstart)"
-    __email__     = "crapex@crapex.cc"
-
-    MSG_NO_SESSION = "当前没有正在运行的session, 可以使用#session {name} {host} {port} {encoding}创建一个."
-
-    _commands = (
-        "alias",        # 别名
-        "command",      # 命令
-        "timer",        # 定时器
-        "exit",         # 结束PyMud应用
-        "help",         # 帮助
-        "session",      # 开启一个新会话
-        "variable",     # 变量
-        "trigger",      # 触发器
-        "load",         # 加载配置文件
-        "reload",       # 重新加载配置文件
-        "info",         # 输出蓝色info
-        "warning",      # 输出黄色warning
-        "error",        # 输出红色error
-        "gmcp",         # GMCP协议信息
-        "num",          # 重复多次指令
-        "repeat",       # 重复上一行输入的指令
-    )
-
-    _commands_alias = {
-        "ali" : "alias",
-        "cmd" : "command",
-        "tm"  : "timer",
-        "tri" : "trigger",
-        "var" : "variable",
-        "rep" : "repeat",
-    }
-
-    def __init__(self, terminal_factory = ConsoleTerminal, encoding = "utf-8", encoding_errors = "ignore", loop = None, logdata = False, uiconsole = False) -> None:
-        self.log = logging.getLogger("pymud.PyMud")         # 此模块的logger
-        self.server_encoding = encoding                     # 服务器端编码字符集为 UTF8
-        self.local_encoding = "utf-8"                       # 本地编码字符集为 UTF-8
-        self.encoding_errors = encoding_errors              # 字符集转换出错时，默认 ignore
-        
-        self.loop = loop if isinstance(loop, asyncio.AbstractEventLoop) else asyncio.get_event_loop()
-        
-        # 增加logdata标记，保存全部服务端数据，用于后续MXP和VT100学习处理
-        self.logdata = logdata
-        if self.logdata:
-            self.rawlogger = logging.getLogger("LOGDATA_RAW")
-            self.plainlogger = logging.getLogger("LOGDATA_PLAIN")
-
-        self.newline = "\n"
-        
-        # 默认绑定的终端
-        self.terminal = terminal_factory(encoding = self.local_encoding, 
-                                         encoding_errors = self.encoding_errors, 
-                                         newline = self.newline, 
-                                         loop = self.loop)                
-
-        self._cmds_handler = dict()                         # 支持的命令的处理函数字典
-        for cmd in PyMud._commands:
-            handler = getattr(self, f"handle_{cmd}", None)
-            self._cmds_handler[cmd] = handler
-
-        self._tasks = []
-        self._sessions = {}
+class PyMudApp:
+    def __init__(self) -> None:
+        self.sessions = {}
         self.current_session = None
 
-        self._localreader_end_future = self.loop.create_future()
+        self.keybindings = KeyBindings()
+        self.keybindings.add(Keys.PageUp, is_global = True)(self.page_up)
+        self.keybindings.add(Keys.PageDown, is_global = True)(self.page_down)
+        self.keybindings.add(Keys.ControlZ, is_global = True)(self.hide_history)
+        self.keybindings.add(Keys.ControlC, is_global = True)(self.copy_selection)      # Control-C 复制文本
+        self.keybindings.add(Keys.ControlR, is_global = True)(self.copy_selection)      # Control-R 复制带有ANSI标记的文本（适用于整行复制）
+        self.keybindings.add(Keys.Right, is_global = True)(self.complete_autosuggest)   # 右箭头补完建议
+        self.keybindings.add(Keys.Backspace)(self.delete_selection)
+        self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
+        self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
 
-        self._print_welcome_screen()
+        self.initUI()
 
-    def activate_session(self, session: Session):
-        "激活指定session，并将该session设置为当前session"
+        # 对剪贴板进行处理，经测试，android下的termux中，pyperclip无法使用，因此要使用默认的InMemoryClipboard
+        clipboard = None
+        try:
+            clipboard = PyperclipClipboard()
+            clipboard.set_text("test pyperclip")
+        except:
+            clipboard = None
+
+        self.app = Application(
+            layout = Layout(self.root_container, focused_element=self.commandLine),
+            enable_page_navigation_bindings=True,
+            style=self.style,
+            mouse_support=True,
+            full_screen=True,
+            color_depth=ColorDepth.TRUE_COLOR,
+            clipboard=clipboard,
+            key_bindings=self.keybindings,
+            cursor=CursorShape.BLINKING_UNDERLINE
+        )
+
+        self.set_status(Settings.text["welcome"])
+
+    def initUI(self):
+        self.style = Style.from_dict(Settings.styles)
+        self.status_message = ""
+        self.showHistory = False
+        self.wrap_lines  = True
+
+        self.commandLine = TextArea(
+            prompt=self.get_input_prompt, 
+            multiline = False, 
+            accept_handler = self.enter_pressed, 
+            height=D(min=1), 
+            auto_suggest = AutoSuggestFromHistory(), 
+            focus_on_click=True,
+            name = "input",
+            )
+
+        self.status_bar = VSplit(
+            [
+                Window(FormattedTextControl(self.get_statusbar_text), style="class:status", align = WindowAlign.LEFT),
+                Window(FormattedTextControl(self.get_statusbar_right_text), style="class:status.right", width = D(preferred=40), align = WindowAlign.RIGHT),
+            ],
+            height = 1,
+            style ="class:status"
+            )
+
+        self.consoleView = SessionBufferControl(
+            buffer = None,
+            input_processors=[
+                MudFormatProcessor(),
+                HighlightSearchProcessor(),
+                HighlightSelectionProcessor(),
+                DisplayMultipleCursors(),
+                ],
+            focus_on_click = False,
+            )
+        
+
+        self.console = VSplitWindow(
+            content = self.consoleView,
+            width = D(preferred = Settings.client["naws_width"]),
+            height = D(preferred = Settings.client["naws_height"]),
+            wrap_lines=Condition(lambda: is_true(self.wrap_lines)),
+            right_margins=[ScrollbarMargin(True)],   
+            style="class:text-area"
+            )
+
+        self.console_frame = Frame(body = self.console, title = self.get_frame_title)
+
+        self.body = HSplit([
+                self.console_frame,
+                self.commandLine,
+                self.status_bar
+            ])
+
+        self.root_container = EasternMenuContainer(
+            body = self.body,
+            menu_items=[
+                MenuItem(
+                    Settings.text["world"],
+                    children=self.create_world_menus(),
+                ),
+                MenuItem(
+                    Settings.text["session"],
+                    children=[
+                        MenuItem(Settings.text["connect"], handler = self.act_connect),
+                        MenuItem(Settings.text["disconnect"], handler = self.act_discon),
+                        MenuItem(Settings.text["closesession"], handler = self.act_close_session),
+                        MenuItem("-", disabled=True),
+                        MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
+                        MenuItem(Settings.text["copy"], handler = self.act_copy),
+                        MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
+                        MenuItem("-", disabled=True),
+                        MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
+                    ]
+                ),
+                MenuItem(
+                    Settings.text["help"],
+                    children=[
+                        MenuItem(Settings.text["about"], handler = self.act_about)
+                    ]
+                )
+            ],
+            floats=[
+                Float(
+                    xcursor=True,
+                    ycursor=True,
+                    content=CompletionsMenu(max_height=16, scroll_offset=1)
+                )
+            ],
+        )
+
+    def create_world_menus(self) -> list[MenuItem]:
+        "创建世界子菜单"
+        menus = []
+        menus.append(MenuItem(Settings.text["new_session"], handler = self.act_new))
+        menus.append(MenuItem("-", disabled=True))
+
+        ss = Settings.sessions
+        for key, site in ss.items():
+            host = site["host"]
+            port = site["port"]
+            encoding = site["encoding"]
+            autologin = site["autologin"]
+            script = site["default_script"]
+            menu = MenuItem(key)
+            for name, info in site["chars"].items():
+                after_connect = autologin.format(*info)
+                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, script))
+                menu.children.append(sub)
+            menus.append(menu)
+
+        menus.append(MenuItem("-", disabled=True))
+        menus.append(MenuItem(Settings.text["exit"], handler=self.act_exit))
+
+        return menus
+
+    def scroll(self, lines = 1):
+        "内容滚动指定行数，小于0为向上滚动，大于0为向下滚动"
         if self.current_session:
-            self.current_session.deactivate()
-        self.current_session = session.activate()
-   
-    def remove_session(self, session: Session):
-        "移除会话, 若移除的为当前会话，则将清单中第一个会话设置为当前会话"
-        if session.name in self._sessions.keys():
-            self._sessions.pop(session.name)
+            s = self.current_session
+            b = s.buffer
+            if lines < 0:
+                b.cursor_up(-1 * lines)
+            elif lines > 0:
+                b.cursor_down(lines)
 
-        if len(self._sessions.keys()) > 0:
-            if self.current_session == session:
-                self.current_session = self._sessions.get(next(iter(self._sessions)))
-                self.current_session.activate()
+    def page_up(self, event: KeyPressEvent) -> None:
+        lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        self.scroll(-1 * lines)
+
+    def page_down(self, event: KeyPressEvent) -> None:
+        lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        self.scroll(lines)
+
+    def hide_history(self, event: KeyPressEvent) -> None:
+        """关闭历史行显示"""
+        self.act_nosplit()
+
+    def copy_selection(self, event: KeyPressEvent)-> None:
+        if event.key_sequence[-1].key == Keys.ControlC:
+            self.copy()
+        elif event.key_sequence[-1].key == Keys.ControlR:
+            self.copy(raw = True)
+
+    def delete_selection(self, event: KeyPressEvent):
+        b = event.current_buffer
+        if b.selection_state:
+            event.key_processor.feed(KeyPress(Keys.Delete), first=True)
         else:
-            self.current_session = None
+            b.delete_before_cursor(1)
+
+    def complete_autosuggest(self, event: KeyPressEvent):
+        """自动完成建议"""
+        b = event.current_buffer
+        s = b.auto_suggest.get_suggestion(b, b.document)
+        if s:
+            b.insert_text(s.text, fire_event=False)
+        else:
+            b.cursor_right()
+
+    def change_session(self, event: KeyPressEvent):
+        if self.current_session:
+            current = self.current_session.name
+            keys = list(self.sessions.keys())
+            idx = keys.index(current)
+            count = len(keys)
+
+            if event.key_sequence[-1].key == Keys.ControlRight:
+                if idx < count - 1:
+                    new_key = keys[idx+1]
+                    self.activate_session(new_key)
+
+            elif event.key_sequence[-1].key == Keys.ControlLeft:
+                if idx > 0:
+                    new_key = keys[idx-1]
+                    self.activate_session(new_key)
+
+    def copy(self, raw = False):
+        b = self.consoleView.buffer
+        if b.selection_state:
+            if not raw:
+                # Control-C 复制纯文本
+                line_start = b.document.translate_row_col_to_index(b.document.cursor_position_row, 0)
+                line = b.document.current_line
+                start = max(0, b.selection_state.original_cursor_position - line_start)
+                end = min(b.cursor_position - line_start, len(line))
+                line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
+                selection = line_plain[start:end]
+                self.app.clipboard.set_text(selection)
+                self.set_status("已复制：{}".format(selection))
+
+            else:
+                # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此需要整行复制-双击时才使用）
+                data = self.consoleView.buffer.copy_selection()
+                self.app.clipboard.set_data(data)
+                self.set_status("已复制：{}".format(data.text))
+        else:
+            self.set_status("未选中任何内容...")
+
+    def create_session(self, name, host, port, encoding = None, after_connect = None, script = None):
+        result = False
+        encoding = encoding or Settings.server["default_encoding"]
+
+        if name not in self.sessions.keys():
+            session = Session(self, name, host, port, encoding, after_connect, script = script)
+            self.sessions[name] = session
+            self.activate_session(name)
+
+            result = True
+        else:
+            self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
+
+        return result
+
+    def activate_session(self, key):
+        "激活指定名称的session，并将该session设置为当前session"
+        session = self.sessions.get(key, None)
+
+        if isinstance(session, Session):
+            self.current_session = session
+            self.consoleView.buffer = session.buffer
+            self.set_status(Settings.text["session_changed"].format(session.name))
+            self.app.invalidate()
+
+    def close_session(self):
+        "关闭当前会话"
+        async def coroutine():
+            if self.current_session:
+                if self.current_session.connected:
+                    dlgQuery = QueryDialog(HTML('<b fg="#aaaa00">警告</b>'), HTML('<style fg="#aaaa00">当前会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    result = await self.show_dialog_as_float(dlgQuery)
+                    if result:
+                        self.current_session.disconnect()
+                    else:
+                        return
+
+                name = self.current_session.name
+                self.current_session = None
+                self.consoleView.buffer = SessionBuffer()
+                self.sessions.pop(name)
+                self.set_status(f"会话 {name} 已关闭")
+                if len(self.sessions.keys()) > 0:
+                    new_sess = list(self.sessions.keys())[0]
+                    self.activate_session(new_sess)
+                    self.set_status(f"当前会话已切换为 {self.current_session.name}")
+
+        asyncio.ensure_future(coroutine())
+
+    # 菜单选项操作 - 开始
+
+    def act_new(self):
+        async def coroutine():
+            dlgNew = NewSessionDialog()
+            result = await self.show_dialog_as_float(dlgNew)
+            if result:
+                self.create_session(*result)
+            return result
+        
+        asyncio.ensure_future(coroutine())
+
+    def act_connect(self):
+        if self.current_session:
+            self.current_session.handle_connect()
+
+    def act_discon(self):
+        if self.current_session:
+            self.current_session.disconnect()
+
+    def act_nosplit(self):
+        if self.current_session:
+            s = self.current_session
+            b = s.buffer
+            b.exit_selection()
+            b.cursor_position = len(b.text)
+
+    def act_close_session(self):
+        self.close_session()
+
+    def act_copy(self):
+        "复制菜单"
+        self.copy()
+
+    def act_copyraw(self):
+        "复制ANSI菜单"
+        self.copy(raw = True)
+
+    def act_reload(self):
+        "重新加载配置文件菜单"
+        if self.current_session:
+            self.current_session.handle_reload()
+
+    def act_exit(self):
+        "退出菜单"
+        async def coroutine():
+            for session in self.sessions.values():
+                if session.connected:
+                    dlgQuery = QueryDialog(HTML('<b fg="yellow">程序退出警告</b>'), HTML('<style fg="yellow">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    result = await self.show_dialog_as_float(dlgQuery)
+                    if result:
+                        session.disconnect()
+                    else:
+                        return
+                
+            self.app.exit()
+
+        asyncio.ensure_future(coroutine())
+
+    def act_about(self):
+        "关于菜单"
+        dialog_about = WelcomeDialog(True)
+        self.show_dialog(dialog_about)
+
+    # 菜单选项操作 - 完成
+
+    def get_input_prompt(self):
+        return HTML(Settings.text["input_prompt"])
+
+    def btn_title_clicked(self, name, mouse_event: MouseEvent):
+        if mouse_event.event_type == MouseEventType.MOUSE_UP:
+            self.activate_session(name)
+
+    def get_frame_title(self):
+        if len(self.sessions.keys()) == 0:
+            return Settings.__appname__ + " " + Settings.__version__
+        
+        title_formatted_list = []
+        for key, session in self.sessions.items():
+            if session == self.current_session:
+                if session.connected:
+                    style = Settings.styles["selected.connected"]
+                else:
+                    style = Settings.styles["selected"]
+
+            else:
+                if session.connected:
+                    style = Settings.styles["normal.connected"]
+                else:
+                    style = Settings.styles["normal"]
+
+            title_formatted_list.append((style, key, functools.partial(self.btn_title_clicked, key)))
+            title_formatted_list.append(("", " | "))
+
+        return title_formatted_list[:-1]
+
+    def get_statusbar_text(self):
+        return [
+            ("class:status", " "),
+            ("class:status", self.status_message),
+        ]
+    
+    def get_statusbar_right_text(self):
+        con_str = ""
+        if self.current_session:
+            if not self.current_session.connected:
+                con_str = "未连接"
+            else:
+                dura = self.current_session.duration
+                DAY, HOUR, MINUTE = 86400, 3600, 60
+                days, hours, mins, secs = 0,0,0,0
+                days = dura // DAY
+                dura = dura - days * DAY
+                hours = dura // HOUR
+                dura = dura - hours * HOUR
+                mins = dura // MINUTE
+                sec = dura - mins * MINUTE
+
+                if days > 0:
+                    con_str = "已连接：{:.0f}天{:.0f}小时{:.0f}分{:.0f}秒".format(days, hours, mins, sec)
+                elif hours > 0:
+                    con_str = "已连接：{:.0f}小时{:.0f}分{:.0f}秒".format(hours, mins, sec)
+                elif mins > 0:
+                    con_str = "已连接：{:.0f}分{:.0f}秒".format(mins, sec)
+                else:
+                    con_str = "已连接：{:.0f}秒".format(sec)
+
+        return "{} {} {} ".format(con_str, Settings.__appname__, Settings.__version__)
+
+    def set_status(self, msg):
+        self.status_message = msg
+        self.app.invalidate()
 
     def handle_session(self, *args):
         "\x1b[1m命令\x1b[0m: #session {名称} {宿主机} {端口} {编码}\n" \
@@ -110,504 +471,179 @@ class PyMud:
         "      如， #session newstart mud.pkuxkx.net 8080 GBK \n" \
         "      当不指定编码格式时, 默认使用utf-8编码 \n" \
         "      如， #session newstart mud.pkuxkx.net 8081 \n" \
-        "      当不指定参数时，列出所有可用的会话 \n" \
         "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
         "\x1b[1m相关\x1b[0m: help, exit"
 
         nothandle = True
-        if len(args) == 0:
-            # List all sessions.
-            if len(self._sessions.keys()) == 0:
-                self.terminal.writeline("当前没有正在运行的session.")
-            else:
-                self.terminal.writeline("当前运行session清单如下:")
-                for name in self._sessions.keys():
-                    if self.current_session.name == name:
-                        self.terminal.writeline(f"  + {name} [活动的]")
-                    else:
-                        self.terminal.writeline(f"  + {name}")
 
-            nothandle = False
-        elif len(args) == 1:
-            # TODO: change session
-            if args[0] == "close":
-                if self.current_session:
-                    self.current_session.close()
-                    self.current_session = None
-                    self.terminal.writeline(f"当前会话已关闭")
-
-        elif len(args) >= 3:
+        if len(args) >= 3:
             session_name = args[0]
             session_host = args[1]
             session_port = int(args[2])
             if len(args) == 4:
                 session_encoding = args[3]
             else:
-                session_encoding = self.server_encoding
+                session_encoding = Settings.server["default_encoding"]
 
-            if session_name not in self._sessions.keys():
-                self.info("尝试建立连接到 %s:%d ..." % (session_host, session_port))
-                session = Session(self, 
-                                  session_name, 
-                                  session_host, 
-                                  session_port, 
-                                  self.terminal,
-                                  session_encoding, 
-                                  self.encoding_errors, 
-                                  self.terminal.getwidth(), 
-                                  self.terminal.getheight()
-                                  )
-                self._sessions[session_name] = session
-                self.activate_session(session)
-                nothandle = False
-            else:
-                self.terminal.writeline(f"已存在一个名为{session_name}的session，请更换名称再试.")
+            self.create_session(session_name, session_host, session_port, session_encoding)
+            nothandle = False
         
         if nothandle:
-            self.terminal.writeline("错误的#session命令，请使用#help session查询用法")
+            self.set_status("错误的#session命令")
 
     def handle_help(self, *args):
         "\x1b[1m命令\x1b[0m: #help {主题}\n" \
         "      当不带参数时, #help会列出所有可用的帮助主题\n" \
         "\x1b[1m相关\x1b[0m: session, exit"
 
-        if len(args) == 0:      # 不带参数，打印所有支持的help主题
-            self._print_all_help()
-        elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
-            topic = args[0]
-            if topic in PyMud._commands_alias.keys():
-                command = PyMud._commands_alias[topic]
-                docstring = self._cmds_handler[command].__doc__
-            elif topic in PyMud._commands:
-                docstring = self._cmds_handler[topic].__doc__
-            else:
-                docstring = f"未找到主题{topic}, 请确认输入是否正确."
+        # if len(args) == 0:      # 不带参数，打印所有支持的help主题
+        #     self._print_all_help()
+        # elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
+        #     topic = args[0]
+        #     if topic in PyMud._commands_alias.keys():
+        #         command = PyMud._commands_alias[topic]
+        #         docstring = self._cmds_handler[command].__doc__
+        #     elif topic in PyMud._commands:
+        #         docstring = self._cmds_handler[topic].__doc__
+        #     else:
+        #         docstring = f"未找到主题{topic}, 请确认输入是否正确."
             
-            self.terminal.writeline(docstring)
+        #     self.terminal.writeline(docstring)
     
     def handle_exit(self, *args):
         "\x1b[1m命令\x1b[0m: #exit \n" \
         "      退出PYMUD程序\n" \
         "\x1b[1m相关\x1b[0m: session"
     
-    def handle_variable(self, *args):
-        "\x1b[1m命令\x1b[0m: #variable|#var\n" \
-        "      列出当前会话中所有的变量清单\n" \
-        "\x1b[1m相关\x1b[0m: alias, trigger, command"
-
-        if self.current_session:
-            vars = self.current_session._variables
-            vars_simple = {}
-            vars_complex = {}
-            for k, v in vars.items():
-                if isinstance(v, Iterable) and not isinstance(v, str):
-                    vars_complex[k] = v
-                else:
-                    vars_simple[k] = v
-
-
-            width = self.terminal.getwidth()
-            
-            title = f"  VARIABLE LIST IN SESSION {self.current_session.name}  "
-            left = (width - len(title)) // 2
-            right = width - len(title) - left
-            self.terminal.writeline("="*left + title + "="*right)
-            
-            # print vars in simple, 每个变量占40格，一行可以多个变量
-            var_count = len(vars_simple)
-            var_per_line = (width - 2) // 40
-            lines = math.ceil(var_count / var_per_line)
-            left_space = (width - var_per_line * 40) // 2
-            if left_space > 4:  left_space = 4
-            
-            var_keys = sorted(vars_simple.keys())
-
-            for idx in range(0, lines):
-                start = idx * var_per_line
-                end   = (idx + 1) * var_per_line
-                if end > var_count: end = var_count
-                self.terminal.write(" " * left_space)
-                line_vars = var_keys[start:end]
-                for var in line_vars:
-                    self.terminal.write("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
-
-                self.terminal.writeline("")
-
-            # print vars in complex, 每个变量占1行
-            for k, v in vars_complex.items():
-                self.terminal.write(" " * left_space)
-                self.terminal.writeline("{0:>18} = {1}".format(k, v.__repr__()))
-
-            self.terminal.writeline("="*width)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def _handle_objs(self, name: str, objs: dict, *args):
-        if len(args) == 0:
-            width = self.terminal.getwidth()
-            
-            title = f"  {name.upper()} LIST IN SESSION {self.current_session.name}  "
-            left = (width - len(title)) // 2
-            right = width - len(title) - left
-            self.terminal.writeline("="*left + title + "="*right)
-
-            for id in sorted(objs.keys()):
-                self.terminal.writeline("  %r" % objs[id])
-
-            self.terminal.writeline("="*width)
-
-        elif len(args) == 1:
-            if args[0] in objs.keys():
-                obj = objs[args[0]]
-                self.info(obj.__detailed__())
-            else:
-                self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
-
-        elif len(args) == 2:
-            if args[0] in objs.keys():
-                obj = objs[args[0]]
-                if args[1] == "on":
-                    obj.enabled = True
-                    self.info(f"对象 {obj} 的使能状态已打开.")
-                elif args[1] == "off":
-                    obj.enabled = False
-                    self.info(f"对象 {obj} 的使能状态已禁用.")
-                else:
-                    self.error(f"#{name.lower()}命令的第二个参数仅能接受on或off")
-            else:
-                self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
-
-    def handle_alias(self, *args):
-        "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
-        "      不指定参数时, 列出当前会话中所有的别名清单\n" \
-        "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Alias的id, 第二个应为on/off, 可修改Alias的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: variable, trigger, command, timer"
-
-        if self.current_session:
-            self._handle_objs("Alias", self.current_session._aliases, *args)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_timer(self, *args):
-        "\x1b[1m命令\x1b[0m: #timer|#tmr\n" \
-        "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
-        "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Timer的id, 第二个应为on/off, 可修改Timer的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: variable, alias, trigger, command"
-
-        if self.current_session:         
-            self._handle_objs("Timer", self.current_session._timers, *args)
-        else:
-            self.warning(self.MSG_NO_SESSION)
-
-    def handle_command(self, *args):
-        "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
-        "      不指定参数时, 列出当前会话中所有的命令清单\n" \
-        "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Command的id, 第二个应为on/off, 可修改Command的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer"
-
-        if self.current_session:
-            self._handle_objs("Command", self.current_session._commands, *args)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_trigger(self, *args):
-        "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
-        "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
-        "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Trigger的id, 第二个应为on/off, 可修改Trigger的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, command, timer"
-                
-        if self.current_session:
-            self._handle_objs("Trigger", self.current_session._triggers, *args)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_repeat(self, *args):
-        "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
-        "      重复向session输出上一次人工输入的命令 \n" \
-        "\x1b[1m相关\x1b[0m: num"
-
-        if self.current_session:
-            if hasattr(self.current_session, "last_command"):
-                self.current_session.exec_command(self.current_session.last_command)
-            else:
-                self.info("当前会话没有键入过指令，repeat无效")
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_num(self, times, *args):
-        "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
-        "      向session中输出{num}次{cmd} \n" \
-        "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
-        "\x1b[1m相关\x1b[0m: repeat"
-        if self.current_session:
-            if len(args) > 0:
-                cmd = " ".join(args)
-                for i in range(0, times):
-                    self.current_session.exec_command(cmd)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_gmcp(self, *args):
-        "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
-        "      指定key时，显示由GMCP收到的key信息\n" \
-        "      不指定key时，显示所有GMCP收到的信息\n" \
-        "\x1b[1m相关\x1b[0m: 暂无"
-
-        if self.current_session:
-            #self.info("这个功能还没写好...")
-            gmcp = self.current_session.listgmcp()
-            #self._handle_objs("GMCP", gmcp, *args)
-            width = self.terminal.getwidth()
-            
-            title = f"  GMCP VALUES LIST IN SESSION {self.current_session.name}  "
-            left = (width - len(title)) // 2
-            right = width - len(title) - left
-            self.terminal.writeline("="*left + title + "="*right)
-   
-            # print vars in complex, 每个变量占1行
-            for k, v in gmcp.items():
-                self.terminal.writeline("  {0:>28} = {1}".format(k, v.__repr__()))
-
-            self.terminal.writeline("="*width)
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_load(self, *args):
-        "\x1b[1m命令\x1b[0m: #load {config}\n" \
-        "      为当前session加载{config}指定的模块\n" \
-        "\x1b[1m相关\x1b[0m: reload"
-
-        if self.current_session:
-            self.current_session.loadconfig(args[0])
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_reload(self, *args):
-        "\x1b[1m命令\x1b[0m: #reload\n" \
-        "      为当前session重新加载配置模块（解决配置模块文件修改后的重启问题）\n" \
-        "\x1b[1m相关\x1b[0m: load"
-
-        if self.current_session:
-            self.current_session.reload()
-        else:
-            self.info(self.MSG_NO_SESSION)
-
-    def handle_info(self, *args):
-        "\x1b[1m命令\x1b[0m: #info {msg}\n" \
-        "      使用info输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: warning, error"
-
-        if len(args) > 0:
-            self.info(" ".join(args))
-
-    def handle_warning(self, *args):
-        "\x1b[1m命令\x1b[0m: #warning {msg}\n" \
-        "      使用warning输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, error"
+    def enter_pressed(self, buffer: Buffer):
+        cmd_line = buffer.text
         
-        if len(args) > 0:
-            self.warning(" ".join(args))
+        if len(cmd_line) == 0:
+            if self.current_session:
+                self.current_session.writeline("")
 
-    def handle_error(self, *args):
-        "\x1b[1m命令\x1b[0m: #error {msg}\n" \
-        "      使用error输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, warning"
-        
-        if len(args) > 0:
-            self.error(" ".join(args))
+        if cmd_line == "#exit":
+            self.act_exit()
 
-    def _print_welcome_screen(self):
-        """打印欢迎屏幕"""
-        width = self.terminal.getwidth()
-        if width >= 80:
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" * 80 + _CLR_STYLE)
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" + " " * 78 + "#" + _CLR_STYLE)
-            intro = f"{self.__appname__} - {self.__appdesc__}"
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#\x1b[0m" + f"{intro:^78}" + _INFO_STYLE + "#" + _CLR_STYLE)
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" + " " * 78 + "#" + _CLR_STYLE)
-            version = f"version: {self.__version__}   Release date: {self.__release__}"
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#\x1b[0m" + f"{version:^78}" + _INFO_STYLE + "#" + _CLR_STYLE)
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" + " " * 78 + "#" + _CLR_STYLE)
-            author = f"本程序由 {self.__author__} 开发, E-mail: {self.__email__}"
-            align = 78 - (len(author.encode()) - len(author)) // 2 
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#\x1b[0m" + author.center(align, " ") + _INFO_STYLE + "#" + _CLR_STYLE)
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" + " " * 78 + "#" + _CLR_STYLE)
-            self.terminal.writeline(_INFO_STYLE + " " * 6 + "#" * 80 + _CLR_STYLE)
+        elif cmd_line == "#close":
+            self.close_session()
+
+        elif cmd_line.startswith("#session"):
+            cmd_tuple = cmd_line[1:].split()
+            self.handle_session(*cmd_tuple[1:])
+
+        elif cmd_line == "#help":
+            self.act_about()
+
+        elif cmd_line[1:] in self.sessions.keys():
+            self.activate_session(cmd_line[1:])
+
         else:
-            self.terminal.writeline(f"program: {self.__appname__} - {self.__version__}")
-            self.terminal.writeline(f"release: {self.__release__}")
-            self.terminal.writeline(f" author: {self.__author__}")
-            self.terminal.writeline(f"  email: {self.__email__}")
-
-    def _print_all_help(self):
-        """打印所有可用的help主题, 并根据终端尺寸进行排版"""
-        width = self.terminal.getwidth()
-        cmds = []
-        cmds.extend(self._commands)
-        cmds.extend(self._commands_alias.keys())
-        cmds.sort()
-
-        cmd_count = len(cmds)
-        left = (width - 8) // 2
-        right = width - 8 - left
-        self.terminal.writeline("#"*left + "  HELP  " + "#"*right)
-        cmd_per_line = (width - 2) // 20
-        lines = math.ceil(cmd_count / cmd_per_line)
-        left_space = (width - cmd_per_line * 20) // 2
-
-        for idx in range(0, lines):
-            start = idx * cmd_per_line
-            end   = (idx + 1) * cmd_per_line
-            if end > cmd_count: end = cmd_count
-            line_cmds = cmds[start:end]
-            self.terminal.write(" " * left_space)
-            for cmd in line_cmds:
-                if cmd in self._commands:
-                    self.terminal.write(f"{cmd.upper():<20}")
-                else:
-                    self.terminal.write(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
-
-            self.terminal.writeline("")
-
-        self.terminal.writeline("#"*width)
-
-    async def _local_reader_task(self):
-        while True:
-            cmd_line_raw = await self.terminal.readline()
-            cmd_line = cmd_line_raw.lower().rstrip(self.newline)
-            if cmd_line == "#exit":
-                break
-            elif len(cmd_line) > 0: 
-                if cmd_line[0] == "#":
-                    cmd_line = cmd_line[1:]
-
-                    if cmd_line in self._sessions.keys():
-                        self.info(f"当前会话切换为: {cmd_line}")
-                        self.activate_session(self._sessions[cmd_line])
-                    else:
-                        cmd_tuple = cmd_line.split()
-                        cmd = cmd_tuple[0]
-
-                        if cmd.isnumeric():
-                            times = 0
-                            try:
-                                times = int(cmd)
-                            except ValueError:
-                                pass
-
-                            if times > 0:
-                                self.handle_num(times, *cmd_tuple[1:])
-                            else:
-                                self.warning("#{num} {cmd}只能支持正整数!")
-
-                            continue
-
-                        elif cmd in self._commands_alias.keys():
-                            cmd = self._commands_alias[cmd]
-
-                        elif cmd in ("num", ):
-                            cmd = ""
-
-                        handler = self._cmds_handler.get(cmd, None)
-                        if handler and callable(handler):
-                            handler(*cmd_tuple[1:])
-                        else:
-                            self.warning("未识别的命令: %s" % cmd_line)
-                else:
-                    if self.current_session:
-                        self.current_session.last_command = cmd_line
-                        self.current_session.exec_command(cmd_line)
-                        #    self.current_session.writeline(cmd_line)  
-                    else:
-                        self.info("当前没有正在运行的session, 请使用#session {name} {host} {port} {encoding}创建一个.")
-            elif len(cmd_line) == 0: 
-                if self.current_session:
+            if self.current_session:
+                if len(cmd_line) == 0:
                     self.current_session.writeline("")
+                else:
+                    cb = CodeBlock(self.current_session, cmd_line)
+                    cb.execute()
+            else:
+                self.set_status("当前没有正在运行的session.")
+
+        # if len(cmd_line) == 0:
+        #     # 直接回车时，向当前session发送空字节（仅回车键）
+        #     if self.current_session:
+        #         self.current_session.writeline("")
+
+        # elif (cmd_line[0] == "#") and (len(cmd_line) > 1):
+        #     # 当命令由#开头时，exit, session, help三个命令，以及活动session切换由APP处理，其余发送到session进行处理
+        #     cmd_tuple = cmd_line[1:].split()
+        #     cmd = cmd_tuple[0]
+
+        #     if cmd == "exit":
+        #         # TODO 增加活动session判断
+        #         self.act_exit()
+            
+        #     elif cmd in self.sessions.keys():
+        #         self.activate_session(cmd)
+
+        #     elif cmd == "session":
+        #         self.handle_session(*cmd_tuple[1:])
+
+        #     elif cmd == "close":
+        #         self.close_session()
+
+
+        #     elif cmd == "help":
+        #         self.handle_help(*cmd_tuple[1:])
+
+        #     else:
+        #         # #xxx 发送到session进行处理
+        #         if self.current_session:
+        #             self.current_session.handle_input(*cmd_tuple)
+        #         else:
+        #             self.set_status("当前没有正在运行的session, 请使用#session {name} {host} {port} {encoding}创建一个.")
+
+        # else:
+        #     # #xxx 发送到session进行处理
+        #     if self.current_session:
+        #         self.current_session.exec_command(cmd_line)
+        #     else:
+        #         self.set_status("当前没有正在运行的session, 请使用#session {name} {host} {port} {encoding}创建一个.")
+
+        # 配置：命令行内容保留
+        if Settings.client["remain_last_input"]:
+            buffer.cursor_position = 0
+            buffer.start_selection()
+            buffer.cursor_right(len(cmd_line))
+            return True
         
-        self._localreader_end_future.set_result(True)
-    
-    def info2(self, msg, title = "PYMUD INFO", style = _INFO_STYLE):
-        self.terminal.writeline(style + "[{}] {}".format(title, msg) + _CLR_STYLE)
+        else:
+            return False
 
-    def info(self, msg, title = "PYMUD INFO", style = _INFO_STYLE):
-        "输出信息（蓝色），自动换行"
-        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
-        self.info2(msg, title, style)
+    def show_message(self, title, text, modal = True):
+        "显示一个消息对话框"
+        async def coroutine():
+            dialog = MessageDialog(title, text, modal)
+            await self.show_dialog_as_float(dialog)
 
-    def warning(self, msg, title = "PYMUD WARNING", style = _WARN_STYLE):
-        "输出警告（黄色），自动换行"
-        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
-        #self.terminal.writeline(_WARN_STYLE + "[PYMUD WARNING] {0}".format(msg) + _CLR_STYLE)
-        self.info2(msg, title, style)
+        asyncio.ensure_future(coroutine())
 
-    def error(self, msg, title = "PYMUD ERROR", style = _ERR_STYLE):
-        "输出错误（红色），自动换行"
-        #self.terminal.writeline(_ERR_STYLE + "[PYMUD ERROR] {0}".format(msg) + _CLR_STYLE)
-        self.info2(msg, title, style)
-        
-    def tell(self, msg):
-        "输出信息，不换行"
-        self.terminal.write(msg)
-    
-    def colorTell(self, fgColor, bgColor, msg):
-        "带颜色输出信息，不换行，暂未实现"
-        from reader import CSI, CSI_END, ANSI_COLOR
-        s = f"{CSI}{str(fgColor)}{CSI_END}{CSI}{str(bgColor)}{CSI_END}{msg}{CSI}{str(ANSI_COLOR.Reset)}{CSI_END}"
-        self.terminal.write(s)
+    def show_dialog(self, dialog):
+        "显示一个给定的对话框"
+        async def coroutine():
+            await self.show_dialog_as_float(dialog)
 
-    def finalize(self):
-        """清理操作"""
-        # 1. 清空所有弱引用的task
-        self._tasks.clear()
-        
-        # 2. 关闭所有session
-        for session in tuple(self._sessions.values()):
-            session.close()
+        asyncio.ensure_future(coroutine())
 
-    def run_untile_exit(self):
-        try:
-            task = self.loop.create_task(self._local_reader_task(), name = "localread")
-            self._tasks.append(task)
-            # 以用户结束命令输入作为程序终止点
-            self.loop.run_until_complete(self._localreader_end_future)
-            self.finalize()
-            self.info("感谢使用PYMUD, 期待下次再见 :)")
-            self.loop.run_until_complete(self.terminal.drain())
-            self.loop.close()
-                
-        except asyncio.CancelledError:
-            pass
+    async def show_dialog_as_float(self, dialog):
+        "显示弹出式窗口."
+        float_ = Float(content=dialog)
+        self.root_container.floats.insert(0, float_)
 
-        return 0
+        self.app.layout.focus(dialog)
+        result = await dialog.future
+        self.app.layout.focus(self.commandLine)
+
+        if float_ in self.root_container.floats:
+            self.root_container.floats.remove(float_)
+
+        return result
+
+    async def run_async(self):
+        await self.app.run_async()
+
+    def run(self):
+        self.app.run()
+        #asyncio.run(self.run_async())
+
+    def get_width(self):
+        "获取ConsoleView的实际宽度，等于输出宽度-4,（左右线条宽度, 滚动条宽度，右边让出的1列）"
+        return self.app.output.get_size().columns - 4
+
+    def get_height(self):
+        "获取ConsoleView的实际高度，等于输出高度-5,（上下线条，菜单，命令栏，状态栏）"
+        #return self.console.height
+        return self.app.output.get_size().rows - 5
 
 if __name__ == "__main__":
-    # 以此文件为入口时，main函数执行如下：
-    args = sys.argv
-    log = True if "log" in args else False
-
-    if log:
-        # INFO以上级别log都存入文件
-        logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-                    datefmt='%m-%d %H:%M',
-                    filename='myapp.log',
-                    filemode='a')
-        # define a Handler which writes INFO messages or higher to the sys.stderr
-        # 高于loglevel的在控制台打印
-        console = logging.StreamHandler()
-        console.setLevel(logging.DEBUG)
-        # set a format which is simpler for console use
-        formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-        # tell the handler to use this format
-        console.setFormatter(formatter)
-        # add the handler to the root logger
-        logging.getLogger('').addHandler(console)
-
-
-    loop = asyncio.get_event_loop()
-    pymud = PyMud(loop = loop)
-    sys.exit(pymud.run_untile_exit())
+    app = PyMudApp()
+    app.run()
