@@ -1,265 +1,410 @@
-"""
-session类型，远程会话的根类
-"""
+import asyncio, logging, re, functools, math, importlib
 
-import asyncio, re, logging, functools, importlib
+from collections.abc import Iterable
+from wcwidth import wcwidth
+from unicodedata import east_asian_width
+
+from prompt_toolkit.filters import (
+    Condition,
+    FilterOrBool,
+    has_focus,
+    is_done,
+    is_true,
+    to_filter,
+)
+from prompt_toolkit.buffer import Buffer
+from extras import SessionBuffer
 from protocol import MudClientProtocol
-from objects import Alias, Trigger, Command, Timer
+from objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger
+from settings import Settings
 
+
+class EventWithData:
+    def __init__(self) -> None:
+        self.event = asyncio.Event()  
+        self.clear()
+
+    async def wait(self):
+        await self.event.wait()
+        return (self._data, self._exception)
+    
+    def set_result(self, result):
+        self._data = result
+        self._exception = None
+        self.event.set()
+
+    def set_exception(self, exc: Exception):
+        self._exception = exc
+        self.event.set()
+
+    def clear(self):
+        self._data = None
+        self._exception = None
+        self.event.clear()
+
+#class Session(StreamReader, StreamWriter):
 class Session:
-    """会话类，管理与远程服务器的连接和配置."""
-
-    "转义字符串替代"
     _esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
-    #_esc_regx = re.compile("\x1b\\[[^m]+[m]")
+    FULL_BLOCKS = set("▂▃▅▆▇▄█")
+    SINGLE_LINES = set("┌└├┬┼┴╭╰─")
+    DOUBLE_LINES = set("╔╚╠╦╪╩═")
 
-    def __init__(self, app, name, host, port, terminal, encoding, encoding_errors, clientwidth, clientheight, *args, **kwargs):
-        """
-        初始化一个会话session，并将会话连接到指定的远程服务器。
-        session类运行时，必须有运行的事件循环，因此必须在asyncio的异步环境下运行。
-        当没有正在运行的循环时，初始化会抛出异常，由asyncio.get_running_loop函数抛出。
-        参数信息：
-            app     : 本会话绑定的application， 当前版本下为PyMud类的实例
-            name    : 会话名称
-            host    : 远程服务器的 名称/IP地址
-            port    : 远程服务器的 端口
-            terminal: 信息的输出终端
-            encoding: 远程服务器编码
-            encoding_errors : 对远程服务器数据解码错误时的处理
-            clientwidth     : 终端的宽度（每行字符数）
-            clientheight    : 终端的高度（行数）
-        """
-        self.loop   = asyncio.get_running_loop()
-        self.log    = logging.getLogger("pymud.session")
-        self.app    = app
-        self.name   = name
-        self.host   = host
-        self.port   = port
-        self.terminal = terminal
-        self.encoding = encoding
-        self.encoding_errors = encoding_errors
-        self.clientwidth = clientwidth
-        self.clientheight = clientheight
-        self.newline = "\n"
-        self.seperator = ";"
+    _commands = (
+        "connect",      # 连接到服务器
 
-        self.active = False
-        self.state  = "INIT"
-        self._extra = args
-        self._kwextra = kwargs
+        "info",         # 输出蓝色info
+        "warning",      # 输出黄色warning
+        "error",        # 输出红色error
+
+        "wait",         # 等待指定毫秒数，与zmud使用相同
+        "timer",        # 定时器
+        "variable",     # 变量
+        "alias",        # 别名
+        "trigger",      # 触发器
+
+        "command",      # 命令
+        
+        "load",         # 加载配置文件
+        "reload",       # 重新加载配置文件
+
+        "gmcp",         # GMCP协议信息
+        "num",          # 重复多次指令
+        "repeat",       # 重复上一行输入的指令
+
+        "message",      # 用弹出式对话框显示消息
+    )
+
+    _commands_alias = {
+        "ali" : "alias",
+        "cmd" : "command",
+        "ti"  : "timer",
+        "tri" : "trigger",
+        "var" : "variable",
+        "rep" : "repeat",
+        "con" : "connect",
+        "wa"  : "wait",
+        "mess": "message",
+        "action": "trigger",
+    }
+
+    def __init__(self, app, name, host, port, encoding = None, after_connect = None, **kwargs):
+        self.log = logging.getLogger("pymud.Session")
+        self.application = app
+        self.name = name
+        self._transport = None
+        self._protocol  = None
+        self.state      = "INITIALIZED"
+        self._eof       = False
+        self._uid       = 0
+
+        self._auto_script = kwargs.get("script", None)
+
+        self._cmds_handler = dict()                         # 支持的命令的处理函数字典
+        for cmd in self._commands:
+            handler = getattr(self, f"handle_{cmd}", None)
+            self._cmds_handler[cmd] = handler
+
+        self.seperator   = Settings.client["seperator"] or ";"
+        self.newline     = Settings.server["newline"] or "\n"
+        self.encoding    = Settings.server["default_encoding"]
+        self.newline_cli = Settings.client["newline"] or "\n"
 
         self.last_command = ""
+        
+        self.buffer     = SessionBuffer()
+        self.buffer_pos_end   = 0                           # 标注最后位置光标指针
+        self.buffer_pos_view  = 0                           # 标注查看位置光标指针
+        self.buffer_pos_view_line = -1
+        self.showHistory      = False                       # 是否显示历史
 
-        self._bglines = []  # 非激活情况下的会话缓冲
-        self._tasks = []
+        self.initialize()
 
-        self._uid = 0       # 适用于本会话的全局id标识
+        self.host = host
+        self.port = port
+        self.encoding = encoding or self.encoding
+        self.after_connect = after_connect
 
-        self._timers    = {}
-        self._triggers  = {}
-        self._aliases   = {}
+        if Settings.client["auto_connect"]:
+            self.open()
+
+    def initialize(self):
+        self._raw_buffer  = bytearray()
+        self._line_buffer = bytearray()
+        
+        self._remote_line_event = EventWithData()
+        self._remote_gmcp_event = EventWithData()
+
+        self._triggers = {}
+        self._aliases  = {}
+        self._commands = {}
+        self._timers   = {}
+
         self._variables = {}
-        self._commands  = {}
 
-        # 任务：创建连接
-        self._task_cc = self.loop.create_task(self.open(), name="open_connection")
-        self._task_cc.add_done_callback(functools.partial(self._connection_created))
+        self._tasks    = []
 
-    async def open(self):
+        self._command_history = []
+
+    def open(self):
+        asyncio.ensure_future(self.connect())
+
+    async def connect(self):
         "异步非阻塞方式创建远程连接"
         def _protocol_factory():
-            return MudClientProtocol(
-                self.loop, 
-                self.encoding, 
-                self.encoding_errors,
-                self.clientwidth,
-                self.clientheight
-                )
-
-        transport, protocol = await self.loop.create_connection(_protocol_factory, self.host, self.port)
-        return transport, protocol
-
-    def _connection_created(self, task):
-        "远程连接创建成功时的回调"
-        self._task_cc = None    # 取消引用，待自动垃圾回收
-        if task.done() and not task.exception():
-            transport, protocol = task.result()
-            self.transport = transport
-            self.protocol  = protocol
-            self.reader    = protocol.reader
-            self.writer    = protocol.writer
-
-            self._task_rd  = self.loop.create_task(self.readline(), name = "remote_read")            
-            self.state     = "RUNNING"
-            self.app.activate_session(self)
-
-            # if self.host == "pkuxkx.net":
-            #     self.config = pkuxkx(self)
-                
-        else:
-            #self.log.error("创建连接过程中发生错误，错误信息为：{%r}" % task.exception())
-            self.app.info("创建连接过程中发生错误，错误信息为 %r " % task.exception())
-            self.close()
-
-    def _cleansession(self):
-        try:
-            self._tasks.clear()
-            self._timers.clear()
-            self._triggers.clear()
-            self._aliases.clear()
-            self._variables.clear()
-            self._commands.clear()
-        except asyncio.CancelledError:
-            pass
-
-    def loadconfig(self, module):
-        try:
-            self.config_name = module
-
-            if hasattr(self, "cfg_module") and self.cfg_module:
-                del self.cfg_module
-                self._cleansession()
-
-            self.cfg_module = importlib.import_module(module)
-            self.config = self.cfg_module.Configuration(self)
-            self.app.info(f"配置模块 {module} 加载完成.")
-        except Exception as e:
-            import traceback
-            self.app.error(f"配置模块 {module} 加载失败，异常为 {e}, 类型为 {type(e)}.")
-            self.app.error(f"异常追踪为： {traceback.format_exc()}")
-
+            return MudClientProtocol(self)
         
-    def reload(self):
-        if hasattr(self, "config_name"):
-            try:
-                del self.config
-                self._cleansession()
-                self.cfg_module = importlib.reload(self.cfg_module)
-                self.config = self.cfg_module.Configuration(self)
-                self.app.info(f"配置模块 {self.cfg_module} 重新加载完成.")
-            except:
-                self.app.error(f"配置模块 {self.cfg_module} 重新加载失败.")
-        else:
-            self.app.error(f"原先未加载过配置模块，怎么能重新加载！")
+        try:
+            self.loop = asyncio.get_running_loop()
+            transport, protocol = await self.loop.create_connection(_protocol_factory, self.host, self.port)
+            
+            self._transport = transport
+            self._protocol  = protocol
+            self._state     = "RUNNING"
+            self.initialize()
 
-    async def readline(self):
-        "远程服务器读取数据并进行处理"
-        while not self.reader.at_eof():
-            # 输出到终端
-            raw_line = await self.reader.readline()
-            if self.active:
-                self.terminal.write(raw_line)
-                await self.terminal.drain()
+            self.onConnected()
+            #self._task_data = asyncio.create_task(self._remote_data_task())
+            #self._task_gmcp = asyncio.create_task(self._remote_gmcp_task())
+
+        except Exception as exc:
+            self.error("创建连接过程中发生错误，错误信息为 %r " % exc)
+            self._state     = "EXCEPTION"
+
+    def onConnected(self):
+        if isinstance(self.after_connect, str):
+            self.writeline(self.after_connect)
+            if self._auto_script:
+                self.handle_load(self._auto_script)
+
+    def disconnect(self):
+        if self.connected:
+            self.write_eof()
+
+    def onDisconnected(self, protocol):
+        pass
+
+
+    async def _remote_data_task(self):
+        "远程数据处理任务，用于Trigger处理，当收到换行符时，触发时间"
+
+        while self.connected:
+            raw_line, exception = await self._remote_line_event.wait()
+            if exception:
+                self.log.error(f"远程数据读取中遇到异常... {exception}")
             else:
-                # 未激活时，不输出到终端显示，保存到背景缓冲
-                self._bglines.append(raw_line)
-                pass
-                #self.app.info("session未被激活")
+                # 触发行在触发时，将去除行尾部的\r\n
+                tri_line = self.getPlainText(raw_line, trim_newline = True)
 
-            # 触发器处理
-            # 触发器触发时的回调函数都是保存在触发器类型实例本身的，因此当执行trymatch时，会自动调用回调函数
-            tri_line = self.getPlainText(raw_line, True)
+                all_tris = list(self._triggers.values())
+                all_tris.sort(key = lambda tri: tri.priority)
 
-            if self.app.logdata:
-                self.app.rawlogger.info(raw_line)
-                self.app.plainlogger.info(tri_line + self.newline)
-
-            all_tris = list(self._triggers.values())
-            all_tris.sort(key = lambda tri: tri.priority)
-            for tri in all_tris:
-                #tri = Trigger()
-                if isinstance(tri, Trigger) and tri.enabled:
-                    if tri.raw:
-                        state = tri.match(raw_line)
-                    else:
-                        state = tri.match(tri_line)
-
-                    if state.result == Trigger.SUCCESS:
-                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                            self._triggers.pop(tri.id)
-
-                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            break
+                for tri in all_tris:
+                    if isinstance(tri, Trigger) and tri.enabled:
+                        if tri.raw:
+                            state = tri.match(raw_line, docallback = True)
                         else:
-                            pass
-                
-        self.close()
+                            state = tri.match(tri_line, docallback = True)
 
-    def listgmcp(self):
-        "返回当前GMCP列表中的所有内容"
-        return self.reader.list_gmcp()
+                        if state.result == Trigger.SUCCESS:
+                            if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                                self._triggers.pop(tri.id)
 
-    async def readgmcp(self, key):
-        "返回当前GMCP列表中的指定key内容（仅当其更新后）"
-        return await self.reader.read_gmcp(key)
+                            if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                                break
+                            else:
+                                pass
 
-    def writeline(self, line: str):
-        """
-        向服务器写入一行，会自动添加换行符。
-        对于使用分隔符隔开的，会分成多行发送。
-        此函数除了分割行之外，不会对内容进行解析
-        """
-        def write_one_line(ln):
-            self.writer.write(line.encode(self.encoding, self.encoding_errors))
-            self.writer.write(self.newline.encode(self.encoding, self.encoding_errors))
+            # 清除事件以待下一次响应
+            # 这里有一点风险，由于使用了可以重复响应的Event，因此如果处理时设置了断点，则会导致后续触发不会触发
+            # 考虑是否采用其他方式？例如，每一行设置一个Triggered标记？
+            # 待测试
+            self._remote_line_event.clear()    
 
-        #asyncio.StreamWriter.write()
-        if self.seperator in line:          # 多个命令集合
+    async def _remote_gmcp_task(self):
+        "远程GMCP处理任务"
+        while self.connected:
+            gmcp, exception = await self._remote_gmcp_event.wait()
+            if exception:
+                self.log.error(f"远程GMCP读取中遇到异常... {exception}")
+            else:
+                pass
+                # TODO 尚未想好GMCP如何触发
+
+            self._remote_gmcp_event.clear()
+
+    @property
+    def connected(self):
+        "返回服务器端连接状态"
+        if self._protocol:
+            con = self._protocol.connected
+        else:
+            con = False
+
+        return con
+
+    @property
+    def duration(self):
+        "返回服务器端连接的时间，以秒为单位"
+        dura = 0
+        if self._protocol and self._protocol.connected:
+            dura = self._protocol.duration
+
+        return dura
+
+
+    def getPlainText(self, rawText: str, trim_newline = False) -> str:
+        "将带有VT100或者MXP转义字符的字符串转换为正常字符串（删除所有转义）"
+        plainText = self._esc_regx.sub("", rawText)
+        if trim_newline:
+            plainText = plainText.rstrip("\n").rstrip("\r")
+
+        return plainText
+    
+    def width_correction(self, line: str) -> str:
+        new_str = []
+        for ch in line:
+            new_str.append(ch)
+            if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
+                if ch in self.FULL_BLOCKS:
+                    new_str.append(ch)
+                elif ch in self.SINGLE_LINES:
+                    new_str.append("─")
+                elif ch in self.DOUBLE_LINES:
+                    new_str.append("═")
+                else:
+                    new_str.append(' ')
+
+        return "".join(new_str)
+
+    def writetobuffer(self, data, newline = False):
+        "将数据写入到用于本地显示的缓冲中"
+
+        self.buffer.insert_text(data)
+
+        if newline:
+            self.buffer.insert_text(self.newline_cli)
+
+
+    def feed_data(self, data) -> None:
+        "永远只会传递1个字节的数据，以bytes形式"
+        self._raw_buffer.extend(data)
+        self._line_buffer.extend(data)
+
+        if (len(data) == 1) and (data[0] == ord("\n")):
+            self.go_ahead()
+
+            # raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
+            # tri_line = self.getPlainText(raw_line, trim_newline = True)
+
+            # feed = raw_line.rstrip("\n").rstrip("\r") + "\n"
+            # self.writetobuffer(feed)
+
+            # self._line_buffer.clear()
+
+            # all_tris = list(self._triggers.values())
+            # all_tris.sort(key = lambda tri: tri.priority)
+
+            # for tri in all_tris:
+            #     if isinstance(tri, Trigger) and tri.enabled:
+            #         if tri.raw:
+            #             state = tri.match(raw_line, docallback = True)
+            #         else:
+            #             state = tri.match(tri_line, docallback = True)
+
+            #         if state.result == Trigger.SUCCESS:
+            #             if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+            #                 self._triggers.pop(tri.id)
+
+            #             if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+            #                 break
+            #             else:
+            #                 pass
+
+    def feed_eof(self) -> None:
+        self._eof = True
+        # TODO 添加服务器断开连接的处理
+        self.state = "DISCONNECTED"
+        self.log.info(f"服务器断开连接! {self._protocol.__repr__}")
+    
+    def feed_gmcp(self, name, value) -> None:
+        pass
+
+    def feed_msdp(self, name, value) -> None:
+        pass
+
+    def feed_mssp(self, name, value) -> None:
+        pass
+
+    def go_ahead(self) -> None:
+        "把当前接收缓冲内容放到显示缓冲中"
+
+        raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
+        tri_line = self.getPlainText(raw_line, trim_newline = True)
+
+        # 全局变量%line
+        self.setVariable("%line", tri_line)
+
+        self.writetobuffer(raw_line)
+        self._line_buffer.clear()
+
+        all_tris = list(self._triggers.values())
+        all_tris.sort(key = lambda tri: tri.priority)
+
+        for tri in all_tris:
+            if isinstance(tri, Trigger) and tri.enabled:
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = True)
+                else:
+                    state = tri.match(tri_line, docallback = True)
+
+                if state.result == Trigger.SUCCESS:
+                    if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                        self._triggers.pop(tri.id)
+
+                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                        break
+                    else:
+                        pass
+
+    def set_exception(self, exc: Exception):
+        self.error(f"连接过程中发生异常，异常信息为： {exc}")
+        pass
+
+    def create_task(self, coro, *args, name: str = None) -> asyncio.Task:
+        task = asyncio.create_task(coro, name = name)
+        self._tasks.append(task)
+        return task
+
+    def clean_finished_tasks(self):
+        "清理已经完成的任务"
+        for task in self._tasks:
+            if isinstance(task, asyncio.Task) and task.done():
+                self._tasks.remove(task)
+
+    def write(self, data: bytes | bytearray | memoryview) -> None:
+        "向服务器写入数据（RAW格式字节数组/字节串）"
+        if self._transport and not self._transport.is_closing():
+            self._transport.write(data)
+    
+    def writeline(self, line: str) -> None:
+        "向服务器中写入一行。如果使用;分隔（使用Settings.client.seperator指定）的多个命令，将逐行写入"
+        if self.seperator in line:
             lines = line.split(self.seperator)
             for ln in lines:
-                write_one_line(ln)
+                cmd = ln + self.newline
+                self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
+                
+                if Settings.client["echo_input"]:
+                    self.writetobuffer(f"\x1b[32m{cmd}\x1b[0m")
+
         else:
-            write_one_line(line)
+            cmd = line + self.newline
+            self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
 
-    async def exec_command_async(self, line: str, *args, **kwargs):
-        """
-        异步执行MUD命令，是exec_command的异步实现
-        """
-        async def exec_one_command_async(cmd):
-            "执行分离后的单个MUD Command/Alias"
-
-            # 先判断是否是命令
-            isNotCmd = True
-            for command in self._commands.values():
-                if isinstance(command, Command) and command.enabled:
-                    state = command.match(cmd)
-                    if state.result == Command.SUCCESS:
-                        # 命令的任务名称采用命令id，以便于后续处理
-                        cmd_task = asyncio.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                        self._tasks.append(cmd_task)
-                        
-                        await cmd_task              # 这一句是单命令执行的异步唯一变化，即如果是Command，则需异步等待Command执行完毕
-                        isNotCmd = False
-                        break
-
-            # 再判断是否是别名
-            if isNotCmd:
-                notAlias = True
-                for alias in self._aliases.values():
-                    if isinstance(alias, Alias) and alias.enabled: 
-                        state = alias.match(cmd)
-                        if state.result == Alias.SUCCESS:
-                            notAlias = False
-                            break
-
-                # 都不是则是普通命令，直接发送
-                if notAlias:
-                    self.writeline(cmd)
-
-        
-        ## 以下为函数执行本体
-        self.clean_finished_tasks()
-
-        if self.seperator in line:          # 多个命令集合
-            cmds = line.split(self.seperator)
-            for cmd in cmds:
-                await exec_one_command_async(cmd)           # 这一句是异步变化，修改为异步等待Command执行完毕
-                await asyncio.sleep(0.1)                    # 异步命令，在多个命令中插入0.1s的等待
-        else:
-            await exec_one_command_async(line)              # 这一句是异步变化，修改为异步等待Command执行完毕
-
-
-    def exec_command(self, line: str, *args, **kwargs):
+            if Settings.client["echo_input"]:
+                self.writetobuffer(f"\x1b[32m{cmd}\x1b[0m")
+    
+    def exec_command(self, line: str, *args, **kwargs) -> None:
         """
         执行MUD命令。多个命令可以用分隔符隔开。
         此函数中，多个命令是一次性发送到服务器的，并未进行等待确认上一条命令执行完毕
@@ -268,16 +413,15 @@ class Session:
         """
         def exec_one_command(cmd):
             "执行分离后的单个MUD Command/Alias"
-
             # 先判断是否是命令
+            self._command_history.append(cmd)
             isNotCmd = True
             for command in self._commands.values():
                 if isinstance(command, Command) and command.enabled:
                     state = command.match(cmd)
                     if state.result == Command.SUCCESS:
-                        # 命令的任务名称采用命令id，以便于后续处理
-                        cmd_task = asyncio.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                        self._tasks.append(cmd_task)
+                        # 命令的任务名称采用命令id，以便于后续查错
+                        self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
                         isNotCmd = False
                         break
 
@@ -306,73 +450,59 @@ class Session:
         else:
             exec_one_command(line)
 
-
-
     def exec_command_after(self, wait: float, line: str):
         "延时一段时间之后，执行命令(exec_command)"
-        delay_task = asyncio.create_task(asyncio.sleep(wait))
+        delay_task = self.create_task(asyncio.sleep(wait))
         delay_task.add_done_callback(functools.partial(self.exec_command, line))
-        self._tasks.append(delay_task)
 
-    def clean_finished_tasks(self):
-        "清理已完成的任务"
-        for task in self._tasks:
-            if isinstance(task, asyncio.Task) and task.done():
-                self._tasks.remove(task)
+    async def exec_command_async(self, line: str, *args, **kwargs):
+        """
+        异步执行MUD命令，是exec_command的异步实现
+        """
+        async def exec_one_command_async(cmd):
+            "执行分离后的单个MUD Command/Alias"
 
-    def activate(self):
-        "激活本会话，即将本会话设置为当前会话。同时，返回会话本身。"
-        self.active = True
+            # 先判断是否是命令
+            isNotCmd = True
+            for command in self._commands.values():
+                if isinstance(command, Command) and command.enabled:
+                    state = command.match(cmd)
+                    if state.result == Command.SUCCESS:
+                        # 命令的任务名称采用命令id，以便于后续处理
+                        # 这一句是单命令执行的异步唯一变化，即如果是Command，则需异步等待Command执行完毕
+                        await self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
+                        isNotCmd = False
+                        break
 
-        # 将背景数据一次性写入终端，并清空背景数据
-        if len(self._bglines) > 0:
-            self.terminal.writelines(self._bglines, True)
-            self._bglines.clear()
+            # 再判断是否是别名
+            if isNotCmd:
+                notAlias = True
+                for alias in self._aliases.values():
+                    if isinstance(alias, Alias) and alias.enabled: 
+                        state = alias.match(cmd)
+                        if state.result == Alias.SUCCESS:
+                            notAlias = False
+                            break
 
-        return self
+                # 都不是则是普通命令，直接发送
+                if notAlias:
+                    self.writeline(cmd)
 
-    def deactivate(self):
-        "取消激活本会话，将当前会话设置为后台。同时，返回会话本身。"
-        self.active = False
-        return self
+        
+        ## 以下为函数执行本体
+        self.clean_finished_tasks()
 
-    def is_active(self):
-        "返回本会话是否激活。激活状态与否，仅影响是否向控制台输出信息"
-        return self.state
+        if self.seperator in line:          # 多个命令集合
+            cmds = line.split(self.seperator)
+            for cmd in cmds:
+                await exec_one_command_async(cmd)           # 这一句是异步变化，修改为异步等待Command执行完毕
+                if Settings.client["interval"] > 0:
+                    await asyncio.sleep(Settings.client["interval"] / 1000.0)
+        else:
+            await exec_one_command_async(line)              # 这一句是异步变化，修改为异步等待Command执行完毕
 
-    def close(self):
-        "关闭本会话, 并从app的会话清单中移除本会话"
-        self.state = "END"
-        self.active = False
-        #if not self._task_rd.done():
-        if hasattr(self,"_task_rd") and self._task_rd:
-            self._task_rd.cancel("宿主要求退出，任务中止. ")
-            self._task_rd = None
-
-        for task in self._tasks:
-            if isinstance(task, asyncio.Task) and (not task.done()):
-                task.cancel("session closed.")
-
-        for timer in self._timers.values():
-            if isinstance(timer, Timer):
-                timer.enabled = False
-
-        self._tasks.clear()
-        self._aliases.clear()
-        self._triggers.clear()
-        self._commands.clear()
-        self._timers.clear()
-
-        self.app.info("远程服务器断开，将自动关闭session")
-        self.app.remove_session(self)
-
-    def getPlainText(self, rawText: str, trim_newline = False) -> str:
-        "将带有VT100或者MXP转义字符的字符串转换为正常字符串（删除所有转义）"
-        plainText = self._esc_regx.sub("", rawText)
-        if trim_newline:
-            plainText = plainText.rstrip("\n").rstrip("\r")
-
-        return plainText
+    def write_eof(self) -> None:
+        self._transport.write_eof()
     
     def getUniqueNumber(self):
         "获取本session中的唯一编号"
@@ -401,69 +531,84 @@ class Session:
             if isinstance(cmd, Timer) and tmr.group == group:
                 tmr.enabled = enabled
 
-    ## ##################
-    ## 别名Alias 处理
-    ## ##################
+    def _addObjects(self, objs: dict, cls: type):
+        if cls == Alias:
+            self._aliases.update(objs)
+        elif cls == Command:
+            self._commands.update(objs)
+        elif cls == Trigger:
+            self._triggers.update(objs)
+        elif cls == Timer:
+            self._timers.update(objs)
+
+    def _addObject(self, obj, cls: type):
+        if type(obj) == cls:
+            if cls == Alias:
+                self._aliases[obj.id] = obj
+            elif cls == Command:
+                self._commands[obj.id] = obj
+            elif cls == Trigger:
+                self._triggers[obj.id] = obj
+            elif cls == Timer:
+                self._timers[obj.id] = obj
+
+    def _delObject(self, id, cls: type):
+        if cls == Alias:
+            self._aliases.pop(id, None)
+        elif cls == Command:
+            self._commands.pop(id, None)
+        elif cls == Trigger:
+            self._triggers.pop(id, None)
+        elif cls == Timer:
+            self._timers.pop(id, None)
+
     def addAliases(self, alis: dict):
-        """将系列别名添加到session"""
-        self._aliases.update(alis)
+        "向会话中增加多个别名"
+        self._addObjects(alis, Alias)
+
+    def addCommands(self, cmds: dict):
+        "向会话中增加多个命令"
+        self._addObjects(cmds, Command)
+
+    def addTriggers(self, tris: dict):
+        "向会话中增加多个触发器"
+        self._addObjects(tris, Trigger)
+
+    def addTimers(self, tis: dict):
+        "向会话中增加多个定时器"
+        self._addObjects(tis, Timer)
 
     def addAlias(self, ali: Alias):
-        """将单个别名添加到session。若存在同id的，则会替换"""
-        self._aliases[ali.id] = ali
-
-    def delAlias(self, id):
-        """删除指定id的alias"""
-        if id in self._aliases.keys():
-            self._aliases.pop(id)
-
-    ## ##################
-    ## 触发器Trigger 处理
-    ## ##################
-    def addTriggers(self, tris: dict):
-        """将系列触发器添加到session"""
-        self._triggers.update(tris)
-
-    def addTrigger(self, tri: Trigger):
-        """将单个触发器添加到session。若存在同id的，则会替换"""
-        self._triggers[tri.id] = tri
-
-    def delTrigger(self, id):
-        """删除指定id的trigger"""
-        if id in self._triggers.keys():
-            self._triggers.pop(id)
-
-    ## ##################
-    ## 命令 Command 处理
-    ## ##################
-    def addCommands(self, cmds: dict):
-        """将系列命令添加到session"""
-        self._commands.update(cmds)
+        "向会话中增加别名"
+        self._addObject(ali, Alias)
 
     def addCommand(self, cmd: Command):
-        """将单个命令添加到session。若存在同id的，则会替换"""
-        self._commands[cmd.id] = cmd
+        "向会话中增加命令"
+        self._addObject(cmd, Command)
 
-    def delCommand(self, id):
-        """删除指定id的command"""
-        if id in self._commands.keys():
-            self._commands.pop(id)
+    def addTrigger(self, tri: Trigger):
+        "向会话中增加触发器"
+        self._addObject(tri, Trigger)
 
-    ## ##################
-    ## 定时器 Timer 处理
-    ## ##################
-    def addTimers(self, tms: dict):
-        """将系列定时器添加到session"""
-        self._timers.update(tms)
+    def addTimer(self, ti: Timer):
+        "向会话中增加定时器"
+        self._addObject(ti, Timer)
 
-    def addTimer(self, timer: Timer):
-        """将单个定时器添加到session。若存在同id的，则会替换"""
-        self._timers[timer.id] = timer
+    def delAlias(self, ali: Alias):
+        "从会话中移除别名"
+        self._delObject(ali, Alias)
 
-    def delTimer(self, id):
-        """删除指定id的timer"""
-        if id in self._timers.keys():
-            self._timers.pop(id)
+    def delCommand(self, cmd: Command):
+        "从会话中移除命令"
+        self._delObject(cmd, Command)
+
+    def delTrigger(self, tri: Trigger):
+        "从会话中移除触发器"
+        self._delObject(tri, Trigger)
+
+    def delTimer(self, ti: Timer):
+        "从会话中移除定时器"
+        self._delObject(ti, Timer)
 
     ## ###################
     ## 变量 Variables 处理
@@ -502,3 +647,379 @@ class Session:
     def updateVariables(self, kvdict: dict):
         """使用dict字典更新变量值"""
         self._variables.update(kvdict)
+
+    def handle_input(self, *args):
+        """处理命令行输入的#开头的命令"""
+        asyncio.ensure_future(self.handle_input_async(*args))
+
+    async def handle_input_async(self, *args):
+        """异步处理命令行输入的#开头的命令"""
+        cmd = args[0]
+
+        if cmd.isnumeric():
+            times = 0
+            try:
+                times = int(cmd)
+            except ValueError:
+                pass
+
+            if times > 0:
+                self.handle_num(times, *args[1:])
+            else:
+                self.warning("#{num} {cmd}只能支持正整数!")
+        else:
+            cmd = cmd.lower()
+            if cmd in self._commands_alias.keys():
+                cmd = self._commands_alias[cmd]
+
+            handler = self._cmds_handler.get(cmd, None)
+            if handler and callable(handler):
+                await handler(*args[1:])
+            else:
+                self.warning("未识别的命令: %s" % " ".join(args))
+
+    async def handle_wait(self, msec: str, *args):
+        "异步等待，毫秒后结束"
+        if msec.isnumeric():
+            wait_time = float(msec) / 1000.0
+            await asyncio.sleep(wait_time)
+
+    def handle_connect(self, *args):
+        "\x1b[1m命令\x1b[0m: #connect|#con\n" \
+        "      连接到远程服务器（仅当远程服务器未连接时有效）\n" \
+        "\x1b[1m相关\x1b[0m: disconnect"
+
+        if not self.connected:
+            self.open()
+
+        else:
+            duration = self._protocol.duration
+            hour = duration // 3600
+            min  = (duration - 3600 * hour) // 60
+            sec  = duration % 60
+            time_msg = ""
+            if hour > 0:
+                time_msg += f"{hour} 小时"
+            if min > 0:
+                time_msg += f"{min} 分"
+            time_msg += f"{sec} 秒"
+
+            self.info("已经与服务器连接了 {}".format(time_msg))
+
+    def handle_variable(self, *args):
+        "\x1b[1m命令\x1b[0m: #variable|#var\n" \
+        "      不带参数时，列出当前会话中所有的变量清单\n" \
+        "      带1个参数时，列出当前会话中名称为该参数的变量值\n" \
+        "      带2个参数时，设置名称为该参数的变量值\n" \
+        "\x1b[1m相关\x1b[0m: alias, trigger, command"
+
+        if len(args) == 0:
+            vars = self._variables
+            vars_simple = {}
+            vars_complex = {}
+            for k, v in vars.items():
+                if isinstance(v, Iterable) and not isinstance(v, str):
+                    vars_complex[k] = v
+                else:
+                    vars_simple[k] = v
+
+            width = self.application.get_width()
+            
+            title = f"  VARIABLE LIST IN SESSION {self.name}  "
+            left = (width - len(title)) // 2
+            right = width - len(title) - left
+            self.writetobuffer("="*left + title + "="*right, newline = True)
+            
+            # print vars in simple, 每个变量占40格，一行可以多个变量
+            var_count = len(vars_simple)
+            var_per_line = (width - 2) // 40
+            lines = math.ceil(var_count / var_per_line)
+            left_space = (width - var_per_line * 40) // 2
+            if left_space > 4:  left_space = 4
+            
+            var_keys = sorted(vars_simple.keys())
+
+            for idx in range(0, lines):
+                start = idx * var_per_line
+                end   = (idx + 1) * var_per_line
+                if end > var_count: end = var_count
+                self.writetobuffer(" " * left_space)
+                line_vars = var_keys[start:end]
+                for var in line_vars:
+                    self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
+
+                self.writetobuffer("", newline = True)
+
+            # print vars in complex, 每个变量占1行
+            for k, v in vars_complex.items():
+                self.writetobuffer(" " * left_space)
+                self.writetobuffer("{0:>18} = {1}".format(k, v.__repr__()), newline = True)
+
+            self.writetobuffer("="*width, newline = True)
+
+        elif len(args) == 1:
+            var = args[0]
+            if var in self._variables.keys:
+                self.info("{0:>18} = {1:<19}".format(var, self._variables[var].__repr__()), "SESSION 变量")
+            else:
+                self.info("本会话 {} 中不存在名称为 {} 的变量".format(self.name, var), "SESSION 变量")
+            
+        elif len(args) == 2:
+            self.setVariable(args[0], args[1])
+
+    def _handle_objs(self, name: str, objs: dict, *args):
+        if len(args) == 0:
+            width = self.application.get_width()
+            
+            title = f"  {name.upper()} LIST IN SESSION {self.name}  "
+            left = (width - len(title)) // 2
+            right = width - len(title) - left
+            self.writetobuffer("="*left + title + "="*right, newline = True)
+
+            for id in sorted(objs.keys()):
+                self.writetobuffer("  %r" % objs[id], newline = True)
+
+            self.writetobuffer("="*width, newline = True)
+
+        elif len(args) == 1:
+            if args[0] in objs.keys():
+                obj = objs[args[0]]
+                self.info(obj.__detailed__())
+            else:
+                self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
+
+        elif len(args) == 2:
+            # 当第一个参数为对象obj名称时，对对象进行处理
+            if args[0] in objs.keys():
+                obj = objs[args[0]]
+                if args[1] == "on":
+                    obj.enabled = True
+                    self.info(f"对象 {obj} 的使能状态已打开.")
+                elif args[1] == "off":
+                    obj.enabled = False
+                    self.info(f"对象 {obj} 的使能状态已禁用.")
+                else:
+                    self.error(f"#{name.lower()}命令的第二个参数仅能接受on或off")
+            
+            # 当第一个参数为不是对象obj名称时，创建新对象
+            else:
+                name = name.lower()
+                if name == "alias":
+                    ali = SimpleAlias(self, args[0], args[1])
+                    self.addAlias(ali)
+                    self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__))
+                elif name == "trigger":
+                    tri = SimpleTrigger(self, args[0], args[1])
+                    self.addTrigger(tri)
+                    self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__))
+
+    def handle_alias(self, *args):
+        "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
+        "      不指定参数时, 列出当前会话中所有的别名清单\n" \
+        "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
+        "      为一个参数时, 第一个参数应为Alias的id, 第二个应为on/off, 可修改Alias的使能状态\n" \
+        "\x1b[1m相关\x1b[0m: variable, trigger, command, timer"
+
+        self._handle_objs("Alias", self._aliases, *args)
+
+
+    def handle_timer(self, *args):
+        "\x1b[1m命令\x1b[0m: #timer|#tmr\n" \
+        "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
+        "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
+        "      为一个参数时, 第一个参数应为Timer的id, 第二个应为on/off, 可修改Timer的使能状态\n" \
+        "\x1b[1m相关\x1b[0m: variable, alias, trigger, command"
+   
+        self._handle_objs("Timer", self._timers, *args)
+
+    def handle_command(self, *args):
+        "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
+        "      不指定参数时, 列出当前会话中所有的命令清单\n" \
+        "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
+        "      为一个参数时, 第一个参数应为Command的id, 第二个应为on/off, 可修改Command的使能状态\n" \
+        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer"
+
+        self._handle_objs("Command", self._commands, *args)
+
+    def handle_trigger(self, *args):
+        "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
+        "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
+        "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
+        "      为一个参数时, 第一个参数应为Trigger的id, 第二个应为on/off, 可修改Trigger的使能状态\n" \
+        "\x1b[1m相关\x1b[0m: alias, variable, command, timer"
+                
+        self._handle_objs("Trigger", self._triggers, *args)
+
+
+    def handle_repeat(self, *args):
+        "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
+        "      重复向session输出上一次人工输入的命令 \n" \
+        "\x1b[1m相关\x1b[0m: num"
+
+        if self.connected and self.last_command:
+            self.exec_command(self.last_command)
+        else:
+            self.info("当前会话没有连接或没有键入过指令，repeat无效")
+
+    def handle_num(self, times, *args):
+        "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
+        "      向session中输出{num}次{cmd} \n" \
+        "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
+        "\x1b[1m相关\x1b[0m: repeat"
+        
+        if self.connected:
+            if len(args) > 0:
+                cmd = " ".join(args)
+                for i in range(0, times):
+                    self.exec_command(cmd)
+        else:
+            self.error("当前会话没有连接，指令无效")
+
+    def handle_gmcp(self, *args):
+        "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
+        "      指定key时，显示由GMCP收到的key信息\n" \
+        "      不指定key时，显示所有GMCP收到的信息\n" \
+        "\x1b[1m相关\x1b[0m: 暂无"
+
+        # if self.current_session:
+        #     #self.info("这个功能还没写好...")
+        #     gmcp = self.current_session.listgmcp()
+        #     #self._handle_objs("GMCP", gmcp, *args)
+        #     width = self.terminal.getwidth()
+            
+        #     title = f"  GMCP VALUES LIST IN SESSION {self.current_session.name}  "
+        #     left = (width - len(title)) // 2
+        #     right = width - len(title) - left
+        #     self.terminal.writeline("="*left + title + "="*right)
+   
+        #     # print vars in complex, 每个变量占1行
+        #     for k, v in gmcp.items():
+        #         self.terminal.writeline("  {0:>28} = {1}".format(k, v.__repr__()))
+
+        #     self.terminal.writeline("="*width)
+        # else:
+        #     self.info(self.MSG_NO_SESSION)
+
+    def handle_message(self, *args):
+        title = "来自会话 {} 的消息".format(self.name)
+        
+        new_args = []
+        for item in args:
+            if item[0] == "%":
+                item_val = self.getVariable(item, "")
+                new_args.append(item_val)
+            # 非系统变量，@开头，在变量明前加@引用
+            elif item[0] == "@":
+                item_val = self.getVariable(item[1:], "")
+                new_args.append(item_val)
+            else:
+                new_args.append(item)
+
+        msg   = " ".join(new_args)
+        self.application.show_message(title, msg, False)
+
+    def _cleansession(self):
+        try:
+            for task in self._tasks:
+                if isinstance(task, asyncio.Task) and not task.done():
+                    task.cancel("session exit.")
+                    del task
+
+            self._tasks.clear()
+            self._timers.clear()
+            self._triggers.clear()
+            self._aliases.clear()
+            self._variables.clear()
+
+            for cmd in self._commands:
+                if isinstance(cmd, Command):
+                    cmd.reset()
+                    del cmd
+
+            self._commands.clear()
+            
+        except asyncio.CancelledError:
+            pass
+
+    def handle_load(self, *args):
+        "\x1b[1m命令\x1b[0m: #load {config}\n" \
+        "      为当前session加载{config}指定的模块\n" \
+        "\x1b[1m相关\x1b[0m: reload"
+
+        if len(args) > 0:
+            module = args[0]
+            try:
+                self.config_name = module
+
+                if hasattr(self, "cfg_module") and self.cfg_module:
+                    del self.cfg_module
+                    self._cleansession()
+
+                self.cfg_module = importlib.import_module(module)
+                self.config = self.cfg_module.Configuration(self)
+                self.info(f"配置模块 {module} 加载完成.")
+            except Exception as e:
+                import traceback
+                self.error(f"配置模块 {module} 加载失败，异常为 {e}, 类型为 {type(e)}.")
+                self.error(f"异常追踪为： {traceback.format_exc()}")
+
+    def handle_reload(self, *args):
+        "\x1b[1m命令\x1b[0m: #reload\n" \
+        "      为当前session重新加载配置模块（解决配置模块文件修改后的重启问题）\n" \
+        "\x1b[1m相关\x1b[0m: load"
+
+        if hasattr(self, "config_name"):
+            try:
+                del self.config
+                self._cleansession()
+                self.cfg_module = importlib.reload(self.cfg_module)
+                self.config = self.cfg_module.Configuration(self)
+                self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
+            except:
+                self.error(f"配置模块 {self.cfg_module} 重新加载失败.")
+        else:
+            self.error(f"原先未加载过配置模块，怎么能重新加载！")
+
+
+    def handle_info(self, *args):
+        "\x1b[1m命令\x1b[0m: #info {msg}\n" \
+        "      使用info输出一行, 主要用于测试\n" \
+        "\x1b[1m相关\x1b[0m: warning, error"
+
+        if len(args) > 0:
+            self.info(" ".join(args))
+
+    def handle_warning(self, *args):
+        "\x1b[1m命令\x1b[0m: #warning {msg}\n" \
+        "      使用warning输出一行, 主要用于测试\n" \
+        "\x1b[1m相关\x1b[0m: info, error"
+        
+        if len(args) > 0:
+            self.warning(" ".join(args))
+
+    def handle_error(self, *args):
+        "\x1b[1m命令\x1b[0m: #error {msg}\n" \
+        "      使用error输出一行, 主要用于测试\n" \
+        "\x1b[1m相关\x1b[0m: info, warning"
+        
+        if len(args) > 0:
+            self.error(" ".join(args))
+
+    def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+        self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
+
+    def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+        "输出信息（蓝色），自动换行"
+        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
+        self.info2(msg, title, style)
+
+    def warning(self, msg, title = "PYMUD WARNING", style = Settings.WARN_STYLE):
+        "输出警告（黄色），自动换行"
+        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
+        #self.terminal.writeline(_WARN_STYLE + "[PYMUD WARNING] {0}".format(msg) + _CLR_STYLE)
+        self.info2(msg, title, style)
+
+    def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
+        "输出错误（红色），自动换行"
+        #self.terminal.writeline(_ERR_STYLE + "[PYMUD ERROR] {0}".format(msg) + _CLR_STYLE)
+        self.info2(msg, title, style)

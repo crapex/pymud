@@ -1,6 +1,6 @@
 import logging, asyncio, datetime, traceback
 from asyncio import BaseTransport, Protocol
-from reader import MudStreamReader
+from settings import Settings
 
 IAC = b"\xff"           # TELNET 命令字 IAC
 DONT = b"\xfe"
@@ -125,106 +125,94 @@ class MudClientProtocol(Protocol):
     扩展协议： GMCP, MCDP, MSP, MXP等等
     """
 
-    _reader_factory = MudStreamReader
-    _writer_factory = asyncio.StreamWriter
-    _closed = False
+    def __init__(self, session, *args, **kwargs) -> None:
+        """
+        MUD客户端协议实现, 参数包括：       \n
+          + session: 管理protocol的会话     \n
+        除此之外，还可以接受的命名参数包括： \n
+          + onConnected:    当连接建立时的回调，包含2个参数： MudClientProtocol本身，以及生成的传输Transport对象  \n
+          + onDisconnected: 当连接断开时的回调，包含1个参数： MudClientProtocol本身
+        """
 
-    def __init__(self, 
-            loop: asyncio.AbstractEventLoop = None, 
-            encoding = "GBK", 
-            encoding_error = "ignore",
-            naws_width = 150,
-            naws_height = 50,
-            *args,
-            **kwargs) -> None:
         self.log = logging.getLogger("pymud.MudClientProtocol")
-        #self.log.setLevel(logging.NOTSET)
+        self.session = session                                              # 数据处理的会话
+        self.connected = False                                              # 连接状态标识                              
+        self._iac_handlers = dict()                                         # 支持选项协商处理函数
+        self._iac_subneg_handlers = dict()                                  # 处理选项子协商处理函数
 
-        self._iac_handlers = dict()             # 支持选项协商处理函数
-        self._iac_subneg_handlers = dict()      # 处理选项子协商处理函数
         for k, v in _option_name_str.items():
-            # 此处逻辑已修改，将处理函数是否是可执行函数留到后续的执行过程时再判断
-            func = getattr(self, f"handle_{v.lower()}", None)        # 选项协商处理函数，处理函数中使用小写字母
-            # assert callable(func), f"错误: IAC命令{name_option(k)}的处理函数{func_name}不存在!"
-            #if callable(func):
+            func = getattr(self, f"handle_{v.lower()}", None)               # 选项协商处理函数，处理函数中使用小写字母
             self._iac_handlers[k] = func
-            subfunc = getattr(self, f"handle_{v.lower()}_sb", None)  # 子协商处理函数
-            #if callable(subfunc):
+            subfunc = getattr(self, f"handle_{v.lower()}_sb", None)         # 子协商处理函数
             self._iac_subneg_handlers[k] = subfunc
 
-        self.loop = loop                        # 保存事件循环，主要用于支持与Qt的
-        self.encoding = encoding                # 字节串基本编码，默认GBK，适用于pkuxkx
-        self.encoding_errors = encoding_error   # 编码解码错误时的处理
+        self.encoding = Settings.server["default_encoding"]                 # 字节串基本编码
+        self.encoding_errors = Settings.server["encoding_errors"]           # 编码解码错误时的处理
+        self.mnes = Settings.mnes
 
         self._extra = dict()                    # 存储有关的额外信息的词典
-        self._tasks = list()                    # 由于asyncio的Task在创建时为弱引用，保存到列表中以防被垃圾回收
-        
+
         self.mssp = dict()                      # 存储MSSP协议传来的服务器有关参数
         self.msdp = dict()                      # 存储MSDP协议传来的服务器所有数据
         self.gmcp = dict()                      # 存储GMCP协议传来的服务器所有数据
-        
-        self.mnes = {
-            "CHARSET" : self.encoding.upper(),
-            "CLIENT_NAME" : "PYMUD",
-            "CLIENT_VERSION" : "0.01b",
-            "AUTHOR" : "NEWSTART"
-        }
-
-        self.reader = None                      # 用于连接后的Reader
-        self.writer = None                      # 用于连接后的Writer
-
-        #if kwargs["width"]
-        self._extra["naws_width"] = naws_width
-        self._extra["naws_height"] = naws_height
 
         self._extra.update(kwargs=kwargs)
-        # 在telnetlib3中，该Future用来表示协商已经完成。
-        # 推测原因应该是协商完成后，才能正常进行protocol的读写流的有关操作。
-        # 先保留定义，后续处理
-        if loop:
-            self._waiter_connected = loop.create_future()
-            self._waiter_closed = loop.create_future()
 
+        self.on_connection_made = kwargs.get("onConnected", None)       # 连接时的回调
+        self.on_connection_lost = kwargs.get("onDisconnected", None)    # 断开时的回调
 
-    def connection_made(self, transport: BaseTransport) -> None:
-        #super().connection_made(transport)
+    def get_extra_info(self, name, default=None):
+        """获取传输信息或者额外的协议信息."""
+        if self._transport:
+            default = self._transport._extra.get(name, default)
+        return self._extra.get(name, default)
         
-        self._transport = transport             # 保存传输
-        self._when_connected = datetime.datetime.now()      # 连接建立时间
-        self._last_received = datetime.datetime.now()       # 最后收到数据时间
+    def connection_made(self, transport: BaseTransport) -> None:
+        self._transport = transport                                         # 保存传输
+        self._when_connected = datetime.datetime.now()                      # 连接建立时间
+        self._last_received = datetime.datetime.now()                       # 最后收到数据时间
 
-        self.reader = self._reader_factory(loop = self.loop, encoding = self.encoding, encoding_errors = self.encoding_errors)
-        self.writer = self._writer_factory(self._transport, self, self.reader, self.loop)
+        #self.session.set_transport(self._transport)                         # 将传输赋值给session
 
-        self._state_machine = "normal"       # 状态机标识, normal,
-        self._bytes_received_count = 0              # 收到的所有字节数（含命令）
-        #self._bytes_count = 0                       # 收到的字节数（不含协商），即写入streamreader的字节数
+        # self.reader = self._reader_factory(loop = self.loop, encoding = self.encoding, encoding_errors = self.encoding_errors)
+        # self.writer = self._writer_factory(self._transport, self, self.reader, self.loop)
 
+        self._state_machine = "normal"                                      # 状态机标识, normal,
+        self._bytes_received_count = 0                                      # 收到的所有字节数（含命令）
+        self._bytes_count = 0                                               # 收到的字节数（不含协商），即写入streamreader的字节数
+        self.connected = True
+        
         self.log.info(f'已建立连接到: {self}.')
 
-        #self._waiter_connected
+        # 若设置了onConnected回调函数，则调用
+        if self.on_connection_made and callable(self.on_connection_made):
+            self.on_connection_made(self._transport)
+
+        # 设置future
+        #self._waiter_connected.set_result(True)
 
     def connection_lost(self, exc) -> None:
-        if self._closed:
+        if not self.connected:
             return
 
-        self._closed = True
+        self.connected = False
 
         if exc is None:
             self.log.info(f'连接已经断开: {self}.')
-            self.reader.feed_eof()
+            self.session.feed_eof()
         else:
-            self.log.info(f'由于异常连接已经断开: {self}, {exc}.')
-            self.reader.set_exception(exc)
-
-        for task in self._tasks:
-            task.cancel()
+            self.log.warning(f'由于异常连接已经断开: {self}, {exc}.')
+            self.session.set_exception(exc)
 
         self._transport.close()
         self._transport = None
+        #self.session.set_transport(None)
+
+        # 若设置了onConnected回调函数，则调用
+        if self.on_connection_lost and callable(self.on_connection_lost):
+            self.on_connection_lost(self._transport)
 
         self._state_machine = "normal"          # 状态机标识恢复到 normal,
-        self._waiter_closed.set_result(True)    # 表示关闭状态的Future设置完成
 
     def eof_received(self):
         self.log.debug("收到服务器发来的EOF, 连接关闭.")
@@ -241,10 +229,9 @@ class MudClientProtocol(Protocol):
             if self._state_machine == "normal":  
                 if byte == IAC:         # 若接收到IAC，状态机切换到等待命令
                     self._state_machine = "waitcommand"
-                    if isinstance(self.reader, MudStreamReader):
-                        self.reader.goahead()
+                    self.session.go_ahead()
                 else:                   # 否则收到为正常数据，传递给reader
-                    self.reader.feed_data(byte)
+                    self.session.feed_data(byte)
             
             # 状态机为 等待命令，接下来应该收到的字节仅可能包括： WILL/WONT/DO/DONT/SB
             elif self._state_machine == "waitcommand":
@@ -258,18 +245,17 @@ class MudClientProtocol(Protocol):
                 elif byte == NOP:                                # 空操作 TODO 确认空操作是否为IAC NOP，没有其他
                     self.log.debug(f"收到服务器NOP指令: IAC NOP")
                     self._state_machine = "normal"
-                    # 对NOP信号和GA信号处理相同，让缓冲区全部发送出去
-                    if isinstance(self.reader, MudStreamReader):
-                        self.reader.goahead()
+                    # 对NOP信号和GA信号处理相同
+                    self.session.go_ahead()
                 elif byte == GA:
                     self.log.debug(f"收到服务器GA指令: IAC GA")
                     self._state_machine = "normal"
                     # 对NOP信号和GA信号处理相同，让缓冲区全部发送出去
-                    if isinstance(self.reader, MudStreamReader):
-                        self.reader.goahead()
+                    self.session.go_ahead()
                 else:                                            # 错误数据，无法处置，记录错误，并恢复状态机到normal
                     self.log.error(f"与服务器协商过程中，收到未处理的非法命令: {byte}")
                     self._state_machine = "normal"
+
             elif self._state_machine == "waitoption":            # 后续可以接受选项
                 if byte in _option_name_str.keys():
                     iac_handler = self._iac_handlers[byte]       # 根据选项选择对应的处理函数
@@ -284,6 +270,7 @@ class MudClientProtocol(Protocol):
                    self.log.warning(f"收到不识别(不在定义范围内)的IAC协商: IAC {name_command(self._iac_command)} {name_option(byte)}, 将使用默认处理（不接受）")
                    self._iac_default_handler(self._iac_command, byte)
                    self._state_machine = "normal"                # 状态机恢复到正常状态
+            
             elif self._state_machine == "waitsubnegotiation":    # 当收到了IAC SB
                 # 此时，下一个字节应为可选选项，至少不应为IAC
                 if byte != IAC:
@@ -293,6 +280,7 @@ class MudClientProtocol(Protocol):
                 else:     
                     self.log.error('子协商中在等待选项码的字节中错误收到了IAC')                                       
                     self._state_machine = "normal"               # 此时丢弃所有前面的状态
+            
             elif self._state_machine == "waitsbdata":           
                 self._iac_sub_neg_data += byte                   # 保存子协商全部内容
                 if byte == IAC:
@@ -307,6 +295,7 @@ class MudClientProtocol(Protocol):
                 else:
                     # 子协商过程中，收到的所有非IAC字节，都是子协商的具体内容
                     pass
+
             elif self._state_machine == "waitse":
                 self._iac_sub_neg_data += byte                   # 保存子协商全部内容
                 if byte == SE:                                   # IAC SE 表示子协商已接收完毕
@@ -321,34 +310,22 @@ class MudClientProtocol(Protocol):
                 else:
                     self._state_machine = "waitsbdata"
 
-    #def pause_writing(self) -> None:
-    #    return super().pause_writing()
-    #
-    #def resume_writing(self) -> None:
-    #    return super().resume_writing()
-
     # public properties
     @property
     def duration(self):
-        """Time elapsed since client connected, in seconds as float."""
+        """自客户端连接以来的总时间，以秒为单位，浮点数表示"""
         return (datetime.datetime.now() - self._when_connected).total_seconds()
 
     @property
     def idle(self):
-        """Time elapsed since data last received, in seconds as float."""
+        """自收到上一个服务器发送数据以来的总时间，以秒为单位，浮点数表示"""
         return (datetime.datetime.now() - self._last_received).total_seconds()
 
     # public protocol methods
-
     def __repr__(self):
+        "%r下的表述"
         hostport = self.get_extra_info("peername", ["-", "closing"])[:2]
         return "<Peer {0} {1}>".format(*hostport)
-
-    def get_extra_info(self, name, default=None):
-        """Get optional client protocol or transport information."""
-        if self._transport:
-            default = self._transport._extra.get(name, default)
-        return self._extra.get(name, default)
     
     def _iac_default_handler(self, cmd, option):
         """
@@ -366,7 +343,7 @@ class MudClientProtocol(Protocol):
             self.log.error(f'选项协商进入非正常分支，参考数据: , _iac_default_handler, {cmd}, {option}')
             return
         
-        self.writer.write(IAC + ack + option)
+        self.session.write(IAC + ack + option)
         self.log.debug(f'使用默认协商处理拒绝了服务器的请求的 IAC {name_command(cmd)} {name_option(option)}, 回复为 IAC {name_command(ack)} {name_option(option)}')
 
     # SGA done.
@@ -375,8 +352,13 @@ class MudClientProtocol(Protocol):
         SGA, supress go ahead, 抑制 GA 信号。在全双工环境中，不需要GA信号，因此默认同意抑制
         """
         if cmd == WILL:
-            self.writer.write(IAC + DO + SGA)
-            self.log.debug(f'发送选项协商, 同意抑制GA信号 IAC DO SGA.')
+            if Settings.server["SGA"]:
+                self.session.write(IAC + DO + SGA)
+                self.log.debug(f'发送选项协商, 同意抑制GA信号 IAC DO SGA.')
+            else:
+                self.session.write(IAC + DONT + SGA)
+                self.log.debug(f'发送选项协商, 不同意抑制GA信号 IAC DONT SGA.')
+
         else:
             self.log.warning(f"收到服务器的未处理的SGA协商: IAC {name_command(cmd)} SGA")
 
@@ -386,8 +368,13 @@ class MudClientProtocol(Protocol):
         ECHO, 回响。默认不同意
         """
         if cmd == WILL:
-            self.writer.write(IAC + DONT + ECHO)
-            self.log.debug(f'发送选项协商, 不同意ECHO选项协商 IAC DONT ECHO.')
+            if Settings.server["ECHO"]:
+                self.session.write(IAC + DO + ECHO)
+                self.log.debug(f'发送选项协商, 同意ECHO选项协商 IAC DO ECHO.')
+            else:
+                self.session.write(IAC + DONT + ECHO)
+                self.log.debug(f'发送选项协商, 不同意ECHO选项协商 IAC DONT ECHO.')
+            
         else:
             self.log.warning(f"收到服务器的未处理的ECHO协商: IAC {name_command(cmd)} ECHO")
 
@@ -398,7 +385,7 @@ class MudClientProtocol(Protocol):
         nohandle = False
         if cmd == WILL:
             # 1. 回复同意CHARSET协商
-            self.writer.write(IAC + DO + CHARSET)
+            self.session.write(IAC + DO + CHARSET)
             self.log.debug(f'发送选项协商, 同意CHARSET协商 IAC DO CHARSET.等待子协商')
         elif cmd == WONT:
             nohandle = True
@@ -424,11 +411,11 @@ class MudClientProtocol(Protocol):
             if 'utf-8' in charset_list:
                 sbneg = bytearray()
                 sbneg.extend(IAC + SB + CHARSET)
-                sbneg.append(REJECTED)
+                sbneg.append(ACCEPTED)
                 sbneg.extend(b"UTF-8")
                 sbneg.extend(IAC + SE)
-                self.writer.write(sbneg)
-                self.log.debug(f'发送CHARSET子协商，不同意UTF-8编码 IAC SB REJECTED "UTF-8" IAC SE')
+                self.session.write(sbneg)
+                self.log.debug(f'发送CHARSET子协商，同意UTF-8编码 IAC SB ACCEPTED "UTF-8" IAC SE')
                 unhandle = False
 
         if unhandle:
@@ -448,7 +435,7 @@ class MudClientProtocol(Protocol):
             nohandle = True
         elif cmd == DO:
             # 1. 回复同意MTTS协商
-            self.writer.write(IAC + WILL + TTYPE)
+            self.session.write(IAC + WILL + TTYPE)
             self._mtts_index = 0
             self.log.debug(f'发送选项协商, 同意MTTS(TTYPE)协商 IAC WILL TTYPE.等待子协商')
         elif cmd == DONT:
@@ -477,20 +464,19 @@ class MudClientProtocol(Protocol):
         if (len(data) == 6) and (data[3] == SEND):  
             if self._mtts_index == 0:
                 # 第一次收到，回复客户端全名，全大写
-                self.writer.write(IAC + SB + TTYPE + IS + b"PYMUD" + IAC + SE)
+                self.session.write(IAC + SB + TTYPE + IS + Settings.__appname__.encode(self.encoding, self.encoding_errors) + IAC + SE)
                 self._mtts_index += 1
-                self.log.debug('回复第一次MTTS子协商: IAC SB TTYPE IS "PYMUD" IAC SE')
+                self.log.debug(f'回复第一次MTTS子协商: IAC SB TTYPE IS "{Settings.__appname__}" IAC SE')
             elif self._mtts_index == 1:
                 # 第二次收到，回复客户端终端类型，此处默认设置为XTERM(使用系统控制台), ANSI（代码已支持），后续功能完善后再更改
-                # TODO 根据完善的终端模拟功能，修改终端类型 DUMB ANSI VT100 XTERM
                 # VT100 https://tintin.mudhalla.net/info/vt100/
                 # XTERM https://tintin.mudhalla.net/info/xterm/
-                self.writer.write(IAC + SB + TTYPE + IS + b"XTERM" + IAC + SE)
+                self.session.write(IAC + SB + TTYPE + IS + b"XTERM" + IAC + SE)
                 self._mtts_index += 1
                 self.log.debug('回复第二次MTTS子协商: IAC SB TTYPE IS "XTERM" IAC SE')
             elif self._mtts_index == 2:
-                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置7（支持ANSI, VT100, UTF8），后续功能完善后再更改
-                # TODO 根据完善的终端模拟功能，修改终端标准
+                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置775（支持ANSI, VT100, UTF-8, TRUECOLOR, MNES），后续功能完善后再更改
+                # 根据完善的终端模拟功能，修改终端标准
                 #       1 "ANSI"              Client supports all common ANSI color codes.
                 #       2 "VT100"             Client supports all common VT100 codes.
                 #       4 "UTF-8"             Client is using UTF-8 character encoding.
@@ -503,9 +489,9 @@ class MudClientProtocol(Protocol):
                 #     512 "MNES"              Client supports the Mud New Environment Standard for information exchange.
                 #    1024 "MSLP"              Client supports the Mud Server Link Protocol for clickable link handling.
                 #    2048 "SSL"               Client supports SSL for data encryption, preferably TLS 1.3 or higher.
-                self.writer.write(IAC + SB + TTYPE + IS + b"MTTS 7" + IAC + SE)
+                self.session.write(IAC + SB + TTYPE + IS + b"MTTS 775" + IAC + SE)
                 self._mtts_index += 1
-                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 7" IAC SE')
+                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 775" IAC SE')
             else:
                 self.log.warning(f'收到第{self._mtts_index + 1}次(正常为3次)的MTTS子协商, 将不予应答')
         else:
@@ -528,16 +514,16 @@ class MudClientProtocol(Protocol):
             nohandle = True
         elif cmd == DO:         # 正常情况下，仅处理服务器的 IAC DO NAWS
             # 1. 回复同意NAWS
-            self.writer.write(IAC + WILL + NAWS)
+            self.session.write(IAC + WILL + NAWS)
             self.log.debug(f'发送选项协商, 同意NAWS协商 IAC WILL NAWS.')
             # 2. 发送子协商确认尺寸
-            width_bytes = self._extra["naws_width"].to_bytes(2, "big")
-            height_bytes = self._extra["naws_height"].to_bytes(2, "big")
+            width_bytes = Settings.client["naws_width"].to_bytes(2, "big")
+            height_bytes = Settings.client["naws_height"].to_bytes(2, "big")
             sb_cmd = IAC + SB + NAWS + width_bytes + height_bytes + IAC + SE
-            self.writer.write(sb_cmd)
+            self.session.write(sb_cmd)
             self.log.debug(
                 '发送NAWS选项子协商, 明确窗体尺寸。IAC SB NAWS (width = %d, height = %d) IAC SE' %
-                (self._extra["naws_width"], self._extra["naws_height"])
+                (Settings.client["naws_width"], Settings.client["naws_height"])
             )
         elif cmd == DONT:
             nohandle = True
@@ -559,7 +545,7 @@ class MudClientProtocol(Protocol):
             nohandle = True
         elif cmd == DO:
             # 1. 回复同意MNES
-            self.writer.write(IAC + WILL + MNES)
+            self.session.write(IAC + WILL + MNES)
             self.log.debug(f'发送选项协商, 同意MNES协商 IAC WILL MNES. 等待服务器子协商')
         elif cmd == DONT:
             nohandle = True
@@ -587,7 +573,7 @@ class MudClientProtocol(Protocol):
             sbneg.append(VAL)
             sbneg.extend(val.encode(self.encoding))
             sbneg.extend(IAC + SE)
-            self.writer.write(sbneg)
+            self.session.write(sbneg)
             self.log.debug(f"回复MNES请求: {var} = {val}")
 
         IS, SEND, INFO = 0, 1, 2
@@ -630,12 +616,17 @@ class MudClientProtocol(Protocol):
         """
         nohandle = False
         if cmd == WILL:
-            # 1. 回复同意GMCP
-            self.writer.write(IAC + DO + GMCP)
-            self.log.debug(f'发送选项协商, 同意GMPC协商 IAC DO GMCP.')
+            # 1. 回复同意GMCP与否
+            if Settings.server["GMCP"]:
+                
+                self.log.debug(f'发送选项协商, 同意GMPC协商 IAC DO GMCP.')
+            else:
+                self.session.write(IAC + DONT + GMCP)
+                self.log.debug(f'发送选项协商, 不同意GMPC协商 IAC DONT GMCP.')
+
             # 2. 发送GMCP子协商，获取MSDP的相关命令？待定后续处理
-            #  支持了MSDP协议， 不使用GMCP获取MSDP的有关命令，即不使用 MDSP over GMCP
-            # self.writer.write(IAC + SB + GMCP + b'MSDP {"LIST" : "COMMANDS"}' + IAC + SE)
+            # 支持了MSDP协议， 不使用GMCP获取MSDP的有关命令，即不使用 MDSP over GMCP
+            # self.session.write(IAC + SB + GMCP + b'MSDP {"LIST" : "COMMANDS"}' + IAC + SE)
             # self.log.debug(f'发送GMPC子协商 IAC SB GMCP ''MSDP {"LIST" : "COMMANDS"}'' IAC SE.')
         elif cmd == WONT:
             nohandle = True
@@ -673,10 +664,8 @@ class MudClientProtocol(Protocol):
         except:
             value = value_str
 
-        self.gmcp.update({name: value})
-        self.log.debug(f'收到GMCP子协商数据: {value} = {value}')
-        if isinstance(self.reader, MudStreamReader):
-            self.reader.feed_gmcp(name, value)
+        self.log.debug(f'收到GMCP子协商数据: {name} = {value}')
+        self.session.feed_gmcp(name, value)
 
     def handle_msdp(self, cmd):
         """
@@ -693,11 +682,17 @@ class MudClientProtocol(Protocol):
         
         nohandle = False
         if cmd == WILL:
-            # 1. 回复同意MSDP
-            self.writer.write(IAC + DO + MSDP)
-            self.log.debug(f'发送选项协商, 同意MSDP协商 IAC DO MSDP.')
-            self.send_msdp_sb(b"LIST", b"LISTS")
-            self.send_msdp_sb(b"LIST", b"REPORTABLE_VARIABLES")
+            # 1. 回复同意MSDP与否
+            if Settings.server["MSDP"]:
+                self.session.write(IAC + DO + MSDP)
+                self.log.debug(f'发送选项协商, 同意MSDP协商 IAC DO MSDP.')
+                self.send_msdp_sb(b"LIST", b"LISTS")
+                self.send_msdp_sb(b"LIST", b"REPORTABLE_VARIABLES")
+
+            else:
+                self.session.write(IAC + DONT + MSDP)
+                self.log.debug(f'发送选项协商, 不同意MSDP协商 IAC DONT MSDP.')
+            
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -721,7 +716,7 @@ class MudClientProtocol(Protocol):
         sbneg.append(MSDP_VAL)
         sbneg.extend(param)
         sbneg.extend(IAC + SE)
-        self.writer.write(sbneg)
+        self.session.write(sbneg)
         self.log.debug(f'发送MSDP子协商查询支持的MSDP命令 IAC SB MSDP MSDP_VAR "{cmd.decode(self.encoding)}" MSDP_VAL "{param.decode(self.encoding)}" IAC SE.')
 
     def handle_msdp_sb(self, data):
@@ -828,9 +823,13 @@ class MudClientProtocol(Protocol):
         nohandle = False
         if cmd == WILL:
             # 1. 回复同意MSSP协商
-            self.writer.write(IAC + DO + MSSP)
-            self._mtts_index = 0
-            self.log.debug(f'发送选项协商, 同意MSSP协商 IAC WILL MSSP.等待子协商')
+            if Settings.server["MSSP"]:
+                self.session.write(IAC + DO + MSSP)
+                self._mtts_index = 0
+                self.log.debug(f'发送选项协商, 同意MSSP协商 IAC DO MSSP.等待子协商')
+            else:
+                self.session.write(IAC + DONT + MSSP)
+                self.log.debug(f'发送选项协商, 不同意MSSP协商 IAC DONT MSSP.等待子协商')
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -858,6 +857,7 @@ class MudClientProtocol(Protocol):
                 var_str = var.decode(self.encoding)
                 val_str = val.decode(self.encoding)
                 svrStatus[var_str] = val_str
+                self.session.feed_mssp(var_str, val_str)
                 self.log.debug(f"收到服务器状态(来自MSSP子协商): {var_str} = {val_str}")
 
         svrStatus = dict()      # 使用字典保存服务器发来的状态信息
@@ -902,9 +902,13 @@ class MudClientProtocol(Protocol):
         nohandle = False
         if cmd == WILL:
             # 1. 回复不同意MCCP2协商
-            self.writer.write(IAC + DONT + MCCP2)
-            self._mtts_index = 0
-            self.log.debug(f'发送选项协商, 不同意MCCP V2协商 IAC DONT MCCP2')
+            if Settings.server["MCCP2"]:
+                self.session.write(IAC + DO + MCCP2)
+                self.log.debug(f'发送选项协商, 同意MCCP V2协商 IAC DO MCCP2')
+            else:
+                self.session.write(IAC + DONT + MCCP2)
+                self.log.debug(f'发送选项协商, 不同意MCCP V2协商 IAC DONT MCCP2')
+
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -927,9 +931,13 @@ class MudClientProtocol(Protocol):
         nohandle = False
         if cmd == WILL:
             # 1. 回复不同意MCCP2协商
-            self.writer.write(IAC + DONT + MCCP3)
-            self._mtts_index = 0
-            self.log.debug(f'发送选项协商, 不同意MCCP V3协商 IAC DONT MCCP3')
+            if Settings.server["MCCP3"]:
+                self.session.write(IAC + DO + MCCP3)
+                self.log.debug(f'发送选项协商, 同意MCCP V3协商 IAC DO MCCP3')
+            else:
+                self.session.write(IAC + DONT + MCCP3)
+                self.log.debug(f'发送选项协商, 不同意MCCP V3协商 IAC DONT MCCP3')
+
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -952,9 +960,13 @@ class MudClientProtocol(Protocol):
         nohandle = False
         if cmd == WILL:
             # 1. 回复不同意MSP协商
-            self.writer.write(IAC + DONT + MSP)
-            self._mtts_index = 0
-            self.log.debug(f'发送选项协商, 不同意MSP协商 IAC DONT MSP')
+            if Settings.server["MSP"]:
+                self.session.write(IAC + DO + MSP)
+                self.log.debug(f'发送选项协商, 同意MSP协商 IAC DO MSP')
+            else:
+                self.session.write(IAC + DONT + MSP)
+                self.log.debug(f'发送选项协商, 不同意MSP协商 IAC DONT MSP')
+
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -976,10 +988,13 @@ class MudClientProtocol(Protocol):
         """
         nohandle = False
         if cmd == WILL:
-            # 1. 回复不同意MSP协商
-            self.writer.write(IAC + DONT + MXP)
-            self._mtts_index = 0
-            self.log.debug(f'发送选项协商, 不同意MXP协商 IAC DONT MXP')
+            if Settings.server["MXP"]:
+                self.session.write(IAC + DO + MXP)
+                self.log.debug(f'发送选项协商, 同意MXP协商 IAC DO MXP')
+            else:
+                self.session.write(IAC + DONT + MXP)
+                self.log.debug(f'发送选项协商, 不同意MXP协商 IAC DONT MXP')
+
         elif cmd == WONT:
             nohandle = True
         elif cmd == DO:
@@ -991,15 +1006,3 @@ class MudClientProtocol(Protocol):
 
         if nohandle:
             self.log.warning(f"收到服务器的未处理的MXP协商: IAC {name_command(cmd)} MXP")
-
-    @staticmethod
-    def _log_exception(logger, e_type, e_value, e_tb):
-        rows_tbk = [
-            line for line in "\n".join(traceback.format_tb(e_tb)).split("\n") if line
-        ]
-        rows_exc = [
-            line.rstrip() for line in traceback.format_exception_only(e_type, e_value)
-        ]
-
-        for line in rows_tbk + rows_exc:
-            logger(line)

@@ -6,6 +6,144 @@ import asyncio, logging, re
 from collections.abc import Iterable
 from collections import namedtuple
 import functools
+from settings import Settings
+
+class CodeBlock:
+    """
+    PyMUD中可以执行的代码块
+    """
+
+    @classmethod
+    def create_block(cls, code: str) -> tuple:
+        "创建代码块，并返回对象自身"
+
+        code_lines = []
+        line = ""
+        brace_count = 0
+        for i in range(0, len(code)):
+            ch = code[i]
+            if ch == "{":
+                brace_count += 1
+                line += ch
+            elif ch == "}":
+                brace_count -= 1
+                if brace_count < 0:
+                    raise Exception("错误的代码块，大括号数量不匹配")
+                line += ch
+            elif ch == ";":
+                if brace_count == 0:
+                    code_lines.append(line)
+                    line = ""
+                else:
+                    line += ch
+            else:
+                line += ch
+
+        if line:
+            code_lines.append(line)
+
+        if len(code_lines) == 1:
+            return CodeBlock.create_line(line)
+        else:
+            codes = []
+            for line in code_lines:
+                codes.extend(CodeBlock.create_block(line))
+
+            return tuple(codes)
+
+    @classmethod
+    def create_line(cls, line: str) -> tuple:
+        code_params = []
+        arg = ""
+        brace_count, single_quote, double_quote = 0, 0, 0
+
+        if len(line)> 0:
+            if line[0] == "#":
+                start_idx = 1
+                code_params.append("#")
+            else:
+                start_idx = 0
+
+            for i in range(start_idx, len(line)):
+                ch = line[i]
+                if ch == "{":
+                    brace_count += 1
+                    arg += ch
+                elif ch == "}":
+                    brace_count -= 1
+                    if brace_count < 0:
+                        raise Exception("错误的代码块，大括号数量不匹配")
+                    arg += ch
+                elif ch == "'":
+                    if single_quote == 0:
+                        single_quote = 1
+                    elif single_quote == 1:
+                        single_quote = 0
+                elif ch == '"':
+                    if double_quote == 0:
+                        double_quote = 1
+                    elif double_quote == 1:
+                        double_quote = 0
+
+                elif ch == " ":
+                    if (brace_count == 0) and (double_quote == 0) and (single_quote == 0):
+                        code_params.append(arg)
+                        arg = ""
+                    else:
+                        arg += ch
+                else:
+                    arg += ch
+
+            if (single_quote > 0) or (double_quote > 0):
+                raise Exception("引号的数量不匹配")
+            
+            if arg:
+                code_params.append(arg)
+
+            result = []
+            result.append(tuple(code_params))
+            return tuple(result)
+        else:
+            return tuple()
+
+    def __init__(self, session, code) -> None:
+        self.session = session
+        self.codes = CodeBlock.create_block(code)
+
+    def execute(self, wildcards = None):
+        asyncio.ensure_future(self.async_execute(wildcards))
+
+    async def async_execute(self, wildcards = None):
+        for code in self.codes:
+            if code[0] == "#":
+                await self.session.handle_input_async(*code[1:])
+            else:
+                new_code = []
+                for item in code:
+                    # %1~%9，特指捕获中的匹配内容
+                    if item in (f"%{i}" for i in range(1, 10)):
+                        idx = int(item[1:])
+                        if idx <= len(wildcards):
+                            item_val = wildcards[idx-1]
+                        else:
+                            item_val = None
+                        new_code.append(item_val)
+
+                    # 系统变量，%开头，直接%引用，如%line
+                    elif item[0] == "%":
+                        item_val = self.session.getVariable(item, "")
+                        new_code.append(item_val)
+                    # 非系统变量，@开头，在变量明前加@引用
+                    elif item[0] == "@":
+                        item_val = self.session.getVariable(item[1:], "")
+                        new_code.append(item_val)
+                    else:
+                        new_code.append(item)
+
+                await self.session.exec_command_async(" ".join(new_code))
+
+            if Settings.client["interval"] > 0:
+                await asyncio.sleep(Settings.client["interval"] / 1000.0)
 
 class BaseObject:
     """MUD会话支持的对象基类"""
@@ -77,24 +215,24 @@ class BaseObject:
 
     def info(self, msg, *args):
         "若session存在，session中输出info；不存在则在logging中输出info"
-        if self.session and self.session.active:
-            self.session.app.info(msg, *args)
+        if self.session:
+            self.session.info(msg, *args)
         else:
             self.log.info(msg)
 
     def warning(self, msg, *args):
         "若session存在，session中输出warning；不存在则在logging中输出warning"
-        if self.session and self.session.active:
-            self.session.app.warning(msg, *args)
+        if self.session:
+            self.session.warning(msg, *args)
         else:
             self.log.warning(msg)
 
     def error(self, msg, *args):
         "若session存在，session中输出error；同时在logging中输出error"
-        if self.session and self.session.active:
-            self.session.app.error(msg, *args)
-        
-        self.log.error(msg)
+        if self.session:
+            self.session.error(msg, *args)
+        else:
+            self.log.error(msg)
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled}'
@@ -111,8 +249,6 @@ class MatchObject(BaseObject):
         self.ignoreCase    = kwargs.get("ignoreCase", False)          # 忽略大小写，非默认
         self.isRegExp      = kwargs.get("isRegExp", True)             # 正则表达式，默认
         self.expandVar     = kwargs.get("expandVar", True)            # 扩展变量（将变量用值替代），默认
-        #self.multiline     = kwargs.get("multiline", False)          # 多行
-        #self.linesToMatch  = kwargs.get("linesToMatch", 2)           # 行数
         self.keepEval      = kwargs.get("keepEval", False)            # 不中断，非默认
         self.raw           = kwargs.get("raw", False)                 # 原始数据匹配。当原始数据匹配时，不对VT100指令进行解析
         
@@ -123,7 +259,6 @@ class MatchObject(BaseObject):
         elif isinstance(patterns, Iterable):
             self.multiline = True
             self.linesToMatch = len(patterns)
-        #else: #if isinstance(matcher, str):
 
         if self.isRegExp:
             flag = 0
@@ -169,7 +304,7 @@ class MatchObject(BaseObject):
                     self.lines.clear()
                     self.lines.append(line)
                     self.wildcards.clear()
-        
+
         else:                                               # 多行匹配情况
             # multilines match. 多行匹配时，受限于行的捕获方式，必须一行一行来，设置状态标志进行处理。
             if self._mline == 0:                            # 当尚未开始匹配时，匹配第1行
@@ -234,20 +369,76 @@ class Alias(MatchObject):
     """别名，实现方式-MatchObject"""
     __abbr__ = "ali"
 
+class SimpleAlias(Alias):
+    "简单Alias，使用类似Zmud方法的处理方式"
+
+    def __init__(self, session, patterns, code, *args, **kwargs):
+        self._code = code
+        self._codeblock = CodeBlock(session, code)
+        super().__init__(session, patterns, *args, **kwargs)
+
+    def onSuccess(self, id, line, wildcards):
+        self._codeblock.execute(wildcards)
+
+    def __detailed__(self) -> str:
+        return f'<{self.__class__.__name__}> enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+    
+    def __repr__(self) -> str:
+        return self.__detailed__()
+
 class Trigger(MatchObject):
     """触发器，实现方式-MatchObject"""
     __abbr__ = "tri"
 
+    def __init__(self, session, patterns, *args, **kwargs):
+        super().__init__(session, patterns, *args, **kwargs)
+        self._task = None
+
     async def triggered(self):
-        return await self.matched()
+        if isinstance(self._task, asyncio.Task) and (not self._task.done()):
+            self._task.cancel("a new task has been settled")
+
+        self._task = self.session.create_task(self.matched())
+        return await self._task
+
+class SimpleTrigger(Trigger):
+    "简单Trigger，使用类似Zmud方法的处理方式"
+
+    def __init__(self, session, patterns, code, *args, **kwargs):
+        self._code = code
+        self._codeblock = CodeBlock(session, code)
+        super().__init__(session, patterns, *args, **kwargs)
+
+    def onSuccess(self, id, line, wildcards):
+        self._codeblock.execute(wildcards)
+
+    def __detailed__(self) -> str:
+        return f'<{self.__class__.__name__}> enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+    
+    def __repr__(self) -> str:
+        return self.__detailed__()
 
 class Command(MatchObject):
     """命令，实现方式-MatchObject"""
     __abbr__ = "cmd"
     def __init__(self, session, patterns, *args, **kwargs):
         super().__init__(session, patterns, sync = False, *args, **kwargs)
+        self._tasks = []
+
+    def create_task(self, coro, *args, name = None):
+        task = self.session.create_task(coro, *args, name)
+        self._tasks.append(task)
+        return task
+
+    def reset(self):
+        super().reset()
+
+        for task in self._tasks:
+            if isinstance(task, asyncio.Task) and (not task.done()):
+                task.cancel("manual reset.")
 
     async def execute(self, cmd, *args, **kwargs):
+        self.reset()
         return
 
 class SimpleCommand(Command):
@@ -283,6 +474,7 @@ class SimpleCommand(Command):
                     self._retry_tris.append(retry_tri)
 
     async def execute(self, cmd, *args, **kwargs):
+        self.reset()
         # 0. check command
         cmd = cmd or self.patterns
         # 1. save the command, to use later.
@@ -293,15 +485,19 @@ class SimpleCommand(Command):
             # 1. create awaitables
             tasklist = list()
             for tr in self._succ_tris:
-                tasklist.append(asyncio.create_task(tr.triggered()))
+                tasklist.append(self.session.create_task(tr.triggered()))
             for tr in self._fail_tris:
-                tasklist.append(asyncio.create_task(tr.triggered()))
+                tasklist.append(self.session.create_task(tr.triggered()))
             for tr in self._retry_tris:
-                tasklist.append(asyncio.create_task(tr.triggered()))
+                tasklist.append(self.session.create_task(tr.triggered()))
 
             self.session.writeline(cmd)
 
             done, pending = await asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED")
+            
+            # 任务完成后增加0.1s等待（不应该等待)
+            # await asyncio.sleep(0.1)
+
             tasks_done = list(done)
             
             tasks_pending = list(pending)
@@ -364,7 +560,7 @@ class Timer(BaseObject):
             self._renewTask()
 
     def _renewTask(self):
-        self._task = asyncio.create_task(asyncio.sleep(self.timeout), name = self.id)
+        self._task = self.session.create_task(asyncio.sleep(self.timeout), name = self.id)
         self._task.add_done_callback(self.onTimer)
 
     @property
@@ -379,7 +575,7 @@ class Timer(BaseObject):
         else:
             self._renewTask()
 
-    def onTimer(self, task, *args, **kwargs):
+    def onTimer(self, *args, **kwargs):
         "定时器到点时执行"
         if self.enabled:
             if callable(self._onSuccess):
@@ -392,6 +588,24 @@ class Timer(BaseObject):
                 self._task = None
             
 
-       
+if __name__ == "__main__":
+    codes = [
+        "w;e;s;n;#tri newage off;xixi",
+        "drink jiudai;#wa 300 {sleep};xixi",
+        "drink jiudai;#wa 300 {sleep};",
+        "w;e;s;#wa 300 {enter;out;#wa 300{sleep}}",
+        "w;e;s;#wa 300 {enter;out;#wa 300{sleep}};drink hulu;eat ganliang;give song gold",
+        "#tri '^[> ]*你看到一个宝石' {get gem}"
+    ]
 
-        
+    async def coroutine(num):
+        return await num
+    
+    print(asyncio.ensure_future(coroutine(1)))
+
+    for code in codes:
+        cb = CodeBlock.create_block(code)
+        for item in cb:
+            print(item)
+
+    print(asyncio.ensure_future(coroutine(2)))
