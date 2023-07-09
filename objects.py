@@ -6,6 +6,7 @@ import asyncio, logging, re
 from collections.abc import Iterable
 from collections import namedtuple
 import functools
+from typing import Any
 from settings import Settings
 
 class CodeBlock:
@@ -240,6 +241,34 @@ class BaseObject:
     def __detailed__(self) -> str:
         return self.__repr__
 
+class GMCPTrigger(BaseObject):
+    """
+    支持GMCP收到数据的处理，可以类似于Trigger的使用用法
+    GMCP必定以指定name为触发，触发时，其值直接传递给对象本身
+    """
+    def __init__(self, session, name, *args, **kwargs):
+        self.event = asyncio.Event()
+        self.value = None
+        super().__init__(session, id = name, *args, **kwargs)
+
+    def reset(self):
+        "复位事件，用于async执行"
+        self.event.clear()
+
+    async def triggered(self):
+        self.reset()
+        await self.event.wait()
+        self.reset()
+
+    def __call__(self, value) -> Any:
+        self.value = value
+        if callable(self._onSuccess):
+            self.event.set()
+            self._onSuccess(value)
+
+    def __detailed__(self) -> str:
+        return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
+            
 class MatchObject(BaseObject):
     "支持匹配内容的对象，包括Alias, Trigger, Command, Module等等"
     __abbr__ = "mob"
@@ -252,7 +281,6 @@ class MatchObject(BaseObject):
         self.keepEval      = kwargs.get("keepEval", False)            # 不中断，非默认
         self.raw           = kwargs.get("raw", False)                 # 原始数据匹配。当原始数据匹配时，不对VT100指令进行解析
         
-
         if isinstance(patterns, str):
             self.multiline = False
             self.linesToMatch = 1
@@ -340,8 +368,8 @@ class MatchObject(BaseObject):
         # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
         if self.sync and docallback:
             if state.result == self.SUCCESS:
-                self._onSuccess(state.id, state.line, state.wildcards)
                 self.event.set()
+                self._onSuccess(state.id, state.line, state.wildcards)
             elif state.result == self.FAILURE:
                 self._onFailure(state.id, state.line, state.wildcards)
             elif state.result == self.TIMEOUT:
@@ -485,10 +513,13 @@ class SimpleCommand(Command):
             # 1. create awaitables
             tasklist = list()
             for tr in self._succ_tris:
+                tr.reset()
                 tasklist.append(self.session.create_task(tr.triggered()))
             for tr in self._fail_tris:
+                tr.reset()
                 tasklist.append(self.session.create_task(tr.triggered()))
             for tr in self._retry_tris:
+                tr.reset()
                 tasklist.append(self.session.create_task(tr.triggered()))
 
             self.session.writeline(cmd)
@@ -587,25 +618,3 @@ class Timer(BaseObject):
                 del self._task
                 self._task = None
             
-
-if __name__ == "__main__":
-    codes = [
-        "w;e;s;n;#tri newage off;xixi",
-        "drink jiudai;#wa 300 {sleep};xixi",
-        "drink jiudai;#wa 300 {sleep};",
-        "w;e;s;#wa 300 {enter;out;#wa 300{sleep}}",
-        "w;e;s;#wa 300 {enter;out;#wa 300{sleep}};drink hulu;eat ganliang;give song gold",
-        "#tri '^[> ]*你看到一个宝石' {get gem}"
-    ]
-
-    async def coroutine(num):
-        return await num
-    
-    print(asyncio.ensure_future(coroutine(1)))
-
-    for code in codes:
-        cb = CodeBlock.create_block(code)
-        for item in cb:
-            print(item)
-
-    print(asyncio.ensure_future(coroutine(2)))

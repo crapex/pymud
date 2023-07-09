@@ -1,27 +1,44 @@
 import asyncio, functools, re 
+from datetime import datetime, time, timedelta
+from prompt_toolkit.widgets import Button, Dialog, FormattedTextToolbar
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
-from prompt_toolkit import HTML
+from prompt_toolkit import ANSI, HTML, print_formatted_text
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
+from prompt_toolkit.selection import SelectionState, SelectionType
 from prompt_toolkit.application import Application
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Float, VSplit, HSplit, Window, WindowAlign
+from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.controls import FormattedTextControl, BufferControl
 from prompt_toolkit.layout.dimension import Dimension, D
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
-from prompt_toolkit.widgets import  MenuItem, TextArea, SystemToolbar, Frame
+from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame
+from prompt_toolkit.lexers.pygments import PygmentsLexer
+from pygments.lexers.html import HtmlLexer
+from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.cursor_shapes import CursorShape
+from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
 from prompt_toolkit.keys import Keys
-
 from prompt_toolkit.filters import (
     Condition,
+    FilterOrBool,
+    has_focus,
+    is_done,
     is_true,
+    to_filter,
 )
-
+from prompt_toolkit.formatted_text import (
+    AnyFormattedText,
+    StyleAndTextTuples,
+    Template,
+    to_formatted_text,
+)
 from prompt_toolkit.layout.processors import (
     DisplayMultipleCursors,
     HighlightIncrementalSearchProcessor,
@@ -270,7 +287,8 @@ class PyMudApp:
                 line = b.document.current_line
                 start = max(0, b.selection_state.original_cursor_position - line_start)
                 end = min(b.cursor_position - line_start, len(line))
-                line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
+                line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
                 selection = line_plain[start:end]
                 self.app.clipboard.set_text(selection)
                 self.set_status("已复制：{}".format(selection))
@@ -548,47 +566,6 @@ class PyMudApp:
             else:
                 self.set_status("当前没有正在运行的session.")
 
-        # if len(cmd_line) == 0:
-        #     # 直接回车时，向当前session发送空字节（仅回车键）
-        #     if self.current_session:
-        #         self.current_session.writeline("")
-
-        # elif (cmd_line[0] == "#") and (len(cmd_line) > 1):
-        #     # 当命令由#开头时，exit, session, help三个命令，以及活动session切换由APP处理，其余发送到session进行处理
-        #     cmd_tuple = cmd_line[1:].split()
-        #     cmd = cmd_tuple[0]
-
-        #     if cmd == "exit":
-        #         # TODO 增加活动session判断
-        #         self.act_exit()
-            
-        #     elif cmd in self.sessions.keys():
-        #         self.activate_session(cmd)
-
-        #     elif cmd == "session":
-        #         self.handle_session(*cmd_tuple[1:])
-
-        #     elif cmd == "close":
-        #         self.close_session()
-
-
-        #     elif cmd == "help":
-        #         self.handle_help(*cmd_tuple[1:])
-
-        #     else:
-        #         # #xxx 发送到session进行处理
-        #         if self.current_session:
-        #             self.current_session.handle_input(*cmd_tuple)
-        #         else:
-        #             self.set_status("当前没有正在运行的session, 请使用#session {name} {host} {port} {encoding}创建一个.")
-
-        # else:
-        #     # #xxx 发送到session进行处理
-        #     if self.current_session:
-        #         self.current_session.exec_command(cmd_line)
-        #     else:
-        #         self.set_status("当前没有正在运行的session, 请使用#session {name} {host} {port} {encoding}创建一个.")
-
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:
             buffer.cursor_position = 0
@@ -641,9 +618,11 @@ class PyMudApp:
 
     def get_height(self):
         "获取ConsoleView的实际高度，等于输出高度-5,（上下线条，菜单，命令栏，状态栏）"
-        #return self.console.height
         return self.app.output.get_size().rows - 5
 
 if __name__ == "__main__":
+    import logging
+    logging.disable()
+    
     app = PyMudApp()
     app.run()
