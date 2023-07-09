@@ -1,53 +1,15 @@
 import asyncio, logging, re, functools, math, importlib
-
 from collections.abc import Iterable
-from wcwidth import wcwidth
-from unicodedata import east_asian_width
 
-from prompt_toolkit.filters import (
-    Condition,
-    FilterOrBool,
-    has_focus,
-    is_done,
-    is_true,
-    to_filter,
-)
-from prompt_toolkit.buffer import Buffer
 from extras import SessionBuffer
 from protocol import MudClientProtocol
-from objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger
+from objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, GMCPTrigger
 from settings import Settings
 
 
-class EventWithData:
-    def __init__(self) -> None:
-        self.event = asyncio.Event()  
-        self.clear()
-
-    async def wait(self):
-        await self.event.wait()
-        return (self._data, self._exception)
-    
-    def set_result(self, result):
-        self._data = result
-        self._exception = None
-        self.event.set()
-
-    def set_exception(self, exc: Exception):
-        self._exception = exc
-        self.event.set()
-
-    def clear(self):
-        self._data = None
-        self._exception = None
-        self.event.clear()
-
-#class Session(StreamReader, StreamWriter):
 class Session:
-    _esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
-    FULL_BLOCKS = set("▂▃▅▆▇▄█")
-    SINGLE_LINES = set("┌└├┬┼┴╭╰─")
-    DOUBLE_LINES = set("╔╚╠╦╪╩═")
+    #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
+    _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
     _commands = (
         "connect",      # 连接到服务器
@@ -131,13 +93,11 @@ class Session:
         self._raw_buffer  = bytearray()
         self._line_buffer = bytearray()
         
-        self._remote_line_event = EventWithData()
-        self._remote_gmcp_event = EventWithData()
-
         self._triggers = {}
         self._aliases  = {}
         self._commands = {}
         self._timers   = {}
+        self._gmcp     = {}
 
         self._variables = {}
 
@@ -163,8 +123,6 @@ class Session:
             self.initialize()
 
             self.onConnected()
-            #self._task_data = asyncio.create_task(self._remote_data_task())
-            #self._task_gmcp = asyncio.create_task(self._remote_gmcp_task())
 
         except Exception as exc:
             self.error("创建连接过程中发生错误，错误信息为 %r " % exc)
@@ -182,55 +140,6 @@ class Session:
 
     def onDisconnected(self, protocol):
         pass
-
-
-    async def _remote_data_task(self):
-        "远程数据处理任务，用于Trigger处理，当收到换行符时，触发时间"
-
-        while self.connected:
-            raw_line, exception = await self._remote_line_event.wait()
-            if exception:
-                self.log.error(f"远程数据读取中遇到异常... {exception}")
-            else:
-                # 触发行在触发时，将去除行尾部的\r\n
-                tri_line = self.getPlainText(raw_line, trim_newline = True)
-
-                all_tris = list(self._triggers.values())
-                all_tris.sort(key = lambda tri: tri.priority)
-
-                for tri in all_tris:
-                    if isinstance(tri, Trigger) and tri.enabled:
-                        if tri.raw:
-                            state = tri.match(raw_line, docallback = True)
-                        else:
-                            state = tri.match(tri_line, docallback = True)
-
-                        if state.result == Trigger.SUCCESS:
-                            if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                                self._triggers.pop(tri.id)
-
-                            if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                                break
-                            else:
-                                pass
-
-            # 清除事件以待下一次响应
-            # 这里有一点风险，由于使用了可以重复响应的Event，因此如果处理时设置了断点，则会导致后续触发不会触发
-            # 考虑是否采用其他方式？例如，每一行设置一个Triggered标记？
-            # 待测试
-            self._remote_line_event.clear()    
-
-    async def _remote_gmcp_task(self):
-        "远程GMCP处理任务"
-        while self.connected:
-            gmcp, exception = await self._remote_gmcp_event.wait()
-            if exception:
-                self.log.error(f"远程GMCP读取中遇到异常... {exception}")
-            else:
-                pass
-                # TODO 尚未想好GMCP如何触发
-
-            self._remote_gmcp_event.clear()
 
     @property
     def connected(self):
@@ -259,31 +168,13 @@ class Session:
             plainText = plainText.rstrip("\n").rstrip("\r")
 
         return plainText
-    
-    def width_correction(self, line: str) -> str:
-        new_str = []
-        for ch in line:
-            new_str.append(ch)
-            if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
-                if ch in self.FULL_BLOCKS:
-                    new_str.append(ch)
-                elif ch in self.SINGLE_LINES:
-                    new_str.append("─")
-                elif ch in self.DOUBLE_LINES:
-                    new_str.append("═")
-                else:
-                    new_str.append(' ')
-
-        return "".join(new_str)
 
     def writetobuffer(self, data, newline = False):
         "将数据写入到用于本地显示的缓冲中"
-
         self.buffer.insert_text(data)
 
         if newline:
             self.buffer.insert_text(self.newline_cli)
-
 
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
@@ -293,41 +184,18 @@ class Session:
         if (len(data) == 1) and (data[0] == ord("\n")):
             self.go_ahead()
 
-            # raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
-            # tri_line = self.getPlainText(raw_line, trim_newline = True)
-
-            # feed = raw_line.rstrip("\n").rstrip("\r") + "\n"
-            # self.writetobuffer(feed)
-
-            # self._line_buffer.clear()
-
-            # all_tris = list(self._triggers.values())
-            # all_tris.sort(key = lambda tri: tri.priority)
-
-            # for tri in all_tris:
-            #     if isinstance(tri, Trigger) and tri.enabled:
-            #         if tri.raw:
-            #             state = tri.match(raw_line, docallback = True)
-            #         else:
-            #             state = tri.match(tri_line, docallback = True)
-
-            #         if state.result == Trigger.SUCCESS:
-            #             if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-            #                 self._triggers.pop(tri.id)
-
-            #             if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-            #                 break
-            #             else:
-            #                 pass
-
     def feed_eof(self) -> None:
         self._eof = True
-        # TODO 添加服务器断开连接的处理
+        if self.connected:
+            self._transport.write_eof()
         self.state = "DISCONNECTED"
         self.log.info(f"服务器断开连接! {self._protocol.__repr__}")
     
     def feed_gmcp(self, name, value) -> None:
-        pass
+        if name in self._gmcp.keys():
+            gmcp = self._gmcp[name]
+            if isinstance(gmcp, GMCPTrigger):
+                gmcp(value)
 
     def feed_msdp(self, name, value) -> None:
         pass
@@ -531,6 +399,10 @@ class Session:
             if isinstance(cmd, Timer) and tmr.group == group:
                 tmr.enabled = enabled
 
+        for gmcp in self._gmcp.values():
+            if isinstance(gmcp, GMCPTrigger) and gmcp.group == group:
+                gmcp.enabled = enabled        
+
     def _addObjects(self, objs: dict, cls: type):
         if cls == Alias:
             self._aliases.update(objs)
@@ -540,6 +412,8 @@ class Session:
             self._triggers.update(objs)
         elif cls == Timer:
             self._timers.update(objs)
+        elif cls == GMCPTrigger:
+            self._gmcp.update(objs)
 
     def _addObject(self, obj, cls: type):
         if type(obj) == cls:
@@ -551,6 +425,8 @@ class Session:
                 self._triggers[obj.id] = obj
             elif cls == Timer:
                 self._timers[obj.id] = obj
+            elif cls == GMCPTrigger:
+                self._gmcp[obj.id] = obj
 
     def _delObject(self, id, cls: type):
         if cls == Alias:
@@ -561,6 +437,8 @@ class Session:
             self._triggers.pop(id, None)
         elif cls == Timer:
             self._timers.pop(id, None)
+        elif cls == GMCPTrigger:
+            self._gmcp.pop(id, None)
 
     def addAliases(self, alis: dict):
         "向会话中增加多个别名"
@@ -573,6 +451,10 @@ class Session:
     def addTriggers(self, tris: dict):
         "向会话中增加多个触发器"
         self._addObjects(tris, Trigger)
+
+    def addGMCPs(self, gmcps: dict):
+        "增加多个GMCP处理函数"
+        self._addObjects(gmcps, GMCPTrigger)
 
     def addTimers(self, tis: dict):
         "向会话中增加多个定时器"
@@ -594,6 +476,10 @@ class Session:
         "向会话中增加定时器"
         self._addObject(ti, Timer)
 
+    def addGMCP(self, gmcp: GMCPTrigger):
+        "增加GMCP处理函数"
+        self._addObject(gmcp, GMCPTrigger)
+
     def delAlias(self, ali: Alias):
         "从会话中移除别名"
         self._delObject(ali, Alias)
@@ -609,6 +495,10 @@ class Session:
     def delTimer(self, ti: Timer):
         "从会话中移除定时器"
         self._delObject(ti, Timer)
+
+    def delGMCP(self, gmcp: GMCPTrigger):
+        "从会话中移除定时器"
+        self._delObject(gmcp, GMCPTrigger)
 
     ## ###################
     ## 变量 Variables 处理
@@ -674,7 +564,10 @@ class Session:
 
             handler = self._cmds_handler.get(cmd, None)
             if handler and callable(handler):
-                await handler(*args[1:])
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(*args[1:])
+                else:
+                    handler(*args[1:])
             else:
                 self.warning("未识别的命令: %s" % " ".join(args))
 
@@ -702,7 +595,7 @@ class Session:
                 time_msg += f"{hour} 小时"
             if min > 0:
                 time_msg += f"{min} 分"
-            time_msg += f"{sec} 秒"
+            time_msg += f"{math.ceil(sec)} 秒"
 
             self.info("已经与服务器连接了 {}".format(time_msg))
 
@@ -807,11 +700,11 @@ class Session:
                 if name == "alias":
                     ali = SimpleAlias(self, args[0], args[1])
                     self.addAlias(ali)
-                    self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__))
+                    self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__()))
                 elif name == "trigger":
                     tri = SimpleTrigger(self, args[0], args[1])
                     self.addTrigger(tri)
-                    self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__))
+                    self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__()))
 
     def handle_alias(self, *args):
         "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
@@ -881,24 +774,7 @@ class Session:
         "      不指定key时，显示所有GMCP收到的信息\n" \
         "\x1b[1m相关\x1b[0m: 暂无"
 
-        # if self.current_session:
-        #     #self.info("这个功能还没写好...")
-        #     gmcp = self.current_session.listgmcp()
-        #     #self._handle_objs("GMCP", gmcp, *args)
-        #     width = self.terminal.getwidth()
-            
-        #     title = f"  GMCP VALUES LIST IN SESSION {self.current_session.name}  "
-        #     left = (width - len(title)) // 2
-        #     right = width - len(title) - left
-        #     self.terminal.writeline("="*left + title + "="*right)
-   
-        #     # print vars in complex, 每个变量占1行
-        #     for k, v in gmcp.items():
-        #         self.terminal.writeline("  {0:>28} = {1}".format(k, v.__repr__()))
-
-        #     self.terminal.writeline("="*width)
-        # else:
-        #     self.info(self.MSG_NO_SESSION)
+        self._handle_objs("GMCPs", self._gmcp, *args)
 
     def handle_message(self, *args):
         title = "来自会话 {} 的消息".format(self.name)
