@@ -109,6 +109,7 @@ class CodeBlock:
 
     def __init__(self, session, code) -> None:
         self.session = session
+        self.__code = code
         self.codes = CodeBlock.create_block(code)
 
     def execute(self, wildcards = None):
@@ -119,8 +120,10 @@ class CodeBlock:
             if code[0] == "#":
                 await self.session.handle_input_async(*code[1:])
             else:
+                # 有%或者@则进行变量替代
                 new_code = []
                 for item in code:
+                    if len(item) == 0: continue
                     # %1~%9，特指捕获中的匹配内容
                     if item in (f"%{i}" for i in range(1, 10)):
                         idx = int(item[1:])
@@ -264,7 +267,7 @@ class GMCPTrigger(BaseObject):
         self.value = value
         if callable(self._onSuccess):
             self.event.set()
-            self._onSuccess(value)
+            self._onSuccess(self.id, value)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
