@@ -205,10 +205,17 @@ class Session:
 
     def go_ahead(self) -> None:
         "把当前接收缓冲内容放到显示缓冲中"
-
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
 
+        # MXP SUPPORT
+        # 目前只有回复功能支持，还没有对内容进行解析，待后续完善
+        if Settings.server["MXP"]:
+            if raw_line == '\x1b[1z<SUPPORT>\r\n':
+                self.write(b"\x1b[1z<SUPPORTS>")
+            # else:
+            #     self.write(b"\x1b[0z")
+        
         # 全局变量%line
         self.setVariable("%line", tri_line)
 

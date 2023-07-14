@@ -172,6 +172,7 @@ class PyMudApp:
                         MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
                         MenuItem(Settings.text["copy"], handler = self.act_copy),
                         MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
+                        MenuItem(Settings.text["clearsession"], handler = self.act_clearsession),
                         MenuItem("-", disabled=True),
                         MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
                     ]
@@ -387,6 +388,10 @@ class PyMudApp:
     def act_copyraw(self):
         "复制ANSI菜单"
         self.copy(raw = True)
+
+    def act_clearsession(self):
+        "清空当前会话缓存的文本内容"
+        self.consoleView.buffer.text = ""
 
     def act_reload(self):
         "重新加载配置文件菜单"
