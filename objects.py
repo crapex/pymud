@@ -239,10 +239,10 @@ class BaseObject:
             self.log.error(msg)
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled}'
+        return self.__detailed__()
     
     def __detailed__(self) -> str:
-        return self.__repr__
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled}'
 
 class GMCPTrigger(BaseObject):
     """
@@ -313,6 +313,10 @@ class MatchObject(BaseObject):
     def reset(self):
         "复位事件，用于async执行"
         self.event.clear()
+
+    def set(self):
+        "设置事件标记，用于人工强制触发"
+        self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
         result = self.NOTSET
@@ -412,7 +416,7 @@ class SimpleAlias(Alias):
         self._codeblock.execute(wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -444,7 +448,7 @@ class SimpleTrigger(Trigger):
         self._codeblock.execute(wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -621,3 +625,17 @@ class Timer(BaseObject):
                 del self._task
                 self._task = None
             
+class SimpleTimer(Timer):
+    def __init__(self, session, code, *args, **kwargs):
+        self._code = code
+        self._codeblock = CodeBlock(session, code)
+        super().__init__(session, *args, **kwargs)
+
+    def onSuccess(self, *args, **kwargs):
+        self._codeblock.execute()
+
+    def __detailed__(self) -> str:
+        return f'<{self.__class__.__name__}> enabled = {self.enabled} timeout = "{self.timeout}" code = "{self._code}"'
+    
+    def __repr__(self) -> str:
+        return self.__detailed__()
