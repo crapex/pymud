@@ -3,6 +3,7 @@ PyMUD Settings 文件
 用于保存与App有关的各类配置、常量等
 """
 
+
 class Settings:
     "保存PyMUD配置的全局对象"
 
@@ -11,9 +12,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.11b"
+    __version__   = "0.13b"
     "APP 当前版本"
-    __release__   = "2023-07-09"
+    __release__   = "2023-08-08"
     "APP 当前版本发布日期"
     __author__    = "北侠玩家 本牛(newstart)"
     "APP 作者"
@@ -49,6 +50,8 @@ class Settings:
     "MUD协议所需的的默认MNES(Mud New-Environment Standard)配置信息"
 
     client = {
+        "status_width"      : 30,                   # 右侧状态栏的宽度
+        "status_height"     : 8,                    # 下侧状态栏的高度
         "naws_width"        : 150,                  # 客户端NAWS宽度
         "naws_height"       : 40,                   # 客户端NAWS高度
         "newline"           : "\n",                 # 客户端换行符
@@ -59,9 +62,10 @@ class Settings:
         "seperator"         : ";",                  # 多个命令分隔符（默认;）
         "appcmdflag"        : "#",                  # app命令标记（默认#）
         "remain_last_input" : False,
-        "echo_input"        : False,
+        "echo_input"        : True,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
         "auto_copy"         : False,                # 选中的内容自动复制到剪贴板
+        "status_display"    : 2,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         
     }
     "客户端的默认配置信息"
@@ -77,9 +81,14 @@ class Settings:
         "nosplit"           : "取消分屏",
         "copy"              : "复制(纯文本)",
         "copyraw"           : "复制(ANSI)",
+        "clearsession"      : "清空会话内容",
         "closesession"      : "关闭当前会话",
         "loadconfig"        : "加载脚本配置",
         "reloadconfig"      : "重新加载脚本配置",
+        "layout"            : "布局",
+        "hide"              : "隐藏状态窗口",
+        "horizon"           : "下方状态窗口",
+        "vertical"          : "右侧状态窗口",
         "help"              : "帮助",
         "about"             : "关于",
 
@@ -87,7 +96,6 @@ class Settings:
 
         "input_prompt"      : '<prompt><b>命令:</b></prompt>',           # HTML格式，输入命令行的提示信息
     }
-    "UI中显示的各处文本配置"
 
     styles = {
         "status"    : "reverse",
@@ -100,7 +108,6 @@ class Settings:
         "normal"    : "fg:#aaaaaa",
         "normal.connected"    : "fg:#33aa33",
     }
-    "UI中显示的各处style配置"
 
     sessions = {
         "pkuxkx" : {

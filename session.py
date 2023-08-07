@@ -79,6 +79,8 @@ class Session:
         self.buffer_pos_view_line = -1
         self.showHistory      = False                       # 是否显示历史
 
+        self._status_maker = None                           # 创建状态窗口的函数（属性）
+
         self.initialize()
 
         self.host = host
@@ -160,6 +162,21 @@ class Session:
 
         return dura
 
+    @property
+    def status_maker(self):
+        return self._status_maker
+    
+    @status_maker.setter
+    def status_maker(self, value):
+        if callable(value):
+            self._status_maker = value
+
+    def get_status(self):
+        text = f"会话: {self.name} \n连接: {self.connected}"
+        if callable(self._status_maker):
+            text = self._status_maker()
+            
+        return text
 
     def getPlainText(self, rawText: str, trim_newline = False) -> str:
         "将带有VT100或者MXP转义字符的字符串转换为正常字符串（删除所有转义）"

@@ -618,7 +618,7 @@ class MudClientProtocol(Protocol):
         if cmd == WILL:
             # 1. 回复同意GMCP与否
             if Settings.server["GMCP"]:
-                
+                self.session.write(IAC + DO + GMCP)
                 self.log.debug(f'发送选项协商, 同意GMPC协商 IAC DO GMCP.')
             else:
                 self.session.write(IAC + DONT + GMCP)

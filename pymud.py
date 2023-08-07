@@ -61,10 +61,19 @@ from session import Session
 from settings import Settings
 from dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog
 
+from enum import Enum
+
+class STATUS_DISPLAY(Enum):
+    NONE = 0
+    HORIZON = 1
+    VERTICAL = 2
+    FLOAT = 3
+
 class PyMudApp:
     def __init__(self) -> None:
         self.sessions = {}
         self.current_session = None
+        self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
 
         self.keybindings = KeyBindings()
         self.keybindings.add(Keys.PageUp, is_global = True)(self.page_up)
@@ -126,6 +135,12 @@ class PyMudApp:
             style ="class:status"
             )
 
+        # 增加状态窗口显示
+        self.statusView = FormattedTextControl(
+            text = self.get_statuswindow_text,
+            show_cursor=False
+        )
+
         self.consoleView = SessionBufferControl(
             buffer = None,
             input_processors=[
@@ -143,11 +158,47 @@ class PyMudApp:
             width = D(preferred = Settings.client["naws_width"]),
             height = D(preferred = Settings.client["naws_height"]),
             wrap_lines=Condition(lambda: is_true(self.wrap_lines)),
-            right_margins=[ScrollbarMargin(True)],   
+            #right_margins=[ScrollbarMargin(True)],   
             style="class:text-area"
             )
 
-        self.console_frame = Frame(body = self.console, title = self.get_frame_title)
+        console_with_bottom_status = ConditionalContainer(
+            content = HSplit(
+                [
+                    self.console,
+                    Window(char = "-", height = 1),
+                    Window(content = self.statusView, height = Settings.client["status_height"]),
+                ]
+            ),
+            filter = to_filter(self.status_display == STATUS_DISPLAY.HORIZON)
+        )
+
+
+        console_with_right_status = ConditionalContainer(
+            content = VSplit(
+                [
+                    self.console,
+                    Window(char = "|", width = 1),
+                    Window(content = self.statusView, width = Settings.client["status_width"]),
+                ]
+            ),
+            filter = to_filter(self.status_display == STATUS_DISPLAY.VERTICAL)
+        )
+
+        console_without_status = ConditionalContainer(
+            content = self.console,
+            filter = to_filter(self.status_display == STATUS_DISPLAY.NONE)
+        )
+
+        body = HSplit(
+            [
+                console_without_status,
+                console_with_right_status,
+                console_with_bottom_status
+            ]
+        )
+
+        self.console_frame = Frame(body = body, title = self.get_frame_title)
 
         self.body = HSplit([
                 self.console_frame,
@@ -177,6 +228,16 @@ class PyMudApp:
                         MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
                     ]
                 ),
+
+                # MenuItem(
+                #     Settings.text["layout"],
+                #     children = [
+                #         MenuItem(Settings.text["hide"], handler = functools.partial(self.act_change_layout, False)),
+                #         MenuItem(Settings.text["horizon"], handler = functools.partial(self.act_change_layout, True)),
+                #         MenuItem(Settings.text["vertical"], handler = functools.partial(self.act_change_layout, True)),
+                #     ]
+                # ),
+
                 MenuItem(
                     Settings.text["help"],
                     children=[
@@ -284,16 +345,32 @@ class PyMudApp:
         if b.selection_state:
             if not raw:
                 # Control-C 复制纯文本
-                line_start = b.document.translate_row_col_to_index(b.document.cursor_position_row, 0)
-                line = b.document.current_line
-                start = max(0, b.selection_state.original_cursor_position - line_start)
-                end = min(b.cursor_position - line_start, len(line))
-                line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
-                #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
-                selection = line_plain[start:end]
-                self.app.clipboard.set_text(selection)
-                self.set_status("已复制：{}".format(selection))
+                # 这里有BUG，多行的时候，复制不行，要改
 
+                srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
+                erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
+
+                if srow == erow:
+                    # 单行情况
+                    line = b.document.current_line
+                    start = max(0, scol)
+                    end = min(ecol, len(line))
+                    line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                    #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
+                    selection = line_plain[start:end]
+                    self.app.clipboard.set_text(selection)
+                    self.set_status("已复制：{}".format(selection))
+                else:
+                    # 多行只认行
+                    lines = []
+                    for row in range(srow, erow + 1):
+                        line = b.document.lines[row]
+                        line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                        lines.append(line_plain)
+
+                    self.app.clipboard.set_text("\n".join(lines))
+                    self.set_status("已复制：行数{}".format(1 + erow - srow))
+                    
             else:
                 # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此需要整行复制-双击时才使用）
                 data = self.consoleView.buffer.copy_selection()
@@ -398,6 +475,21 @@ class PyMudApp:
         if self.current_session:
             self.current_session.handle_reload()
 
+    def act_change_layout(self, layout):
+        "更改状态窗口显示"
+        #if isinstance(layout, STATUS_DISPLAY):
+        self.status_display = layout
+        #self.console_frame.body.reset()
+        # if layout == STATUS_DISPLAY.HORIZON:
+        #     self.console_frame.body = self.console_with_horizon_status
+        # elif layout == STATUS_DISPLAY.VERTICAL:
+        #     self.console_frame.body = self.console_with_vertical_status
+        # elif layout == STATUS_DISPLAY.NONE:
+        #     self.console_frame.body = self.console_without_status
+
+        #self.show_message("布局调整", f"已将布局设置为{layout}")
+        self.app.invalidate()
+
     def act_exit(self):
         "退出菜单"
         async def coroutine():
@@ -483,6 +575,13 @@ class PyMudApp:
                     con_str = "已连接：{:.0f}秒".format(sec)
 
         return "{} {} {} ".format(con_str, Settings.__appname__, Settings.__version__)
+
+    def get_statuswindow_text(self):
+        text = ""
+        if self.current_session:
+            text = self.current_session.get_status()
+
+        return text
 
     def set_status(self, msg):
         self.status_message = msg
@@ -619,11 +718,18 @@ class PyMudApp:
 
     def get_width(self):
         "获取ConsoleView的实际宽度，等于输出宽度-4,（左右线条宽度, 滚动条宽度，右边让出的1列）"
-        return self.app.output.get_size().columns - 4
+        size = self.app.output.get_size().columns - 4
+        if self.status_display:
+            size = size - Settings.client["status_width"] - 1
+        return size
 
     def get_height(self):
         "获取ConsoleView的实际高度，等于输出高度-5,（上下线条，菜单，命令栏，状态栏）"
-        return self.app.output.get_size().rows - 5
+        size = self.app.output.get_size().rows - 5
+
+        if self.status_display == STATUS_DISPLAY.HORIZON:
+            size = size - Settings.client["status_height"] - 1
+        return size
 
 if __name__ == "__main__":
     import logging
