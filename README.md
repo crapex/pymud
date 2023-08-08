@@ -1,5 +1,6 @@
 # PyMUD - Python原生MUD客户端
-## 重大更新V0.10b
+## 2023-08-08 更新 V0.13b
+## 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ## 1. 简介
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
@@ -50,3 +51,26 @@ PyMUD目前使用纯命令行方式运行（现在支持鼠标、菜单、快捷
 + 增加了类zmud的操作命令习惯，如#wait, #message之类的，用法相同
 + 原0.05b脚本99%可以兼容，仅需将info\warning\error的调用由原来的app移动到session即可完美兼容
 
+### 2023-08-08
++ 当前版本: V0.13b
++ 修复了部分BUG
++ 增加了状态窗口处理，通过Settings.py中"status_display"进行配置，0-不显示，1-显示在下方，2-显示在右侧
++ 状态窗口内容，通过在脚本中设置session.status_maker为对应的状态显示内容函数进行配置
++ 此处尝试了很久，目前都没有办法做到在运行后动态调整是否显示状态窗口和窗口位置，目前只能通过配置修改后重新运行实现
++ 一个示例的状态窗口内容反馈函数如下：
+
+```Python
+def status_window(self):
+
+    lines = list()
+    lines.append(f"角色: {self.session.getVariable('%charname')}({self.session.getVariable('%char')})")
+    lines.append(f"门派: {self.session.getVariable('%menpai')}")
+    lines.append(f"存款: {self.session.getVariable('%deposit')}")
+    lines.append(f"潜能: {self.session.getVariable('pot')}")
+    lines.append(f"经验: {self.session.getVariable('exp')}")
+    lines.append(f"食物: {self.session.getVariable('food')}")
+    lines.append(f"饮水: {self.session.getVariable('water')}")
+
+
+    return "\n".join(lines)
+```
