@@ -166,7 +166,7 @@ class PyMudApp:
             content = HSplit(
                 [
                     self.console,
-                    Window(char = "-", height = 1),
+                    Window(char = "—", height = 1),
                     Window(content = self.statusView, height = Settings.client["status_height"]),
                 ]
             ),
@@ -220,6 +220,7 @@ class PyMudApp:
                         MenuItem(Settings.text["disconnect"], handler = self.act_discon),
                         MenuItem(Settings.text["closesession"], handler = self.act_close_session),
                         MenuItem("-", disabled=True),
+                        MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
                         MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
                         MenuItem(Settings.text["copy"], handler = self.act_copy),
                         MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
@@ -417,6 +418,7 @@ class PyMudApp:
                         return
 
                 name = self.current_session.name
+                self.current_session.clean()
                 self.current_session = None
                 self.consoleView.buffer = SessionBuffer()
                 self.sessions.pop(name)
@@ -457,6 +459,10 @@ class PyMudApp:
 
     def act_close_session(self):
         self.close_session()
+
+    def act_echoinput(self):
+        val = not Settings.client["echo_input"]
+        Settings.client["echo_input"] = val
 
     def act_copy(self):
         "复制菜单"
@@ -665,8 +671,14 @@ class PyMudApp:
                 if len(cmd_line) == 0:
                     self.current_session.writeline("")
                 else:
-                    cb = CodeBlock(self.current_session, cmd_line)
-                    cb.execute()
+                    # 增加额外处置：当创建代码块出现异常时，直接执行本行内容
+                    # 是为了解决find-draw里面原图的有关内容，会出现引号、括号不匹配情况
+                    try:
+                        cb = CodeBlock(self.current_session, cmd_line)
+                        cb.execute()
+                    except Exception as e:
+                        self.current_session.warning(e)
+                        self.current_session.exec_command(cmd_line)
             else:
                 self.set_status("当前没有正在运行的session.")
 
@@ -719,7 +731,7 @@ class PyMudApp:
     def get_width(self):
         "获取ConsoleView的实际宽度，等于输出宽度-4,（左右线条宽度, 滚动条宽度，右边让出的1列）"
         size = self.app.output.get_size().columns - 4
-        if self.status_display:
+        if Settings.client["status_display"] == 2:
             size = size - Settings.client["status_width"] - 1
         return size
 
@@ -727,7 +739,7 @@ class PyMudApp:
         "获取ConsoleView的实际高度，等于输出高度-5,（上下线条，菜单，命令栏，状态栏）"
         size = self.app.output.get_size().rows - 5
 
-        if self.status_display == STATUS_DISPLAY.HORIZON:
+        if Settings.client["status_display"] == 1:
             size = size - Settings.client["status_height"] - 1
         return size
 

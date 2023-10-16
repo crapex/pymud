@@ -17,6 +17,7 @@ class Session:
         "info",         # 输出蓝色info
         "warning",      # 输出黄色warning
         "error",        # 输出红色error
+        "clear",        # 清除屏幕
 
         "wait",         # 等待指定毫秒数，与zmud使用相同
         "timer",        # 定时器
@@ -33,6 +34,9 @@ class Session:
         "num",          # 重复多次指令
         "repeat",       # 重复上一行输入的指令
 
+        "replace",      # 替代显示的行
+        "gag",          # 不显示对应行
+
         "message",      # 用弹出式对话框显示消息
     )
 
@@ -47,6 +51,7 @@ class Session:
         "wa"  : "wait",
         "mess": "message",
         "action": "trigger",
+        "cls" : "clear",
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, **kwargs):
@@ -80,6 +85,7 @@ class Session:
         self.showHistory      = False                       # 是否显示历史
 
         self._status_maker = None                           # 创建状态窗口的函数（属性）
+        self.display_line  = ""
 
         self.initialize()
 
@@ -92,7 +98,6 @@ class Session:
             self.open()
 
     def initialize(self):
-        self._raw_buffer  = bytearray()
         self._line_buffer = bytearray()
         
         self._triggers = {}
@@ -108,6 +113,7 @@ class Session:
         self._command_history = []
 
     def open(self):
+        self.clean()
         asyncio.ensure_future(self.connect())
 
     async def connect(self):
@@ -172,7 +178,7 @@ class Session:
             self._status_maker = value
 
     def get_status(self):
-        text = f"会话: {self.name} \n连接: {self.connected}"
+        text = f"这是一个默认的状态窗口信息\n会话: {self.name} 连接状态: {self.connected}"
         if callable(self._status_maker):
             text = self._status_maker()
             
@@ -195,7 +201,6 @@ class Session:
 
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
-        self._raw_buffer.extend(data)
         self._line_buffer.extend(data)
 
         if (len(data) == 1) and (data[0] == ord("\n")):
@@ -224,6 +229,7 @@ class Session:
         "把当前接收缓冲内容放到显示缓冲中"
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
+        self._line_buffer.clear()
 
         # MXP SUPPORT
         # 目前只有回复功能支持，还没有对内容进行解析，待后续完善
@@ -235,9 +241,14 @@ class Session:
         
         # 全局变量%line
         self.setVariable("%line", tri_line)
+        # 全局变量%raw
+        self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
 
-        self.writetobuffer(raw_line)
-        self._line_buffer.clear()
+        # 此处修改，为了处理#replace和#gag命令
+        #self.writetobuffer(raw_line)
+        #self._line_buffer.clear()
+        # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
+        self.display_line = raw_line
 
         all_tris = list(self._triggers.values())
         all_tris.sort(key = lambda tri: tri.priority)
@@ -258,6 +269,10 @@ class Session:
                     else:
                         pass
 
+        # 将数据写入缓存添加到此处
+        if len(self.display_line) > 0:
+            self.writetobuffer(self.display_line)
+
     def set_exception(self, exc: Exception):
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
         pass
@@ -266,6 +281,12 @@ class Session:
         task = asyncio.create_task(coro, name = name)
         self._tasks.append(task)
         return task
+
+    def remove_task(self, task: asyncio.Task, msg = None):
+        result = task.cancel(msg)
+        if task in self._tasks:
+            self._tasks.remove(task)
+        return result
 
     def clean_finished_tasks(self):
         "清理已经完成的任务"
@@ -818,14 +839,16 @@ class Session:
         msg   = " ".join(new_args)
         self.application.show_message(title, msg, False)
 
-    def _cleansession(self):
+    def clean(self):
+        "清除会话有关信息"
         try:
             for task in self._tasks:
                 if isinstance(task, asyncio.Task) and not task.done():
                     task.cancel("session exit.")
-                    del task
 
             self._tasks.clear()
+            for tm in self._timers.values():
+                tm.enabled = False
             self._timers.clear()
             self._triggers.clear()
             self._aliases.clear()
@@ -853,7 +876,7 @@ class Session:
 
                 if hasattr(self, "cfg_module") and self.cfg_module:
                     del self.cfg_module
-                    self._cleansession()
+                    self.clean()
 
                 self.cfg_module = importlib.import_module(module)
                 self.config = self.cfg_module.Configuration(self)
@@ -871,7 +894,7 @@ class Session:
         if hasattr(self, "config_name"):
             try:
                 del self.config
-                self._cleansession()
+                self.clean()
                 self.cfg_module = importlib.reload(self.cfg_module)
                 self.config = self.cfg_module.Configuration(self)
                 self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
@@ -880,6 +903,33 @@ class Session:
         else:
             self.error(f"原先未加载过配置模块，怎么能重新加载！")
 
+    def handle_clear(self, *args):
+        "\x1b[1m命令\x1b[0m: #clear #cls {msg}\n" \
+        "      清屏命令，清除当前会话所有缓存显示内容\n" \
+        "\x1b[1m相关\x1b[0m: connect"
+        self.buffer.text = ""
+
+    def handle_replace(self, *args):
+        "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
+        "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
+        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
+        "\x1b[1m相关\x1b[0m: gag"
+        
+        new_msg = ""
+        if len(args) > 0:
+            new_msg = args[0]
+        
+        if len(new_msg) > 0:
+            new_msg += Settings.client["newline"]
+
+        self.display_line = new_msg
+        
+    def handle_gag(self, *args):
+        "\x1b[1m命令\x1b[0m: #gag\n" \
+        "      在主窗口中不显示当前行\n" \
+        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效"
+        "\x1b[1m相关\x1b[0m: replace"
+        self.display_line = ""
 
     def handle_info(self, *args):
         "\x1b[1m命令\x1b[0m: #info {msg}\n" \

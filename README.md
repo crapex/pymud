@@ -1,5 +1,5 @@
 # PyMUD - Python原生MUD客户端
-## 2023-08-08 更新 V0.13b
+## 2023-10-16 更新 V0.15b
 ## 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ## 1. 简介
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
@@ -74,3 +74,14 @@ def status_window(self):
 
     return "\n".join(lines)
 ```
+### 2023-08-12
++ 当前版本： V0.14b
++ 修复部分BUG
++ 增加#clear/#cls命令，用于清除显示缓存
+
+### 2023-10-16
++ 当前版本： V0.15b
++ 修复小BUG：当命令行输入内容括号或者引号不匹配时，会产生异常，原先会跳出到控制台界面报错，现改为在SESSION回话显示错误信息，并仍可以继续对该行数据进行处理
++ 增加两个小功能，在触发器处理时，可以使用#replace替换原显示行内容，或者使用#gag隐藏此行内容
++ 不使用SimpleTrigger时，可以使用session.handle_replace或者session.handle_gag进行处理
++ 增加了一个名为%raw的系统变量，表示当前行的原始信息（即包含ANSI字符的信息）
