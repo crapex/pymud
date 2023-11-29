@@ -1,5 +1,5 @@
 # PyMUD - Python原生MUD客户端
-## 2023-10-16 更新 V0.15b
+## 2023-11-29 更新 V0.15c
 ## 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ## 1. 简介
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
