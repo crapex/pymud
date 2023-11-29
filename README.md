@@ -85,3 +85,13 @@ def status_window(self):
 + 增加两个小功能，在触发器处理时，可以使用#replace替换原显示行内容，或者使用#gag隐藏此行内容
 + 不使用SimpleTrigger时，可以使用session.handle_replace或者session.handle_gag进行处理
 + 增加了一个名为%raw的系统变量，表示当前行的原始信息（即包含ANSI字符的信息）
+
+### 2023-11-29
++ 当前版本： V0.15c
++ 本版功能与V0.15b完全相同，仅修改了关于参数类型声明的语法，以适应低版本的Python。经测试，Python x64 3.7.9版可以正常运行。推测 >3.7 版均可正常运行。
++ 具体修改位置包括：
++ extra.py, line 275, SessionBufferControl 的 __init__ 定义声明
++ extra.py, line 493, VSplitWindow 的 _copy_body 声明, line 534, _copy_line 声明
++ extra.py, line 969, MenuItem 的 __init__ 声明
++ pymud.py, line 258, PyMudApp 的 create_world_menus 声明
++ session.py, line 297, Session 的 write 声明

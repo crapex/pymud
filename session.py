@@ -294,7 +294,7 @@ class Session:
             if isinstance(task, asyncio.Task) and task.done():
                 self._tasks.remove(task)
 
-    def write(self, data: bytes | bytearray | memoryview) -> None:
+    def write(self, data) -> None:
         "向服务器写入数据（RAW格式字节数组/字节串）"
         if self._transport and not self._transport.is_closing():
             self._transport.write(data)

@@ -272,7 +272,8 @@ class SessionBuffer(Buffer):
 
 
 class SessionBufferControl(BufferControl):
-    def __init__(self, buffer: SessionBuffer | None = None, input_processors: list[Processor] | None = None, include_default_input_processors: bool = True, lexer: Lexer | None = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control: SearchBufferControl | Callable[[], SearchBufferControl] | None = None, menu_position: Callable[[], int | None] | None = None, focus_on_click: FilterOrBool = False, key_bindings: KeyBindingsBase | None = None):
+    #def __init__(self, buffer: SessionBuffer | None = None, input_processors: list[Processor] | None = None, include_default_input_processors: bool = True, lexer: Lexer | None = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control: SearchBufferControl | Callable[[], SearchBufferControl] | None = None, menu_position: Callable[[], int | None] | None = None, focus_on_click: FilterOrBool = False, key_bindings: KeyBindingsBase | None = None):
+    def __init__(self, buffer: SessionBuffer = None, input_processors = None, include_default_input_processors: bool = True, lexer: Lexer = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control = None, menu_position = None, focus_on_click: FilterOrBool = False, key_bindings: KeyBindingsBase = None):
         # 将所属Buffer类型更改为SessionBuffer
         buffer = buffer or SessionBuffer()
         super().__init__(buffer, input_processors, include_default_input_processors, lexer, preview_search, focusable, search_buffer_control, menu_position, focus_on_click, key_bindings)
@@ -508,9 +509,9 @@ class VSplitWindow(Window):
         always_hide_cursor: bool = False,
         has_focus: bool = False,
         align: WindowAlign = WindowAlign.LEFT,
-        get_line_prefix: Callable[[int, int], AnyFormattedText] | None = None,
+        get_line_prefix: Callable[[int, int], AnyFormattedText] = None,
         isNotMargin = True,
-    ) -> tuple[dict[int, tuple[int, int]], dict[tuple[int, int], tuple[int, int]]]:
+    ):
         """
         Copy the UIContent into the output screen.
         Return (visible_line_to_row_col, rowcol_to_yx) tuple.
@@ -537,7 +538,7 @@ class VSplitWindow(Window):
             x: int,
             y: int,
             is_input: bool = False,
-        ) -> tuple[int, int]:
+        ):
             """
             Copy over a single line to the output screen. This can wrap over
             multiple lines in the output. It will call the prefix (prompt)
@@ -970,10 +971,10 @@ class MenuItem:
     def __init__(
         self,
         text: str = "",
-        handler: Callable[[], None] | None = None,
-        children: list[MenuItem] | None = None,
-        shortcut: Sequence[Keys | str] | None = None,
-        disabled: bool = False,
+        handler = None,
+        children = None,
+        shortcut = None,
+        disabled = False,
     ) -> None:
         self.text = text
         self.handler = handler

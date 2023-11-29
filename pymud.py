@@ -255,7 +255,7 @@ class PyMudApp:
             ],
         )
 
-    def create_world_menus(self) -> list[MenuItem]:
+    def create_world_menus(self):
         "创建世界子菜单"
         menus = []
         menus.append(MenuItem(Settings.text["new_session"], handler = self.act_new))
