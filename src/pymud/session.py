@@ -853,7 +853,9 @@ class Session:
             self._timers.clear()
             self._triggers.clear()
             self._aliases.clear()
-            self._variables.clear()
+
+            # 重新加载脚本时，变量考虑保留
+            #self._variables.clear()
 
             for cmd in self._commands:
                 if isinstance(cmd, Command):

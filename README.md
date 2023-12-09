@@ -95,3 +95,7 @@ def status_window(self):
 + extra.py, line 969, MenuItem 的 __init__ 声明
 + pymud.py, line 258, PyMudApp 的 create_world_menus 声明
 + session.py, line 297, Session 的 write 声明
+
+### 2023-12-06 （未打包）
++ BUG修复： 修复__init__.py中的__all__变量为字符串
++ 功能修改：在session处理数据清理时，保留变量数据(处理#reload后变量信息清空情况)
