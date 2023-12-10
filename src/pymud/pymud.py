@@ -1,4 +1,4 @@
-import asyncio, functools, re 
+import asyncio, functools, re, logging, math, json, os
 from datetime import datetime, time, timedelta
 from prompt_toolkit.widgets import Button, Dialog, FormattedTextToolbar
 from prompt_toolkit.output import ColorDepth
@@ -70,7 +70,21 @@ class STATUS_DISPLAY(Enum):
     FLOAT = 3
 
 class PyMudApp:
-    def __init__(self) -> None:
+    def __init__(self, cfg_data = None) -> None:
+        if cfg_data and isinstance(cfg_data, dict):
+            for key in cfg_data.keys():
+                if key == "sessions":
+                    Settings.sessions = cfg_data[key]
+                elif key == "client":
+                    Settings.client.update(cfg_data[key])
+                elif key == "text":
+                    Settings.text.update(cfg_data[key])
+                elif key == "server":
+                    Settings.server.update(cfg_data[key])
+                elif key == "styles":
+                    Settings.styles.update(cfg_data[key])
+
+        self.globals  = {}              # 增加所有session使用的全局变量
         self.sessions = {}
         self.current_session = None
         self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
@@ -262,6 +276,7 @@ class PyMudApp:
         menus.append(MenuItem("-", disabled=True))
 
         ss = Settings.sessions
+
         for key, site in ss.items():
             host = site["host"]
             port = site["port"]
@@ -501,7 +516,7 @@ class PyMudApp:
         async def coroutine():
             for session in self.sessions.values():
                 if session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="yellow">程序退出警告</b>'), HTML('<style fg="yellow">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         session.disconnect()
@@ -624,25 +639,76 @@ class PyMudApp:
         "      当不带参数时, #help会列出所有可用的帮助主题\n" \
         "\x1b[1m相关\x1b[0m: session, exit"
 
-        # if len(args) == 0:      # 不带参数，打印所有支持的help主题
-        #     self._print_all_help()
-        # elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
-        #     topic = args[0]
-        #     if topic in PyMud._commands_alias.keys():
-        #         command = PyMud._commands_alias[topic]
-        #         docstring = self._cmds_handler[command].__doc__
-        #     elif topic in PyMud._commands:
-        #         docstring = self._cmds_handler[topic].__doc__
-        #     else:
-        #         docstring = f"未找到主题{topic}, 请确认输入是否正确."
+        if self.current_session:
+            if len(args) == 0:      # 不带参数，打印所有支持的help主题
+                self._print_all_help()
             
-        #     self.terminal.writeline(docstring)
+            elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
+                topic = args[0]
+
+                if topic in ("exit", "close", "session", "all", "help"):
+                    command = getattr(self, f"handle_{topic}", None)
+                    docstring = command.__doc__
+                elif topic in self.current_session._commands_alias.keys():
+                    command = self.current_session._commands_alias[topic]
+                    docstring = self.current_session._cmds_handler[command].__doc__
+                elif topic in self.current_session._commands:
+                    docstring = self.current_session._cmds_handler[topic].__doc__
+                else:
+                    docstring = f"未找到主题{topic}, 请确认输入是否正确."
+                
+                self.current_session.writetobuffer(docstring)
+
+        else:
+            self.act_about()
     
+    def _print_all_help(self):
+        """打印所有可用的help主题, 并根据终端尺寸进行排版"""
+        width = self.get_width()
+
+        cmds = ["exit", "close", "session", "all", "help"]
+        cmds.extend(Session._commands_alias.keys())
+        cmds.extend(Session._commands)
+        cmds.sort()
+
+        cmd_count = len(cmds)
+        left = (width - 8) // 2
+        right = width - 8 - left
+        self.current_session.writetobuffer("#"*left + "  HELP  " + "#"*right, newline = True)
+        cmd_per_line = (width - 2) // 20
+        lines = math.ceil(cmd_count / cmd_per_line)
+        left_space = (width - cmd_per_line * 20) // 2
+
+        for idx in range(0, lines):
+            start = idx * cmd_per_line
+            end   = (idx + 1) * cmd_per_line
+            if end > cmd_count: end = cmd_count
+            line_cmds = cmds[start:end]
+            self.current_session.writetobuffer(" " * left_space)
+            for cmd in line_cmds:
+                if cmd in Session._commands:
+                    self.current_session.writetobuffer(f"{cmd.upper():<20}")
+                else:
+                    self.current_session.writetobuffer(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
+
+            self.current_session.writetobuffer("", newline = True)
+
+        self.current_session.writetobuffer("#"*width, newline = True)
+
+
     def handle_exit(self, *args):
         "\x1b[1m命令\x1b[0m: #exit \n" \
         "      退出PYMUD程序\n" \
         "\x1b[1m相关\x1b[0m: session"
     
+    def handle_all(self, cmd):
+        "\x1b[1m命令\x1b[0m: #all xxx \n" \
+        "      向所有的活动的session发送同样的命令\n" \
+        "\x1b[1m相关\x1b[0m: session"
+        for ss in self.sessions.values():
+            if isinstance(ss, Session) and ss.connected:
+                ss.exec_command(cmd)
+
     def enter_pressed(self, buffer: Buffer):
         cmd_line = buffer.text
         
@@ -660,8 +726,14 @@ class PyMudApp:
             cmd_tuple = cmd_line[1:].split()
             self.handle_session(*cmd_tuple[1:])
 
-        elif cmd_line == "#help":
-            self.act_about()
+        elif cmd_line.startswith("#help"):
+            #self.act_about()
+            cmd_tuple = cmd_line[1:].split()
+            self.handle_help(*cmd_tuple[1:])
+
+        elif cmd_line.startswith("#all "):
+            cmd = cmd_line[4:].strip()
+            self.handle_all(cmd)
 
         elif cmd_line[1:] in self.sessions.keys():
             self.activate_session(cmd_line[1:])
@@ -691,6 +763,17 @@ class PyMudApp:
         
         else:
             return False
+
+    def get_globals(self, name, default = None):
+        "获取PYMUD全局变量"
+        if name in self.globals.keys():
+            return self.globals[name]
+        else:
+            return default
+
+    def set_globals(self, name, value):
+        "设置PYMUD全局变量"
+        self.globals[name] = value
 
     def show_message(self, title, text, modal = True):
         "显示一个消息对话框"
@@ -743,11 +826,9 @@ class PyMudApp:
             size = size - Settings.client["status_height"] - 1
         return size
 
-def main():
-    import logging
+def main(cfg_data = None):
     logging.disable()
-
-    app = PyMudApp()
+    app = PyMudApp(cfg_data)
     app.run()
 
 if __name__ == "__main__":

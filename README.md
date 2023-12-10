@@ -1,7 +1,11 @@
 # PyMUD - Python原生MUD客户端
-## 2023-11-29 更新 V0.15c
-## 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
-## 1. 简介
+## 简介
+
+### 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
+### 源代码地址: https://github.com/crapex/pymud-pip.git
+### 使用流QQ群：554672580
+
+
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
 + 原生Python开发，除prompt-toolkit及其依赖库（wcwidth, pygment, pyperclip)外，不需要其他第三方库支持
@@ -16,86 +20,22 @@
 + Python拥有极为强大的文字处理能力，用于处理文本的MUD最为合适
 + Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMud中支持
 + 我自己还在玩，所以本客户端会持续进行更新:)
-## 2. 基本使用方法
-### 打开PyMUD方法
-在文件夹下，运行python pymud.py即可
-现在支持鼠标和对话框操作了，当然，原有命令仍然基本支持
-### 配置PyMUD参数
-所有的配置都写在settings.py文件中，里面有注释，可以自行研究
-Settings.session下面，可以自己把自己的角色信息加进去，会自动生成菜单，单击后可以自动登录，并且自动加载脚本
-### PyMUD命令
-PyMUD目前使用纯命令行方式运行（现在支持鼠标、菜单、快捷键操作了），因此使用各类命令来完成，PyMud命令使用#开头，记住以下几个命令就可以了
-#### #session
-创建会话命令，1个会话就是1个角色的客户端，基本语法为（现在支持鼠标点击对话框创建了）：
-+    #session {name} {host} {port} {encoding}
-+    name为会话的名称
-+    host，port为服务器的地址和端口
-+    encoding为编码方式，不指定时为utf-8
-+    例如：#session newstart mud.pkuxkx.net 8081
-+    创建一个名为newstart的会话，连接到mud.pkuxkx.net的8081端口，使用UTF8编码方式
-+ 当存在多个会话时，可以直接使用#sessionname切换当前会话
-+ 例如，#newstart可以直接将newstart会话切换为当前会话
-#### #load
-+ 加载配置文件，在会话链接成功后，可以使用#load {config}加载配置文件
-+ 本版本附送了一个pkuxkx.py的配置文件，请大家自行参考
-+ 加载pkuxkx.py配置文件的方法为，在session登录成功之后，使用#load pkuxkx即可
-#### 其他命令，就请各位自行摸索啦
-## 3. 更新记录（从这一次开始）
-### 2023-06-06
-+ 当前版本：V0.05b
-+ 修复了多个session时的bug
-+ 增加了GMCP在session中的应用
-### 2023-07-08
-+ 当前版本：V0.10b
-+ 重写整个界面
-+ 增加了类zmud的操作命令习惯，如#wait, #message之类的，用法相同
-+ 原0.05b脚本99%可以兼容，仅需将info\warning\error的调用由原来的app移动到session即可完美兼容
-
-### 2023-08-08
-+ 当前版本: V0.13b
-+ 修复了部分BUG
-+ 增加了状态窗口处理，通过Settings.py中"status_display"进行配置，0-不显示，1-显示在下方，2-显示在右侧
-+ 状态窗口内容，通过在脚本中设置session.status_maker为对应的状态显示内容函数进行配置
-+ 此处尝试了很久，目前都没有办法做到在运行后动态调整是否显示状态窗口和窗口位置，目前只能通过配置修改后重新运行实现
-+ 一个示例的状态窗口内容反馈函数如下：
-
-```Python
-def status_window(self):
-
-    lines = list()
-    lines.append(f"角色: {self.session.getVariable('%charname')}({self.session.getVariable('%char')})")
-    lines.append(f"门派: {self.session.getVariable('%menpai')}")
-    lines.append(f"存款: {self.session.getVariable('%deposit')}")
-    lines.append(f"潜能: {self.session.getVariable('pot')}")
-    lines.append(f"经验: {self.session.getVariable('exp')}")
-    lines.append(f"食物: {self.session.getVariable('food')}")
-    lines.append(f"饮水: {self.session.getVariable('water')}")
 
 
-    return "\n".join(lines)
-```
-### 2023-08-12
-+ 当前版本： V0.14b
-+ 修复部分BUG
-+ 增加#clear/#cls命令，用于清除显示缓存
+## 版本更新信息
+### 0.15.8 (2023-12-05)
+发布到pip，增加模块使用
 
-### 2023-10-16
-+ 当前版本： V0.15b
-+ 修复小BUG：当命令行输入内容括号或者引号不匹配时，会产生异常，原先会跳出到控制台界面报错，现改为在SESSION回话显示错误信息，并仍可以继续对该行数据进行处理
-+ 增加两个小功能，在触发器处理时，可以使用#replace替换原显示行内容，或者使用#gag隐藏此行内容
-+ 不使用SimpleTrigger时，可以使用session.handle_replace或者session.handle_gag进行处理
-+ 增加了一个名为%raw的系统变量，表示当前行的原始信息（即包含ANSI字符的信息）
-
-### 2023-11-29
-+ 当前版本： V0.15c
-+ 本版功能与V0.15b完全相同，仅修改了关于参数类型声明的语法，以适应低版本的Python。经测试，Python x64 3.7.9版可以正常运行。推测 >3.7 版均可正常运行。
-+ 具体修改位置包括：
-+ extra.py, line 275, SessionBufferControl 的 __init__ 定义声明
-+ extra.py, line 493, VSplitWindow 的 _copy_body 声明, line 534, _copy_line 声明
-+ extra.py, line 969, MenuItem 的 __init__ 声明
-+ pymud.py, line 258, PyMudApp 的 create_world_menus 声明
-+ session.py, line 297, Session 的 write 声明
-
-### 2023-12-06 （未打包）
-+ BUG修复： 修复__init__.py中的__all__变量为字符串
+### 0.16.0 (2023-12-10)
++ 问题修复：修复__init__.py中的__all__变量为字符串
++ 功能增加：可以加载自定义Settings。在执行python -m pymud时，会自动从当前目录读取pymud.ini文件。使用json格式将配置信息写在该文件中即可。支持模块中settings.py里的sessions, client, server, styles, text字段内容。
++ 功能增加：增加全局变量集，可以使用session.setGlobal和session.getGlobal进行访问，以便于跨session通信。也可以使用#global在命令行访问
++ 功能增加：增加变量的文件存储，文件位于当前目录，文件名为session名称.mud，该文件在会话初始化时自动读取，会话断开时自动保存，其他时候使用#save可以随时保存。
++ 功能增加：增加session变量和全局变量的快捷访问辅助，使用session.vars和session.globals的.属性方法进行访问，例如：session.vars.charname，相当于session.getVariable('charname')
++ 功能增加：增加Trigger测试功能，使用#test {msg}在命令行输入后，会如同接收到服务端数据一样引发触发反应，并且会使用[PYMUD TRIGGER TEST]进行信息显示
++ 功能增加：增加#all命令，可以向当前所有活动会话发送同一消息，例如#all xixi，可以使所有连接的会话都发送emote
++ 功能修改：session对命令的输入异步处理函数handle_input_async进行微小调整，以适应#test命令使用
++ 功能修改：退出时未断开session时的提示窗口文字改为红色（原黄色对比度问题，看不清楚）
++ 功能修改：恢复了#help功能，可以在任意会话中使用#help列出所有帮助主题，#help topic可以查看主题详情
 + 功能修改：在session处理数据清理时，保留变量数据(处理#reload后变量信息清空情况)
+

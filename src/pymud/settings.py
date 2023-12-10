@@ -11,7 +11,7 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.15c"
+    __version__   = "0.16.0"
     "APP 当前版本"
     __release__   = "2023-12-05"
     "APP 当前版本发布日期"
@@ -126,7 +126,7 @@ class Settings:
             "autologin" : "{0};{1}",
             "default_script": "pkuxkx",
             "chars" : {
-                "display_title" : ("yourid", "yourpassword"),
+                "display_title" : ["yourid", "yourpassword"],
             }
         },
         "another-mud-evennia" : {
@@ -136,7 +136,7 @@ class Settings:
             "autologin" : "connect {0} {1}",
             "default_script": None,
             "chars" : {
-                "evennia"   : ("name", "pass"),
+                "evennia"   : ["name", "pass"],
             }
         }
     }

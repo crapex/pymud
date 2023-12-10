@@ -1,5 +1,6 @@
 # general things to ignore
 build/
+
 dist/
 *.egg-info/
 *.egg
@@ -11,3 +12,7 @@ __pycache__/
 # due to using tox and pytest
 .tox
 .cache
+
+# debug is my debug-venv-dir
+debug
+debug/

@@ -118,7 +118,8 @@ class CodeBlock:
     async def async_execute(self, wildcards = None):
         for code in self.codes:
             if code[0] == "#":
-                await self.session.handle_input_async(*code[1:])
+                #await self.session.handle_input_async(*code[1:])
+                await self.session.handle_input_async(self.__code)
             else:
                 # 有%或者@则进行变量替代
                 new_code = []

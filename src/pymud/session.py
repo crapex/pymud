@@ -1,4 +1,4 @@
-import asyncio, logging, re, functools, math, importlib
+import asyncio, logging, re, functools, math, importlib, json, os, pickle
 from collections.abc import Iterable
 
 from .extras import SessionBuffer
@@ -8,6 +8,20 @@ from .settings import Settings
 
 
 class Session:
+    class _VAR_ACCESSOR:
+        def __init__(self, vars_dict: dict):
+            self.__dict__["__vars__"] = vars_dict
+
+        def __getattr__(self, __name: str):
+            if not __name.startswith("__"):
+                return self.__dict__["__vars__"].get(__name, None)
+        
+        def __setattr__(self, __name: str, __value):
+            if not __name.startswith("__"):
+                self.__dict__["__vars__"][__name] = __value
+            else:
+                self.__dict__[__name] = __value
+
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
@@ -19,16 +33,21 @@ class Session:
         "error",        # 输出红色error
         "clear",        # 清除屏幕
 
+        "test",         # 测试输出信息
+
         "wait",         # 等待指定毫秒数，与zmud使用相同
         "timer",        # 定时器
         "variable",     # 变量
         "alias",        # 别名
         "trigger",      # 触发器
+        "global",       # PyMUD跨session全局变量
 
         "command",      # 命令
         
-        "load",         # 加载配置文件
-        "reload",       # 重新加载配置文件
+        "load",         # 加载脚本文件
+        "reload",       # 重新加载脚本文件
+
+        "save",         # 将动态运行信息保存到磁盘
 
         "gmcp",         # GMCP协议信息
         "num",          # 重复多次指令
@@ -89,6 +108,10 @@ class Session:
 
         self.initialize()
 
+        # 变量辅助访问器
+        self._var_accessor = Session._VAR_ACCESSOR(self._variables)
+        self._global_accessor = Session._VAR_ACCESSOR(self.application.globals)
+
         self.host = host
         self.port = port
         self.encoding = encoding or self.encoding
@@ -141,13 +164,25 @@ class Session:
             self.writeline(self.after_connect)
             if self._auto_script:
                 self.handle_load(self._auto_script)
+            
+            file = f"{self.name}.mud"
+            if os.path.exists(file):
+                with open(file, "rb") as fp:
+                    #vars = json.load(fp)
+                    vars = pickle.load(fp)
+                    self._variables.update(vars)
+                    self.info(f"自动从{file}中加载保存变量成功")
 
     def disconnect(self):
         if self.connected:
             self.write_eof()
 
+            # 断开时自动保存变量数据
+            self.handle_save()
+
     def onDisconnected(self, protocol):
-        pass
+        # 断开时自动保存变量数据
+        self.handle_save()
 
     @property
     def connected(self):
@@ -176,6 +211,16 @@ class Session:
     def status_maker(self, value):
         if callable(value):
             self._status_maker = value
+
+    @property
+    def vars(self):
+        "本会话变量的辅助访问器"
+        return self._var_accessor
+
+    @property
+    def globals(self):
+        "全局变量的辅助访问器"
+        return self._global_accessor
 
     def get_status(self):
         text = f"这是一个默认的状态窗口信息\n会话: {self.name} 连接状态: {self.connected}"
@@ -236,8 +281,9 @@ class Session:
         if Settings.server["MXP"]:
             if raw_line == '\x1b[1z<SUPPORT>\r\n':
                 self.write(b"\x1b[1z<SUPPORTS>")
-            # else:
-            #     self.write(b"\x1b[0z")
+            else:
+                #self.write(b"\x1b[0z")
+                self.warning("MXP支持尚未开发，请暂时不要打开MXP支持设置")
         
         # 全局变量%line
         self.setVariable("%line", tri_line)
@@ -546,6 +592,10 @@ class Session:
         "从会话中移除定时器"
         self._delObject(gmcp, GMCPTrigger)
 
+    def replace(self, newstr):
+        "替换当前行内容显示为newstr"
+        self.handle_replace(newstr)
+
     ## ###################
     ## 变量 Variables 处理
     ## ###################
@@ -555,7 +605,7 @@ class Session:
         self._variables[name] = value
 
     def getVariable(self, name, default = None):
-        """获取一个变量的值. 待决定：当name指定的变量不存在时，是返回default还是抛出异常？当前为返回default"""
+        """获取一个变量的值. 当name指定的变量不存在时，返回default"""
         assert isinstance(name, str), "name必须是一个字符串"
         return self._variables.get(name, default)
     
@@ -584,12 +634,29 @@ class Session:
         """使用dict字典更新变量值"""
         self._variables.update(kvdict)
 
+    ## ###################
+    ## 全局变量 Globals 处理
+    ## ###################
+    def setGlobal(self, name, value):
+        """设置一个全局变量的值"""
+        assert isinstance(name, str), "name必须是一个字符串"
+        self.application.set_globals(name, value)
+
+    def getGlobal(self, name, default = None):
+        """获取一个全局变量的值。当name指定的变量不存在时，返回default"""
+        assert isinstance(name, str), "name必须是一个字符串"
+        return self.application.get_globals(name, default)
+
+    ## ###################
+    ## 各类命令处理函数
+    ## ###################
     def handle_input(self, *args):
         """处理命令行输入的#开头的命令"""
         asyncio.ensure_future(self.handle_input_async(*args))
 
-    async def handle_input_async(self, *args):
+    async def handle_input_async(self, code):
         """异步处理命令行输入的#开头的命令"""
+        args = code[1:].split()        # 去除#号并分隔
         cmd = args[0]
 
         if cmd.isnumeric():
@@ -603,6 +670,7 @@ class Session:
                 self.handle_num(times, *args[1:])
             else:
                 self.warning("#{num} {cmd}只能支持正整数!")
+        
         else:
             cmd = cmd.lower()
             if cmd in self._commands_alias.keys():
@@ -610,12 +678,44 @@ class Session:
 
             handler = self._cmds_handler.get(cmd, None)
             if handler and callable(handler):
-                if asyncio.iscoroutinefunction(handler):
+                if cmd == "test":                       # 脚本测试时，要原样发送
+                    self.handle_test(code[6:])          # 去除前面的#code 加空格共6个字符
+
+                elif asyncio.iscoroutinefunction(handler):
                     await handler(*args[1:])
                 else:
                     handler(*args[1:])
             else:
                 self.warning("未识别的命令: %s" % " ".join(args))
+
+    # async def handle_input_async(self, *args):
+    #     """异步处理命令行输入的#开头的命令"""
+    #     cmd = args[0]
+
+    #     if cmd.isnumeric():
+    #         times = 0
+    #         try:
+    #             times = int(cmd)
+    #         except ValueError:
+    #             pass
+
+    #         if times > 0:
+    #             self.handle_num(times, *args[1:])
+    #         else:
+    #             self.warning("#{num} {cmd}只能支持正整数!")
+    #     else:
+    #         cmd = cmd.lower()
+    #         if cmd in self._commands_alias.keys():
+    #             cmd = self._commands_alias[cmd]
+
+    #         handler = self._cmds_handler.get(cmd, None)
+    #         if handler and callable(handler):
+    #             if asyncio.iscoroutinefunction(handler):
+    #                 await handler(*args[1:])
+    #             else:
+    #                 handler(*args[1:])
+    #         else:
+    #             self.warning("未识别的命令: %s" % " ".join(args))
 
     async def handle_wait(self, msec: str, *args):
         "异步等待，毫秒后结束"
@@ -657,6 +757,10 @@ class Session:
             vars_simple = {}
             vars_complex = {}
             for k, v in vars.items():
+                # 不显示line, raw两个系统变量
+                if k in ("%line", "%raw"):
+                    continue
+
                 if isinstance(v, Iterable) and not isinstance(v, str):
                     vars_complex[k] = v
                 else:
@@ -697,14 +801,75 @@ class Session:
             self.writetobuffer("="*width, newline = True)
 
         elif len(args) == 1:
-            var = args[0]
-            if var in self._variables.keys:
-                self.info("{0:>18} = {1:<19}".format(var, self._variables[var].__repr__()), "SESSION 变量")
+            if args[0] in self._variables.keys():
+                obj = self.getVariable(args[0])
+                self.info(f"变量{args[0]}值为:{obj}")
             else:
-                self.info("本会话 {} 中不存在名称为 {} 的变量".format(self.name, var), "SESSION 变量")
+                self.warning(f"当前session中不存在名称为 {args[0]} 的变量")
             
         elif len(args) == 2:
             self.setVariable(args[0], args[1])
+
+    def handle_global(self, *args):
+        "\x1b[1m命令\x1b[0m: #global\n" \
+        "      不带参数时，列出程序当前所有全局变量清单\n" \
+        "      带1个参数时，列出程序当前名称我为该参数的全局变量值\n" \
+        "      带2个参数时，设置名称为该全局变量的变量值\n" \
+        "\x1b[1m相关\x1b[0m: variable"
+
+        if len(args) == 0:
+            vars = self.application.globals
+            vars_simple = {}
+            vars_complex = {}
+            for k, v in vars.items():
+                if isinstance(v, Iterable) and not isinstance(v, str):
+                    vars_complex[k] = v
+                else:
+                    vars_simple[k] = v
+
+            width = self.application.get_width()
+            
+            title = f" GLOBAL VARIABLES LIST "
+            left = (width - len(title)) // 2
+            right = width - len(title) - left
+            self.writetobuffer("="*left + title + "="*right, newline = True)
+            
+            # print vars in simple, 每个变量占40格，一行可以多个变量
+            var_count = len(vars_simple)
+            var_per_line = (width - 2) // 40
+            lines = math.ceil(var_count / var_per_line)
+            left_space = (width - var_per_line * 40) // 2
+            if left_space > 4:  left_space = 4
+            
+            var_keys = sorted(vars_simple.keys())
+
+            for idx in range(0, lines):
+                start = idx * var_per_line
+                end   = (idx + 1) * var_per_line
+                if end > var_count: end = var_count
+                self.writetobuffer(" " * left_space)
+                line_vars = var_keys[start:end]
+                for var in line_vars:
+                    self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
+
+                self.writetobuffer("", newline = True)
+
+            # print vars in complex, 每个变量占1行
+            for k, v in vars_complex.items():
+                self.writetobuffer(" " * left_space)
+                self.writetobuffer("{0:>18} = {1}".format(k, v.__repr__()), newline = True)
+
+            self.writetobuffer("="*width, newline = True)
+
+        elif len(args) == 1:
+            var = args[0]
+            if var in self.application.globals.keys():
+                self.info("{0:>18} = {1:<19}".format(var, self.application.get_globals(var).__repr__()), "全局变量")
+            else:
+                self.info("全局空间不存在名称为 {} 的变量".format(var), "全局变量")
+            
+        elif len(args) == 2:
+            self.application.set_globals(args[0], args[1])
 
     def _handle_objs(self, name: str, objs: dict, *args):
         if len(args) == 0:
@@ -823,6 +988,10 @@ class Session:
         self._handle_objs("GMCPs", self._gmcp, *args)
 
     def handle_message(self, *args):
+        "\x1b[1m命令\x1b[0m: #message|#mess {msg}\n" \
+        "      使用弹出窗体显示信息\n" \
+        "\x1b[1m相关\x1b[0m: 暂无"
+
         title = "来自会话 {} 的消息".format(self.name)
         
         new_args = []
@@ -906,11 +1075,62 @@ class Session:
         else:
             self.error(f"原先未加载过配置模块，怎么能重新加载！")
 
+    def handle_save(self, *args):
+        "\x1b[1m命令\x1b[0m: #save\n" \
+        "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
+        "      文件保存在当前目录下，文件名为 {会话名}.mud \n" \
+        "\x1b[1m相关\x1b[0m: variable"
+        file = f"{self.name}.mud"
+
+        with open(file, "wb") as fp:
+            saved = dict()
+            saved.update(self._variables)
+            # keys = list(saved.keys())
+            # for key in keys:
+            #     if key.startswith("%"):
+            #         saved.pop(key)
+            saved.pop("%line", None)
+            saved.pop("%raw", None)
+            pickle.dump(saved, fp)
+            #json.dump(saved, fp)
+            self.info(f"会话变量信息已保存到{file}")
+
     def handle_clear(self, *args):
         "\x1b[1m命令\x1b[0m: #clear #cls {msg}\n" \
         "      清屏命令，清除当前会话所有缓存显示内容\n" \
-        "\x1b[1m相关\x1b[0m: connect"
+        "\x1b[1m相关\x1b[0m: connect, exit"
         self.buffer.text = ""
+
+    def handle_test(self, *args):
+        "\x1b[1m命令\x1b[0m: #test {msg}\n" \
+        "      用于测试脚本的命令，会将msg发送并显示在session中，同时触发触发器\n" \
+        "\x1b[1m相关\x1b[0m: trigger"
+        "把当前接收缓冲内容放到显示缓冲中"
+        raw_line = "".join(args)
+        tri_line = self.getPlainText(raw_line)
+
+        all_tris = list(self._triggers.values())
+        all_tris.sort(key = lambda tri: tri.priority)
+
+        for tri in all_tris:
+            if isinstance(tri, Trigger) and tri.enabled:
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = True)
+                else:
+                    state = tri.match(tri_line, docallback = True)
+
+                if state.result == Trigger.SUCCESS:
+                    self.info(f"TRIGGER {tri.id} 被触发", "PYMUD TRIGGER TEST")
+                    if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                        self._triggers.pop(tri.id)
+
+                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                        break
+                    else:
+                        pass
+
+        if len(raw_line) > 0:
+            self.info(raw_line, "PYMUD TRIGGER TEST")
 
     def handle_replace(self, *args):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
