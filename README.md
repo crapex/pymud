@@ -25,7 +25,7 @@
 ### 0.15.8 (2023-12-05)
 发布到pip，增加模块使用
 
-### 0.16.0 (2023-12-11)
+### 0.16.1 (2023-12-11)
 + 问题修复：修复__init__.py中的__all__变量为字符串
 + 功能增加：可以加载自定义Settings。在执行python -m pymud时，会自动从当前目录读取pymud.cfg文件。使用json格式将配置信息写在该文件中即可。支持模块中settings.py里的sessions, client, server, styles, text字段内容。
 + 功能增加：增加全局变量集，可以使用session.setGlobal和session.getGlobal进行访问，以便于跨session通信。也可以使用#global在命令行访问
