@@ -9,48 +9,9 @@ import functools
 from typing import Any
 from .settings import Settings
 
-class CodeBlock:
+class CodeLine:
     """
-    PyMUD中可以执行的代码块
-    """
-
-    @classmethod
-    def create_block(cls, code: str) -> tuple:
-        "创建代码块，并返回对象自身"
-
-        code_lines = []
-        line = ""
-        brace_count = 0
-        for i in range(0, len(code)):
-            ch = code[i]
-            if ch == "{":
-                brace_count += 1
-                line += ch
-            elif ch == "}":
-                brace_count -= 1
-                if brace_count < 0:
-                    raise Exception("错误的代码块，大括号数量不匹配")
-                line += ch
-            elif ch == ";":
-                if brace_count == 0:
-                    code_lines.append(line)
-                    line = ""
-                else:
-                    line += ch
-            else:
-                line += ch
-
-        if line:
-            code_lines.append(line)
-
-        if len(code_lines) == 1:
-            return CodeBlock.create_line(line)
-        else:
-            codes = []
-            for line in code_lines:
-                codes.extend(CodeBlock.create_block(line))
-
-            return tuple(codes)
+    PyMUD中可执行的代码块（单行）"""
 
     @classmethod
     def create_line(cls, line: str) -> tuple:
@@ -101,51 +62,108 @@ class CodeBlock:
             if arg:
                 code_params.append(arg)
 
-            result = []
-            result.append(tuple(code_params))
-            return tuple(result)
+            return tuple(code_params)
         else:
             return tuple()
 
-    def __init__(self, session, code) -> None:
-        self.session = session
+    def __init__(self, _code: str) -> None:
+        self.__code = _code
+        self.code = CodeLine.create_line(_code)
+
+    def execute(self, session, wildcards = None):
+        asyncio.ensure_future(self.async_execute(session, wildcards))
+
+    async def async_execute(self, session, wildcards = None):           
+        new_code_str = self.__code
+        new_code = []
+
+        for item in self.code:
+            if len(item) == 0: continue
+            # %1~%9，特指捕获中的匹配内容
+            if item in (f"%{i}" for i in range(1, 10)):
+                idx = int(item[1:])
+                if idx <= len(wildcards):
+                    item_val = wildcards[idx-1]
+                else:
+                    item_val = None
+                new_code.append(item_val)
+                new_code_str = new_code_str.replace(item, item_val, 1)
+
+            # 系统变量，%开头，直接%引用，如%line
+            elif item[0] == "%":
+                item_val = session.getVariable(item, "")
+                new_code.append(item_val)
+                new_code_str = new_code_str.replace(item, item_val, 1)
+
+            # 非系统变量，@开头，在变量明前加@引用
+            elif item[0] == "@":
+                item_val = session.getVariable(item[1:], "")
+                new_code.append(item_val)
+                new_code_str = new_code_str.replace(item, item_val, 1)
+
+            else:
+                new_code.append(item)
+
+        if new_code[0] == "#":
+            await session.handle_input_async(new_code_str)
+        else:
+            await session.exec_command_async(" ".join(new_code))
+
+
+class CodeBlock:
+    """
+    PyMUD中可以执行的代码块（最终使用，单行或多行）
+    """
+
+    @classmethod
+    def create_block(cls, code: str) -> tuple:
+        "创建代码块，并返回对象自身"
+
+        code_lines = []
+        line = ""
+        brace_count = 0
+        for i in range(0, len(code)):
+            ch = code[i]
+            if ch == "{":
+                brace_count += 1
+                line += ch
+            elif ch == "}":
+                brace_count -= 1
+                if brace_count < 0:
+                    raise Exception("错误的代码块，大括号数量不匹配")
+                line += ch
+            elif ch == ";":
+                if brace_count == 0:
+                    code_lines.append(line)
+                    line = ""
+                else:
+                    line += ch
+            else:
+                line += ch
+
+        if line:
+            code_lines.append(line)
+
+        if len(code_lines) == 1:
+            return (CodeLine(code),)
+        else:
+            codes = []
+            for line in code_lines:
+                codes.extend(CodeBlock.create_block(line))
+
+            return tuple(codes)
+
+    def __init__(self, code) -> None:
         self.__code = code
         self.codes = CodeBlock.create_block(code)
 
-    def execute(self, wildcards = None):
-        asyncio.ensure_future(self.async_execute(wildcards))
+    def execute(self, session, wildcards = None):
+        asyncio.ensure_future(self.async_execute(session, wildcards))
 
-    async def async_execute(self, wildcards = None):
+    async def async_execute(self, session, wildcards = None):
         for code in self.codes:
-            if code[0] == "#":
-                #await self.session.handle_input_async(*code[1:])
-                await self.session.handle_input_async(self.__code)
-            else:
-                # 有%或者@则进行变量替代
-                new_code = []
-                for item in code:
-                    if len(item) == 0: continue
-                    # %1~%9，特指捕获中的匹配内容
-                    if item in (f"%{i}" for i in range(1, 10)):
-                        idx = int(item[1:])
-                        if idx <= len(wildcards):
-                            item_val = wildcards[idx-1]
-                        else:
-                            item_val = None
-                        new_code.append(item_val)
-
-                    # 系统变量，%开头，直接%引用，如%line
-                    elif item[0] == "%":
-                        item_val = self.session.getVariable(item, "")
-                        new_code.append(item_val)
-                    # 非系统变量，@开头，在变量明前加@引用
-                    elif item[0] == "@":
-                        item_val = self.session.getVariable(item[1:], "")
-                        new_code.append(item_val)
-                    else:
-                        new_code.append(item)
-
-                await self.session.exec_command_async(" ".join(new_code))
+            if isinstance(code, CodeLine):
+                await code.async_execute(session, wildcards)
 
             if Settings.client["interval"] > 0:
                 await asyncio.sleep(Settings.client["interval"] / 1000.0)
@@ -410,11 +428,11 @@ class SimpleAlias(Alias):
 
     def __init__(self, session, patterns, code, *args, **kwargs):
         self._code = code
-        self._codeblock = CodeBlock(session, code)
+        self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(wildcards)
+        self._codeblock.execute(self.session, wildcards)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -442,11 +460,11 @@ class SimpleTrigger(Trigger):
 
     def __init__(self, session, patterns, code, *args, **kwargs):
         self._code = code
-        self._codeblock = CodeBlock(session, code)
+        self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(wildcards)
+        self._codeblock.execute(self.session, wildcards)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -636,11 +654,11 @@ class Timer(BaseObject):
 class SimpleTimer(Timer):
     def __init__(self, session, code, *args, **kwargs):
         self._code = code
-        self._codeblock = CodeBlock(session, code)
+        self._codeblock = CodeBlock(code)
         super().__init__(session, *args, **kwargs)
 
     def onSuccess(self, *args, **kwargs):
-        self._codeblock.execute()
+        self._codeblock.execute(self.session)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> enabled = {self.enabled} timeout = "{self.timeout}" code = "{self._code}"'

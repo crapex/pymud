@@ -2,7 +2,7 @@
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
 from typing import TYPE_CHECKING
-import time, asyncio, math
+import time
 
 from typing import Callable, Iterable, List, Optional, Sequence, Union
 from prompt_toolkit import ANSI
@@ -988,3 +988,15 @@ class MenuItem:
             return max(get_cwidth(c.text) for c in self.children)
         else:
             return 0
+
+
+class DotDict(dict):
+    def __getattr__(self, __key):
+        if not __key in self.__dict__:
+            return self.__getitem__(__key)
+
+    def __setattr__(self, __name: str, __value):
+        if __name in self.__dict__:
+            object.__setattr__(self, __name, __value)
+        else:
+            self.__setitem__(__name, __value)

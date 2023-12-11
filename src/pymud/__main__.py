@@ -2,7 +2,7 @@ import sys, os, json
 from .pymud import main
 
 if __name__ == "__main__":
-    cfg = "pymud.ini"
+    cfg = "pymud.cfg"
 
     args = sys.argv
     if len(args) > 1:

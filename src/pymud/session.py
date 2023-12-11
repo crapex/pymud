@@ -1,27 +1,13 @@
 import asyncio, logging, re, functools, math, importlib, json, os, pickle
 from collections.abc import Iterable
 
-from .extras import SessionBuffer
+from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
 from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, GMCPTrigger
 from .settings import Settings
 
 
 class Session:
-    class _VAR_ACCESSOR:
-        def __init__(self, vars_dict: dict):
-            self.__dict__["__vars__"] = vars_dict
-
-        def __getattr__(self, __name: str):
-            if not __name.startswith("__"):
-                return self.__dict__["__vars__"].get(__name, None)
-        
-        def __setattr__(self, __name: str, __value):
-            if not __name.startswith("__"):
-                self.__dict__["__vars__"][__name] = __value
-            else:
-                self.__dict__[__name] = __value
-
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
@@ -108,10 +94,6 @@ class Session:
 
         self.initialize()
 
-        # 变量辅助访问器
-        self._var_accessor = Session._VAR_ACCESSOR(self._variables)
-        self._global_accessor = Session._VAR_ACCESSOR(self.application.globals)
-
         self.host = host
         self.port = port
         self.encoding = encoding or self.encoding
@@ -123,13 +105,13 @@ class Session:
     def initialize(self):
         self._line_buffer = bytearray()
         
-        self._triggers = {}
-        self._aliases  = {}
-        self._commands = {}
-        self._timers   = {}
-        self._gmcp     = {}
+        self._triggers = DotDict()
+        self._aliases  = DotDict()
+        self._commands = DotDict()
+        self._timers   = DotDict()
+        self._gmcp     = DotDict()
 
-        self._variables = {}
+        self._variables = DotDict()
 
         self._tasks    = []
 
@@ -142,7 +124,7 @@ class Session:
     async def connect(self):
         "异步非阻塞方式创建远程连接"
         def _protocol_factory():
-            return MudClientProtocol(self)
+            return MudClientProtocol(self, onDisconnected = self.onDisconnected)
         
         try:
             self.loop = asyncio.get_running_loop()
@@ -215,12 +197,37 @@ class Session:
     @property
     def vars(self):
         "本会话变量的辅助访问器"
-        return self._var_accessor
+        return self._variables
 
     @property
     def globals(self):
         "全局变量的辅助访问器"
-        return self._global_accessor
+        return self.application.globals
+
+    @property
+    def tris(self):
+        "本回话的触发器辅助访问器"
+        return self._triggers
+
+    @property
+    def alis(self):
+        "本回话的别名辅助访问器"
+        return self._aliases
+    
+    @property
+    def cmds(self):
+        "本回话的命令辅助访问器"
+        return self._commands
+
+    @property
+    def timers(self):
+        "本回话的定时器辅助访问器"
+        return self._timers
+
+    @property
+    def gmcp(self):
+        "本回话的GMCP辅助访问器"
+        return self._gmcp
 
     def get_status(self):
         text = f"这是一个默认的状态窗口信息\n会话: {self.name} 连接状态: {self.connected}"
@@ -1091,6 +1098,7 @@ class Session:
             #         saved.pop(key)
             saved.pop("%line", None)
             saved.pop("%raw", None)
+            saved.pop("%copy", None)
             pickle.dump(saved, fp)
             #json.dump(saved, fp)
             self.info(f"会话变量信息已保存到{file}")
@@ -1106,31 +1114,40 @@ class Session:
         "      用于测试脚本的命令，会将msg发送并显示在session中，同时触发触发器\n" \
         "\x1b[1m相关\x1b[0m: trigger"
         "把当前接收缓冲内容放到显示缓冲中"
-        raw_line = "".join(args)
-        tri_line = self.getPlainText(raw_line)
 
-        all_tris = list(self._triggers.values())
-        all_tris.sort(key = lambda tri: tri.priority)
+        line = "".join(args)
+        if "\n" in line:
+            lines = line.split("\n")
+        else:
+            lines = []
+            lines.append(line)
 
-        for tri in all_tris:
-            if isinstance(tri, Trigger) and tri.enabled:
-                if tri.raw:
-                    state = tri.match(raw_line, docallback = True)
-                else:
-                    state = tri.match(tri_line, docallback = True)
+        for raw_line in lines:
+            #raw_line = "".join(args)
+            tri_line = self.getPlainText(raw_line)
 
-                if state.result == Trigger.SUCCESS:
-                    self.info(f"TRIGGER {tri.id} 被触发", "PYMUD TRIGGER TEST")
-                    if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                        self._triggers.pop(tri.id)
+            all_tris = list(self._triggers.values())
+            all_tris.sort(key = lambda tri: tri.priority)
 
-                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        break
+            for tri in all_tris:
+                if isinstance(tri, Trigger) and tri.enabled:
+                    if tri.raw:
+                        state = tri.match(raw_line, docallback = True)
                     else:
-                        pass
+                        state = tri.match(tri_line, docallback = True)
 
-        if len(raw_line) > 0:
-            self.info(raw_line, "PYMUD TRIGGER TEST")
+                    if state.result == Trigger.SUCCESS:
+                        self.info(f"TRIGGER {tri.id} 被触发", "PYMUD TRIGGER TEST")
+                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                            self._triggers.pop(tri.id)
+
+                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                            break
+                        else:
+                            pass
+
+            if len(raw_line) > 0:
+                self.info(raw_line, "PYMUD TRIGGER TEST")
 
     def handle_replace(self, *args):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
@@ -1183,16 +1200,12 @@ class Session:
 
     def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
         "输出信息（蓝色），自动换行"
-        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
         self.info2(msg, title, style)
 
     def warning(self, msg, title = "PYMUD WARNING", style = Settings.WARN_STYLE):
         "输出警告（黄色），自动换行"
-        #self.terminal.writeline(_INFO_STYLE + "[PYMUD INFO] {0}".format(msg) + _CLR_STYLE)
-        #self.terminal.writeline(_WARN_STYLE + "[PYMUD WARNING] {0}".format(msg) + _CLR_STYLE)
         self.info2(msg, title, style)
 
     def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
         "输出错误（红色），自动换行"
-        #self.terminal.writeline(_ERR_STYLE + "[PYMUD ERROR] {0}".format(msg) + _CLR_STYLE)
         self.info2(msg, title, style)

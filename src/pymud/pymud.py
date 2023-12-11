@@ -56,7 +56,7 @@ from prompt_toolkit.layout.margins import (
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl
+from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict
 from .session import Session
 from .settings import Settings
 from .dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog
@@ -84,7 +84,7 @@ class PyMudApp:
                 elif key == "styles":
                     Settings.styles.update(cfg_data[key])
 
-        self.globals  = {}              # 增加所有session使用的全局变量
+        self._globals  = DotDict()             # 增加所有session使用的全局变量
         self.sessions = {}
         self.current_session = None
         self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
@@ -376,6 +376,8 @@ class PyMudApp:
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
                     self.set_status("已复制：{}".format(selection))
+
+                    self.current_session.setVariable("%copy", selection)
                 else:
                     # 多行只认行
                     lines = []
@@ -386,12 +388,16 @@ class PyMudApp:
 
                     self.app.clipboard.set_text("\n".join(lines))
                     self.set_status("已复制：行数{}".format(1 + erow - srow))
+
+                    self.current_session.setVariable("%copy", "\n".join(lines))
                     
             else:
                 # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此需要整行复制-双击时才使用）
                 data = self.consoleView.buffer.copy_selection()
                 self.app.clipboard.set_data(data)
                 self.set_status("已复制：{}".format(data.text))
+
+                self.current_session.setVariable("%copy", data.text)
         else:
             self.set_status("未选中任何内容...")
 
@@ -425,7 +431,7 @@ class PyMudApp:
         async def coroutine():
             if self.current_session:
                 if self.current_session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="#aaaa00">警告</b>'), HTML('<style fg="#aaaa00">当前会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML('<b fg="red">警告</b>'), HTML('<style fg="red">当前会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         self.current_session.disconnect()
@@ -516,7 +522,7 @@ class PyMudApp:
         async def coroutine():
             for session in self.sessions.values():
                 if session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(session.name)))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         session.disconnect()
@@ -746,8 +752,8 @@ class PyMudApp:
                     # 增加额外处置：当创建代码块出现异常时，直接执行本行内容
                     # 是为了解决find-draw里面原图的有关内容，会出现引号、括号不匹配情况
                     try:
-                        cb = CodeBlock(self.current_session, cmd_line)
-                        cb.execute()
+                        cb = CodeBlock(cmd_line)
+                        cb.execute(self.current_session)
                     except Exception as e:
                         self.current_session.warning(e)
                         self.current_session.exec_command(cmd_line)
@@ -764,16 +770,20 @@ class PyMudApp:
         else:
             return False
 
+    @property
+    def globals(self):
+        return self._globals
+
     def get_globals(self, name, default = None):
         "获取PYMUD全局变量"
-        if name in self.globals.keys():
-            return self.globals[name]
+        if name in self._globals.keys():
+            return self._globals[name]
         else:
             return default
 
     def set_globals(self, name, value):
         "设置PYMUD全局变量"
-        self.globals[name] = value
+        self._globals[name] = value
 
     def show_message(self, title, text, modal = True):
         "显示一个消息对话框"

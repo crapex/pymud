@@ -210,7 +210,7 @@ class MudClientProtocol(Protocol):
 
         # 若设置了onConnected回调函数，则调用
         if self.on_connection_lost and callable(self.on_connection_lost):
-            self.on_connection_lost(self._transport)
+            self.on_connection_lost(self)
 
         self._state_machine = "normal"          # 状态机标识恢复到 normal,
 
