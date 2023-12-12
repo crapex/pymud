@@ -2,7 +2,7 @@
 ## 简介
 
 ### 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
-### 源代码地址: https://github.com/crapex/pymud-pip.git
+### 源代码地址: https://github.com/crapex/pymud
 ### 使用流QQ群：554672580
 
 
