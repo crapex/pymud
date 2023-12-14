@@ -380,31 +380,39 @@ class Session:
         """
         def exec_one_command(cmd):
             "执行分离后的单个MUD Command/Alias"
-            # 先判断是否是命令
+            # 命令加入历史记录
             self._command_history.append(cmd)
-            isNotCmd = True
-            for command in self._commands.values():
-                if isinstance(command, Command) and command.enabled:
-                    state = command.match(cmd)
-                    if state.result == Command.SUCCESS:
-                        # 命令的任务名称采用命令id，以便于后续查错
-                        self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                        isNotCmd = False
-                        break
-
-            # 再判断是否是别名
-            if isNotCmd:
-                notAlias = True
-                for alias in self._aliases.values():
-                    if isinstance(alias, Alias) and alias.enabled: 
-                        state = alias.match(cmd)
-                        if state.result == Alias.SUCCESS:
-                            notAlias = False
+            
+            #先判断是否带有#号（系统命令）
+            if (len(cmd) > 0) and (cmd[0] == "#"):
+                self.handle_input(cmd)
+            
+            # 否则为其他
+            else:
+                # 先判断是否是命令
+                isNotCmd = True
+                for command in self._commands.values():
+                    if isinstance(command, Command) and command.enabled:
+                        state = command.match(cmd)
+                        if state.result == Command.SUCCESS:
+                            # 命令的任务名称采用命令id，以便于后续查错
+                            self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
+                            isNotCmd = False
                             break
 
-                # 都不是则是普通命令，直接发送
-                if notAlias:
-                    self.writeline(cmd)
+                # 再判断是否是别名
+                if isNotCmd:
+                    notAlias = True
+                    for alias in self._aliases.values():
+                        if isinstance(alias, Alias) and alias.enabled: 
+                            state = alias.match(cmd)
+                            if state.result == Alias.SUCCESS:
+                                notAlias = False
+                                break
+
+                    # 都不是则是普通命令，直接发送
+                    if notAlias:
+                        self.writeline(cmd)
 
         
         ## 以下为函数执行本体
@@ -429,31 +437,36 @@ class Session:
         async def exec_one_command_async(cmd):
             "执行分离后的单个MUD Command/Alias"
 
-            # 先判断是否是命令
-            isNotCmd = True
-            for command in self._commands.values():
-                if isinstance(command, Command) and command.enabled:
-                    state = command.match(cmd)
-                    if state.result == Command.SUCCESS:
-                        # 命令的任务名称采用命令id，以便于后续处理
-                        # 这一句是单命令执行的异步唯一变化，即如果是Command，则需异步等待Command执行完毕
-                        await self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                        isNotCmd = False
-                        break
+            #先判断是否带有#号（系统命令）
+            if (len(cmd) > 0) and (cmd[0] == "#"):
+                await self.handle_input_async(cmd)
 
-            # 再判断是否是别名
-            if isNotCmd:
-                notAlias = True
-                for alias in self._aliases.values():
-                    if isinstance(alias, Alias) and alias.enabled: 
-                        state = alias.match(cmd)
-                        if state.result == Alias.SUCCESS:
-                            notAlias = False
+            else:
+                # 先判断是否是命令
+                isNotCmd = True
+                for command in self._commands.values():
+                    if isinstance(command, Command) and command.enabled:
+                        state = command.match(cmd)
+                        if state.result == Command.SUCCESS:
+                            # 命令的任务名称采用命令id，以便于后续处理
+                            # 这一句是单命令执行的异步唯一变化，即如果是Command，则需异步等待Command执行完毕
+                            await self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
+                            isNotCmd = False
                             break
 
-                # 都不是则是普通命令，直接发送
-                if notAlias:
-                    self.writeline(cmd)
+                # 再判断是否是别名
+                if isNotCmd:
+                    notAlias = True
+                    for alias in self._aliases.values():
+                        if isinstance(alias, Alias) and alias.enabled: 
+                            state = alias.match(cmd)
+                            if state.result == Alias.SUCCESS:
+                                notAlias = False
+                                break
+
+                    # 都不是则是普通命令，直接发送
+                    if notAlias:
+                        self.writeline(cmd)
 
         
         ## 以下为函数执行本体

@@ -104,11 +104,12 @@ class CodeLine:
             else:
                 new_code.append(item)
 
-        if new_code[0] == "#":
-            await session.handle_input_async(new_code_str)
-        else:
-            #await session.exec_command_async(" ".join(new_code))
-            await session.exec_command_async(new_code_str)
+        await session.exec_command_async(new_code_str)
+        # if new_code[0] == "#":
+        #     await session.handle_input_async(new_code_str)
+        # else:
+        #     #await session.exec_command_async(" ".join(new_code))
+        #     await session.exec_command_async(new_code_str)
 
 class CodeBlock:
     """

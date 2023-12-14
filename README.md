@@ -49,3 +49,6 @@
 
 ### 0.16.1.post2 (2023-12-12)
 + 问题修复：修改github项目地址为原pymud地址
+
+### 0.16.2a1 (2023-12-14)
++ 功能修改：归一化#命令和非#命令处理，使session.exec_command和exec_command_async均可以处理#命令，例如session.exec_command("#save")。同时，也可以在命令行使用#all发送#命令，如"#all #save"此类
