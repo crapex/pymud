@@ -64,8 +64,8 @@ class WelcomeDialog(BasicDialog):
         self.website = FormattedText(
             [('', '访问 '),
              #('class:b', 'GitHub:'), 
-             ('', ' https://github.com/crapex/pymud', self.open_url),
-             ('', ' 以获取最新版本')]
+             ('', 'https://github.com/crapex/pymud', self.open_url),
+             ('', ' 以获取最新信息')]
              )
         super().__init__("PYMUD", modal)
         
@@ -74,16 +74,14 @@ class WelcomeDialog(BasicDialog):
             webbrowser.open(Settings.__website__)
 
     def create_body(self) -> AnyContainer:
-        import platform
+        import platform, sys
         body = HSplit([
             Window(height=1),
-            Label(HTML('<b fg="red">PYMUD</b> - a MUD Client Written in Python'), align=WindowAlign.CENTER),
-            #Window(height=1),
-            Label(HTML("<b>Version:</b> {0}   <b>Release Date:</b> {1}".format(Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
-            #Window(height=1),
-            Label(HTML('本程序由 <b>{0}</b> 开发  <b>E-mail</b>: <u>{1}</u>'.format(Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
-            #Label(self.website, align=WindowAlign.CENTER),
-            Label('系统:{} {}'.format(platform.system(), platform.version()), align = WindowAlign.CENTER),
+            Label(HTML('<b fg="red">PYMUD {0}</b> - a MUD Client Written in Python'.format(Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
+            Label(HTML('作者: <b>{0}</b> <b>E-mail</b>: <u>{1}</u>'.format(Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
+            Label(self.website, align=WindowAlign.CENTER),
+            Label('系统:{} {}   Python版本:{}'.format(platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
+
             Window(height=1),
         ])
         
