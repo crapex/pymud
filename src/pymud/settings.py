@@ -57,6 +57,8 @@ class Settings:
         "tabstop"           : 4,                    # 制表符改成空格
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
+        "var_autosave"      : True,                 # 断开时自动保存会话变量
+        "var_autoload"      : True,                 # 初始化时自动加载会话变量
 
         "seperator"         : ";",                  # 多个命令分隔符（默认;）
         "appcmdflag"        : "#",                  # app命令标记（默认#）

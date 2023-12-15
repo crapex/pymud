@@ -144,27 +144,30 @@ class Session:
     def onConnected(self):
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
+            
+            if Settings.client["var_autoload"]:
+                file = f"{self.name}.mud"
+                if os.path.exists(file):
+                    with open(file, "rb") as fp:
+                        vars = pickle.load(fp)
+                        self._variables.update(vars)
+                        self.info(f"自动从{file}中加载保存变量成功")
+
             if self._auto_script:
                 self.handle_load(self._auto_script)
-            
-            file = f"{self.name}.mud"
-            if os.path.exists(file):
-                with open(file, "rb") as fp:
-                    #vars = json.load(fp)
-                    vars = pickle.load(fp)
-                    self._variables.update(vars)
-                    self.info(f"自动从{file}中加载保存变量成功")
 
     def disconnect(self):
         if self.connected:
             self.write_eof()
 
             # 断开时自动保存变量数据
-            self.handle_save()
+            if Settings.client["var_autosave"]:
+                self.handle_save()
 
     def onDisconnected(self, protocol):
         # 断开时自动保存变量数据
-        self.handle_save()
+        if Settings.client["var_autosave"]:
+            self.handle_save()
 
     @property
     def connected(self):
