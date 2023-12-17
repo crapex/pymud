@@ -50,8 +50,9 @@
 ### 0.16.1.post2 (2023-12-12)
 + 问题修复：修改github项目地址为原pymud地址
 
-### 0.16.2a1 (2023-12-14)
+### 0.16.2a1 (2023-12-17)
 + 功能修改：归一化#命令和非#命令处理，使session.exec_command和exec_command_async均可以处理#命令，例如session.exec_command("#save")。同时，也可以在命令行使用#all发送#命令，如"#all #save"此类
 + 功能修改：调整脚本加载与变量自动加载的顺序。当前为连接自动加载时，首先加载变量，然后再加载脚本。目的是使脚本的变化可以覆盖加载的变量内容，而不是反向覆盖。
 + 功能修改：会话变量保存和加载可以配置是否打开，默认为打开。见Settings.client["var_autosave] 和 Settings.client["var_autoload"]。同理，该配置可以被本地pymud.cfg所覆盖
++ 功能修改：将MatchObject的同步onSuccess和异步await的执行顺序进行挑战，以确保一定是同步onSuccess先执行。涉及Trigger、Command等。
 + 修改尝试：尝试使用多线程，将每一个session放在独立线程以防止不同会话之间的相互干扰。经测试后，可以正常运行，但本地的显示窗口经常自动分屏（因为跨线程锁问题，会造成读取值与实际值不同步），因此暂返回单线程模式
