@@ -3,7 +3,7 @@
 
 ### 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ### 源代码地址: https://github.com/crapex/pymud
-### 使用流QQ群：554672580
+### 使用交流QQ群：554672580
 
 
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
