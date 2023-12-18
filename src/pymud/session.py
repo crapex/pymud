@@ -269,10 +269,15 @@ class Session:
         self.log.info(f"服务器断开连接! {self._protocol.__repr__}")
     
     def feed_gmcp(self, name, value) -> None:
+        nothandle = True
         if name in self._gmcp.keys():
             gmcp = self._gmcp[name]
             if isinstance(gmcp, GMCPTrigger):
                 gmcp(value)
+                nothandle = False
+
+        if nothandle:
+            self.info(f"{name}: {value}", "GMCP")
 
     def feed_msdp(self, name, value) -> None:
         pass

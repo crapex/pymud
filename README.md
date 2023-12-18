@@ -50,9 +50,12 @@
 ### 0.16.1.post2 (2023-12-12)
 + 问题修复：修改github项目地址为原pymud地址
 
-### 0.16.2a1 (2023-12-17)
-+ 功能修改：归一化#命令和非#命令处理，使session.exec_command和exec_command_async均可以处理#命令，例如session.exec_command("#save")。同时，也可以在命令行使用#all发送#命令，如"#all #save"此类
+### 0.16.2a1 (2023-12-18)
++ 功能修改：归一化#命令和非#命令处理，使session.exec_command、exec_command_async、exec_command_after均可以处理#命令，例如session.exec_command("#save")。同时，也可以在命令行使用#all发送#命令，如"#all #save"此类
 + 功能修改：调整脚本加载与变量自动加载的顺序。当前为连接自动加载时，首先加载变量，然后再加载脚本。目的是使脚本的变化可以覆盖加载的变量内容，而不是反向覆盖。
 + 功能修改：会话变量保存和加载可以配置是否打开，默认为打开。见Settings.client["var_autosave] 和 Settings.client["var_autoload"]。同理，该配置可以被本地pymud.cfg所覆盖
-+ 功能修改：将MatchObject的同步onSuccess和异步await的执行顺序进行挑战，以确保一定是同步onSuccess先执行。涉及Trigger、Command等。
-+ 修改尝试：尝试使用多线程，将每一个session放在独立线程以防止不同会话之间的相互干扰。经测试后，可以正常运行，但本地的显示窗口经常自动分屏（因为跨线程锁问题，会造成读取值与实际值不同步），因此暂返回单线程模式
++ 功能修改：将MatchObject的同步onSuccess和异步await的执行顺序进行调整，以确保一定是同步onSuccess先执行。涉及Trigger、Command等。
++ 功能修改：修改了GMCPTrigger的onSuccess处置和await triggered处置参数，以保持与Trigger同步。当前，onSuccess函数传递3个参数，name，line（GMCP收到的原始str数据）,wildcards（经eval处理的GMCP数据，大概率是dict，偶尔也可能eval失败，返回与line相同值）。await triggered返回与Triggerd的await triggered相同，均为BaseObject.State，包含4个参数的元组，result（永为True)，name（GMCP的id)，line（GMCP原始数据），wildcards（GMCP处理后数据）。其中，后3个参数与onSuccess函数调用时传递参数相同。
+
+### 0.16.2a2 (2023-12-18)
++ 功能修改：增加GMCP默认处理。当未使用GMCPTrigger对对应的GMCP消息进行处理时，默认使用[GMCP] name: value的形式输出GMCP收到的消息，以便于个人脚本调试。

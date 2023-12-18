@@ -657,12 +657,12 @@ class MudClientProtocol(Protocol):
         
         space_split = gmcp_data.find(" ")
         name = gmcp_data[:space_split]
-        value_str = gmcp_data[space_split+1:]
+        value = gmcp_data[space_split+1:]
         
-        try:
-            value = eval(value_str)
-        except:
-            value = value_str
+        # try:
+        #     value = eval(value_str)
+        # except:
+        #     value = value_str
 
         self.log.debug(f'收到GMCP子协商数据: {name} = {value}')
         self.session.feed_gmcp(name, value)

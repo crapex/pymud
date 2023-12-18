@@ -281,13 +281,22 @@ class GMCPTrigger(BaseObject):
     async def triggered(self):
         self.reset()
         await self.event.wait()
+        state = BaseObject.State(True, self.id, self.line, self.value)
         self.reset()
+        return state
 
     def __call__(self, value) -> Any:
-        self.value = value
+        try:
+            value_exp = eval(value)
+        except:
+            value_exp = value
+
+        self.line  = value
+        self.value = value_exp
+
         if callable(self._onSuccess):
             self.event.set()
-            self._onSuccess(self.id, value)
+            self._onSuccess(self.id, value, value_exp)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
