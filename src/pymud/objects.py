@@ -287,7 +287,8 @@ class GMCPTrigger(BaseObject):
 
     def __call__(self, value) -> Any:
         try:
-            value_exp = eval(value)
+            import json
+            value_exp = json.load(value, strict = False)
         except:
             value_exp = value
 

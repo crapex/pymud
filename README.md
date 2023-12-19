@@ -57,5 +57,6 @@
 + 功能修改：将MatchObject的同步onSuccess和异步await的执行顺序进行调整，以确保一定是同步onSuccess先执行。涉及Trigger、Command等。
 + 功能修改：修改了GMCPTrigger的onSuccess处置和await triggered处置参数，以保持与Trigger同步。当前，onSuccess函数传递3个参数，name，line（GMCP收到的原始str数据）,wildcards（经eval处理的GMCP数据，大概率是dict，偶尔也可能eval失败，返回与line相同值）。await triggered返回与Triggerd的await triggered相同，均为BaseObject.State，包含4个参数的元组，result（永为True)，name（GMCP的id)，line（GMCP原始数据），wildcards（GMCP处理后数据）。其中，后3个参数与onSuccess函数调用时传递参数相同。
 
-### 0.16.2a2 (2023-12-18)
+### 0.16.2 (2023-12-19)
 + 功能修改：增加GMCP默认处理。当未使用GMCPTrigger对对应的GMCP消息进行处理时，默认使用[GMCP] name: value的形式输出GMCP收到的消息，以便于个人脚本调试。
++ 功能修改：修改GMCP数据的处理方式从eval修改为json.load，其余不变。
