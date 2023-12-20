@@ -212,10 +212,37 @@ class PyMudApp:
             ]
         )
 
-        self.console_frame = Frame(body = body, title = self.get_frame_title)
+        fill = functools.partial(Window, style="class:frame.border")
+        top_row_with_title = VSplit(
+            [
+                #fill(width=1, height=1, char=Border.TOP_LEFT),
+                fill(char = "\u2500"),
+                fill(width=1, height=1, char="|"),
+                # Notice: we use `Template` here, because `self.title` can be an
+                # `HTML` object for instance.
+                Label(
+                    lambda: Template(" {} ").format(self.get_frame_title),
+                    style="class:frame.label",
+                    dont_extend_width=True,
+                ),
+                fill(width=1, height=1, char="|"),
+                fill(char = "\u2500"),
+                #fill(width=1, height=1, char=Border.TOP_RIGHT),
+            ],
+            height=1,
+        )
+
+        new_body = HSplit([
+            top_row_with_title,
+            body,
+            fill(height = 1, char = "\u2500"),
+        ])
+
+        #self.console_frame = Frame(body = body, title = self.get_frame_title)
 
         self.body = HSplit([
-                self.console_frame,
+                new_body,
+                #self.console_frame,
                 self.commandLine,
                 self.status_bar
             ])
