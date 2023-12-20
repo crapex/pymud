@@ -1000,3 +1000,10 @@ class DotDict(dict):
             object.__setattr__(self, __name, __value)
         else:
             self.__setitem__(__name, __value)
+
+
+class Plugin:
+    def __init__(self, load):
+        pass
+
+    

@@ -11,7 +11,7 @@ class Session:
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
-    _commands = (
+    _sys_commands = (
         "connect",      # 连接到服务器
 
         "info",         # 输出蓝色info
@@ -72,7 +72,7 @@ class Session:
         self._auto_script = kwargs.get("script", None)
 
         self._cmds_handler = dict()                         # 支持的命令的处理函数字典
-        for cmd in self._commands:
+        for cmd in self._sys_commands:
             handler = getattr(self, f"handle_{cmd}", None)
             self._cmds_handler[cmd] = handler
 
@@ -92,12 +92,26 @@ class Session:
         self._status_maker = None                           # 创建状态窗口的函数（属性）
         self.display_line  = ""
 
+        self._plugins = DotDict()
+
         self.initialize()
 
         self.host = host
         self.port = port
         self.encoding = encoding or self.encoding
         self.after_connect = after_connect
+
+        # 将变量加载和脚本加载调整到会话创建时刻
+        if Settings.client["var_autoload"]:
+                file = f"{self.name}.mud"
+                if os.path.exists(file):
+                    with open(file, "rb") as fp:
+                        vars = pickle.load(fp)
+                        self._variables.update(vars)
+                        self.info(f"自动从{file}中加载保存变量成功")
+
+        if self._auto_script:
+            self.handle_load(self._auto_script)
 
         if Settings.client["auto_connect"]:
             self.open()
@@ -118,6 +132,7 @@ class Session:
         self._command_history = []
 
     def open(self):
+        # daka
         self.clean()
         asyncio.ensure_future(self.connect())
 
@@ -133,7 +148,7 @@ class Session:
             self._transport = transport
             self._protocol  = protocol
             self._state     = "RUNNING"
-            self.initialize()
+            #self.initialize()
 
             self.onConnected()
 
@@ -144,17 +159,6 @@ class Session:
     def onConnected(self):
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
-            
-            if Settings.client["var_autoload"]:
-                file = f"{self.name}.mud"
-                if os.path.exists(file):
-                    with open(file, "rb") as fp:
-                        vars = pickle.load(fp)
-                        self._variables.update(vars)
-                        self.info(f"自动从{file}中加载保存变量成功")
-
-            if self._auto_script:
-                self.handle_load(self._auto_script)
 
     def disconnect(self):
         if self.connected:
@@ -168,6 +172,8 @@ class Session:
         # 断开时自动保存变量数据
         if Settings.client["var_autosave"]:
             self.handle_save()
+        
+        self.clean()
 
     @property
     def connected(self):
@@ -1040,26 +1046,29 @@ class Session:
     def clean(self):
         "清除会话有关信息"
         try:
+            # 重新加载时，仅取消所有任务，停止所有定时器，复位所有async对象
             for task in self._tasks:
                 if isinstance(task, asyncio.Task) and not task.done():
                     task.cancel("session exit.")
 
             self._tasks.clear()
+
             for tm in self._timers.values():
                 tm.enabled = False
-            self._timers.clear()
-            self._triggers.clear()
-            self._aliases.clear()
+            
+            # self._timers.clear()
+            # self._triggers.clear()
+            # self._aliases.clear()
 
             # 重新加载脚本时，变量考虑保留
             #self._variables.clear()
 
-            for cmd in self._commands:
+            for cmd in self._commands.values():
                 if isinstance(cmd, Command):
                     cmd.reset()
-                    del cmd
+                    #del cmd
 
-            self._commands.clear()
+            #self._commands.clear()
             
         except asyncio.CancelledError:
             pass
@@ -1230,3 +1239,30 @@ class Session:
     def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
         "输出错误（红色），自动换行"
         self.info2(msg, title, style)
+
+    #####################################
+    # plugins 处理
+    #####################################
+    def load_plugin(self, mod_spec):
+        mod = importlib.util.module_from_spec(mod_spec)
+        #if "PLUGIN" in mod.__dict__.keys():
+        try:
+            plugin_detail = mod.__dict__["PLUGIN"]
+
+            if not isinstance(plugin_detail, "dict"):
+                raise Exception(f"模块{mod_spec}加载失败")
+            
+        except:
+            pass
+
+
+    def load_plugins(self):
+        import pathlib
+        import importlib.util
+        current_dir = os.path.dirname(__file__)
+        plugins_dir = os.path.join(current_dir, "plugins")
+        for file in os.listdir(plugins_dir):
+            if file.endswith(".py"):
+                modspec = importlib.util.spec_from_file_location(file, plugins_dir)
+                mod     = importlib.util.module_from_spec(modspec)
+                mod.__dict__["PLUGIN"]
