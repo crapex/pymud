@@ -9,7 +9,7 @@ if __name__ == "__main__":
         cfg = args[1]
 
     if os.path.exists(cfg):
-        with open(cfg, "r") as fp:
+        with open(cfg, "r", encoding="utf8", errors="ignore") as fp:
             cfg_data = json.load(fp)
             main(cfg_data)
     else:
