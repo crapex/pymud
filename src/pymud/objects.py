@@ -364,7 +364,8 @@ class MatchObject(BaseObject):
                     self.lines.append(line)
             else:
                 #if line.find(self.patterns) >= 0:
-                if line == self.patterns:
+                #if line == self.patterns:
+                if self.patterns in line:
                     result = self.SUCCESS
                     self.lines.clear()
                     self.lines.append(line)
