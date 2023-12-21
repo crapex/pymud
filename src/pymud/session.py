@@ -164,9 +164,10 @@ class Session:
         if self.connected:
             self.write_eof()
 
-            # 断开时自动保存变量数据
-            if Settings.client["var_autosave"]:
-                self.handle_save()
+            # 两次保存，删掉一次
+            # # 断开时自动保存变量数据
+            # if Settings.client["var_autosave"]:
+            #     self.handle_save()
 
     def onDisconnected(self, protocol):
         # 断开时自动保存变量数据
@@ -1239,30 +1240,3 @@ class Session:
     def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
         "输出错误（红色），自动换行"
         self.info2(msg, title, style)
-
-    #####################################
-    # plugins 处理
-    #####################################
-    def load_plugin(self, mod_spec):
-        mod = importlib.util.module_from_spec(mod_spec)
-        #if "PLUGIN" in mod.__dict__.keys():
-        try:
-            plugin_detail = mod.__dict__["PLUGIN"]
-
-            if not isinstance(plugin_detail, "dict"):
-                raise Exception(f"模块{mod_spec}加载失败")
-            
-        except:
-            pass
-
-
-    def load_plugins(self):
-        import pathlib
-        import importlib.util
-        current_dir = os.path.dirname(__file__)
-        plugins_dir = os.path.join(current_dir, "plugins")
-        for file in os.listdir(plugins_dir):
-            if file.endswith(".py"):
-                modspec = importlib.util.spec_from_file_location(file, plugins_dir)
-                mod     = importlib.util.module_from_spec(modspec)
-                mod.__dict__["PLUGIN"]

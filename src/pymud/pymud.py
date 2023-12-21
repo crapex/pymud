@@ -1,4 +1,5 @@
 import asyncio, functools, re, logging, math, json, os
+import importlib, importlib.util
 from datetime import datetime, time, timedelta
 from prompt_toolkit.widgets import Button, Dialog, FormattedTextToolbar
 from prompt_toolkit.output import ColorDepth
@@ -685,7 +686,7 @@ class PyMudApp:
                 elif topic in self.current_session._commands_alias.keys():
                     command = self.current_session._commands_alias[topic]
                     docstring = self.current_session._cmds_handler[command].__doc__
-                elif topic in self.current_session._commands:
+                elif topic in self.current_session._sys_commands:
                     docstring = self.current_session._cmds_handler[topic].__doc__
                 else:
                     docstring = f"未找到主题{topic}, 请确认输入是否正确."
@@ -701,7 +702,7 @@ class PyMudApp:
 
         cmds = ["exit", "close", "session", "all", "help"]
         cmds.extend(Session._commands_alias.keys())
-        cmds.extend(Session._commands)
+        cmds.extend(Session._sys_commands)
         cmds.sort()
 
         cmd_count = len(cmds)
@@ -719,7 +720,7 @@ class PyMudApp:
             line_cmds = cmds[start:end]
             self.current_session.writetobuffer(" " * left_space)
             for cmd in line_cmds:
-                if cmd in Session._commands:
+                if cmd in Session._sys_commands:
                     self.current_session.writetobuffer(f"{cmd.upper():<20}")
                 else:
                     self.current_session.writetobuffer(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
@@ -862,6 +863,32 @@ class PyMudApp:
         if Settings.client["status_display"] == 1:
             size = size - Settings.client["status_height"] - 1
         return size
+
+    #####################################
+    # plugins 处理
+    #####################################
+    def load_plugin(self, mod_spec):
+        mod = importlib.util.module_from_spec(mod_spec)
+        #if "PLUGIN" in mod.__dict__.keys():
+        try:
+            plugin_detail = mod.__dict__["PLUGIN"]
+
+            if not isinstance(plugin_detail, "dict"):
+                raise Exception(f"模块{mod_spec}加载失败")
+            
+        except:
+            pass
+
+
+    def load_plugins(self):
+        current_dir = os.path.dirname(__file__)
+        plugins_dir = os.path.join(current_dir, "plugins")
+        for file in os.listdir(plugins_dir):
+            if file.endswith(".py"):
+                modspec = importlib.util.spec_from_file_location(file, plugins_dir)
+                mod     = importlib.util.module_from_spec(modspec)
+                mod.__dict__["PLUGIN"]
+
 
 def main(cfg_data = None):
     logging.disable()
