@@ -57,7 +57,7 @@ from prompt_toolkit.layout.margins import (
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict
+from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict, Plugin
 from .session import Session
 from .settings import Settings
 from .dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog
@@ -85,7 +85,8 @@ class PyMudApp:
                 elif key == "styles":
                     Settings.styles.update(cfg_data[key])
 
-        self._globals  = DotDict()             # 增加所有session使用的全局变量
+        self._plugins  = DotDict()              # 增加 插件 字典
+        self._globals  = DotDict()              # 增加所有session使用的全局变量
         self.sessions = {}
         self.current_session = None
         self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
@@ -124,6 +125,8 @@ class PyMudApp:
         )
 
         self.set_status(Settings.text["welcome"])
+
+        self.load_plugins()
 
     def initUI(self):
         self.style = Style.from_dict(Settings.styles)
@@ -438,6 +441,10 @@ class PyMudApp:
             self.sessions[name] = session
             self.activate_session(name)
 
+            for plugin in self._plugins.values():
+                if isinstance(plugin, Plugin):
+                    plugin.onSessionCreate(session)
+
             result = True
         else:
             self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
@@ -465,6 +472,10 @@ class PyMudApp:
                         self.current_session.disconnect()
                     else:
                         return
+
+                for plugin in self._plugins.values():
+                    if isinstance(plugin, Plugin):
+                        plugin.onSessionCreate(self.current_session)
 
                 name = self.current_session.name
                 self.current_session.clean()
@@ -813,6 +824,10 @@ class PyMudApp:
         "设置PYMUD全局变量"
         self._globals[name] = value
 
+    @property
+    def plugins(self):
+        return self._plugins
+
     def show_message(self, title, text, modal = True):
         "显示一个消息对话框"
         async def coroutine():
@@ -867,27 +882,36 @@ class PyMudApp:
     #####################################
     # plugins 处理
     #####################################
-    def load_plugin(self, mod_spec):
-        mod = importlib.util.module_from_spec(mod_spec)
-        #if "PLUGIN" in mod.__dict__.keys():
-        try:
-            plugin_detail = mod.__dict__["PLUGIN"]
-
-            if not isinstance(plugin_detail, "dict"):
-                raise Exception(f"模块{mod_spec}加载失败")
-            
-        except:
-            pass
-
-
     def load_plugins(self):
+        # 首先加载系统目录下的插件
         current_dir = os.path.dirname(__file__)
         plugins_dir = os.path.join(current_dir, "plugins")
-        for file in os.listdir(plugins_dir):
-            if file.endswith(".py"):
-                modspec = importlib.util.spec_from_file_location(file, plugins_dir)
-                mod     = importlib.util.module_from_spec(modspec)
-                mod.__dict__["PLUGIN"]
+        if os.path.exists(plugins_dir):
+            for file in os.listdir(plugins_dir):
+                if file.endswith(".py"):
+                    try:
+                        file_path = os.path.join(plugins_dir, file)
+                        file_name = file[:-3]
+                        plugin = Plugin(file_name, file_path)
+                        self._plugins[plugin.name] = plugin
+                        plugin.onAppInit(self)
+                    except Exception as e:
+                        self.set_status(f"File: {plugins_dir}\{file} is not a valid plugin file. Loading error: {e}")
+        
+        # 然后加载当前目录下的插件
+        current_dir = os.path.abspath(".")
+        plugins_dir = os.path.join(current_dir, "plugins")
+        if os.path.exists(plugins_dir):
+            for file in os.listdir(plugins_dir):
+                if file.endswith(".py"):
+                    try:
+                        file_path = os.path.join(plugins_dir, file)
+                        file_name = file[:-3]
+                        plugin = Plugin(file_name, file_path)
+                        self._plugins[plugin.name] = plugin
+                        plugin.onAppInit(self)
+                    except Exception as e:
+                        self.set_status(f"File: {plugins_dir}\{file} is not a valid plugin file. Loading error: {e}")
 
 
 def main(cfg_data = None):

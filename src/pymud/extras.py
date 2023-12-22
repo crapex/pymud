@@ -1002,8 +1002,33 @@ class DotDict(dict):
             self.__setitem__(__name, __value)
 
 
-class Plugin:
-    def __init__(self, load):
-        pass
+import importlib
+import importlib.util
 
+class Plugin:
+    def __init__(self, name, location):
+        self._plugin_file = name
+        self._plugin_loc  = location
+
+        self.reload()
+
+    def reload(self):
+        del self.modspec, self.mod
+        self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
+        self.mod     = importlib.util.module_from_spec(self.modspec)
+        self.modspec.loader.exec_module(self.mod)
+        self.name    = self.mod.__dict__["PLUGIN_NAME"]
+        self.desc    = self.mod.__dict__["PLUGIN_DESC"]
+
+        self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
+        self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
+        self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
     
+    def onAppInit(self, app):
+        self._app_init(app)
+
+    def onSessionCreate(self, session):
+        self._session_create(session)
+
+    def onSessionDestroy(self, session):
+        self._session_destroy(session)
