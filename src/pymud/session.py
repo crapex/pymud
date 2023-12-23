@@ -111,9 +111,12 @@ class Session:
                 file = f"{self.name}.mud"
                 if os.path.exists(file):
                     with open(file, "rb") as fp:
-                        vars = pickle.load(fp)
-                        self._variables.update(vars)
-                        self.info(f"自动从{file}中加载保存变量成功")
+                        try:
+                            vars = pickle.load(fp)
+                            self._variables.update(vars)
+                            self.info(f"自动从{file}中加载保存变量成功")
+                        except Exception as e:
+                            self.warning(f"自动从{file}中加载变量失败，错误消息为： {e}")
 
         if self._auto_script:
             self.handle_load(self._auto_script)
