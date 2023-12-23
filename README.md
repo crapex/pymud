@@ -68,3 +68,20 @@
 + 功能修改：将自动脚本加载调整到session创建初始，而不论是否连接服务器
 + 功能修改：脚本load和reload时，不再清空任何对象，保留内容包括：中止并清空所有task，关闭所有定时器，将所有异步对象复位
 + 功能修改：去掉了左右边框
+
+### 0.17.0b1 (2023-12-23)
++ 问题修复：修复了当使用session.addCommand/addTrigger/addAlias等添加对象，而对象是Command/Trigger/Alias等的子类时，由于类型检查失败导致无法成功的问题
++ 功能修改：增加自动重连配置，Settings.client["auto_reconnect"]配置，当为True时，若连接过程中出现异常断开，则10秒后自动重连。该配置默认为False。
++ 功能修改：当连接过程中出现异常时，异常提示中增加异常时刻。
++ 功能修改：#reload指令增加可以重新加载插件功能。例如，#reload chathook会重新加载名为chathook的插件。
++ 功能增加：增加#py指令，可以直接在命令行中写代码并执行。执行的上下文环境为当前环境，即self代表当前session。例如，#py self.writeline("xixi")相当于直接在脚本会话中调用发送xixi指令
++ 功能新增：新增插件（Plugins）功能。将自动读取pymud模块目录的plugins子目录以及当前脚本目录的plugins子目录下的.py文件，若发现遵照插件规范脚本，将自动加载该模块到pymud。可以使用#plugins查看所有被加载的插件，可以直接带参数插件名（如#plugins myplugin）查看插件的详细信息（自动打印插件的__doc__属性，即写在文件最前面的字符串常量）插件文件中必须有以下定义：
+
+|名称|类型|状态|含义|
+|-|-|-|-|
+|PLUGIN_NAME|str|必须有|插件唯一名称|
+|PLUGIN_DESC|dict|必须有|插件描述信息的详情，必要关键字包含VERSION（版本）、AUTHOR（作者）、RELEASE_DATE（发布日期）、DESCRIPTION（简要描述）|
+|PLUGIN_PYMUD_START|func(app)|函数定义必须有，函数体可以为空|PYMUD自动读取并加载插件时自动调用的函数， app为APP本体。该函数仅会在程序运行时，自动加载一次|
+|PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
+|PLUGIN_PYMUD_START|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
+

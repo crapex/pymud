@@ -11,9 +11,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.17.0a1"
+    __version__   = "0.17.0b1"
     "APP 当前版本"
-    __release__   = "2023-12-21"
+    __release__   = "2023-12-23"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -57,6 +57,7 @@ class Settings:
         "tabstop"           : 4,                    # 制表符改成空格
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
+        "auto_reconnect"    : False,                # 在会话异常断开之后，是否自动重连
         "var_autosave"      : True,                 # 断开时自动保存会话变量
         "var_autoload"      : True,                 # 初始化时自动加载会话变量
 
@@ -116,7 +117,7 @@ class Settings:
         "green"     : "fg:green",
         "blue"      : "fg:blue",
         "link"      : "fg:green underline",
-        "title"     : "fg:white bold",
+        "title"     : "bold",
         "value"     : "fg:green",
     }
 

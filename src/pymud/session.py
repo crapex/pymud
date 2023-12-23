@@ -1,7 +1,7 @@
-import asyncio, logging, re, functools, math, importlib, json, os, pickle
+import asyncio, logging, re, functools, math, os, pickle, datetime, importlib, importlib.util
 from collections.abc import Iterable
 
-from .extras import SessionBuffer, DotDict
+from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
 from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, GMCPTrigger
 from .settings import Settings
@@ -43,6 +43,9 @@ class Session:
         "gag",          # 不显示对应行
 
         "message",      # 用弹出式对话框显示消息
+
+        "plugins",      # 插件
+        "py",           # 直接执行python语句
     )
 
     _commands_alias = {
@@ -92,14 +95,16 @@ class Session:
         self._status_maker = None                           # 创建状态窗口的函数（属性）
         self.display_line  = ""
 
-        self._plugins = DotDict()
-
         self.initialize()
 
         self.host = host
         self.port = port
         self.encoding = encoding or self.encoding
         self.after_connect = after_connect
+
+        for plugin in app.plugins.values():
+            if isinstance(plugin, Plugin):
+                plugin.onSessionCreate(self)
 
         # 将变量加载和脚本加载调整到会话创建时刻
         if Settings.client["var_autoload"]:
@@ -153,8 +158,14 @@ class Session:
             self.onConnected()
 
         except Exception as exc:
-            self.error("创建连接过程中发生错误，错误信息为 %r " % exc)
+            now = datetime.datetime.now()
+            self.error(f"创建连接过程中发生错误, 错误发生时刻 {now}, 错误信息为 {exc}, ")
             self._state     = "EXCEPTION"
+
+            if Settings.client["auto_reconnect"]:
+                self.info(f"10秒之后将自动重新连接...")
+                await asyncio.sleep(10)
+                asyncio.ensure_future(self.connect())
 
     def onConnected(self):
         if isinstance(self.after_connect, str):
@@ -203,6 +214,11 @@ class Session:
     def status_maker(self, value):
         if callable(value):
             self._status_maker = value
+
+    @property
+    def plugins(self):
+        "返回PYMUD的插件清单辅助访问器"
+        return self.application.plugins
 
     @property
     def vars(self):
@@ -543,7 +559,8 @@ class Session:
             self._gmcp.update(objs)
 
     def _addObject(self, obj, cls: type):
-        if type(obj) == cls:
+        #if type(obj) == cls:
+        if isinstance(obj, cls):
             if cls == Alias:
                 self._aliases[obj.id] = obj
             elif cls == Command:
@@ -1097,21 +1114,28 @@ class Session:
                 self.error(f"异常追踪为： {traceback.format_exc()}")
 
     def handle_reload(self, *args):
-        "\x1b[1m命令\x1b[0m: #reload\n" \
-        "      为当前session重新加载配置模块（解决配置模块文件修改后的重启问题）\n" \
+        "\x1b[1m命令\x1b[0m: #reload {plugin}\n" \
+        "      不带参数时(#reload)，为当前session重新加载配置模块\n" \
+        "      带参数时(#reload {plugin}_，为PYMUD重新加载指定名称的插件，此时对所有会话均生效。\n" \
         "\x1b[1m相关\x1b[0m: load"
 
-        if hasattr(self, "config_name"):
-            try:
-                del self.config
-                self.clean()
-                self.cfg_module = importlib.reload(self.cfg_module)
-                self.config = self.cfg_module.Configuration(self)
-                self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
-            except:
-                self.error(f"配置模块 {self.cfg_module} 重新加载失败.")
-        else:
-            self.error(f"原先未加载过配置模块，怎么能重新加载！")
+        if len(args) == 0:
+            if hasattr(self, "config_name"):
+                try:
+                    del self.config
+                    self.clean()
+                    self.cfg_module = importlib.reload(self.cfg_module)
+                    self.config = self.cfg_module.Configuration(self)
+                    self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
+                except:
+                    self.error(f"配置模块 {self.cfg_module} 重新加载失败.")
+            else:
+                self.error(f"原先未加载过配置模块，怎么能重新加载！")
+        elif len(args) == 1:
+            name = args[0]
+            if name in self.plugins.keys():
+                self.application.reload_plugin(self.plugins[name])
+
 
     def handle_save(self, *args):
         "\x1b[1m命令\x1b[0m: #save\n" \
@@ -1180,6 +1204,27 @@ class Session:
             if len(raw_line) > 0:
                 self.info(raw_line, "PYMUD TRIGGER TEST")
 
+    def handle_plugins(self, *args):
+        "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
+        "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
+        "      当带参数时，列出指定名称插件的详细信息"
+        "\x1b[1m相关\x1b[0m: help"
+        if len(args) == 0:
+            count = len(self.plugins.keys())
+            if count == 0:
+                self.info("PYMUD当前并未加载任何插件。", "PLUGINS")
+            else:
+                self.info(f"PYMUD当前已加载 {count} 个插件，分别为：", "PLUGINS")
+                for name, plugin in self.plugins.items():
+                    self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
+        
+        elif len(args) == 1:
+            name = args[0]
+            if name in self.plugins.keys():
+                plugin = self.plugins[name]
+                self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
+                self.writetobuffer(plugin.help)
+
     def handle_replace(self, *args):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
         "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
@@ -1201,6 +1246,18 @@ class Session:
         "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效"
         "\x1b[1m相关\x1b[0m: replace"
         self.display_line = ""
+
+    def handle_py(self, *args):
+        "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
+        "      直接执行后面跟着的python语句\n" \
+        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。"
+        "\x1b[1m相关\x1b[0m: replace"
+        sentence = " ".join(args)
+        try:
+            exec(sentence)
+        except Exception as e:
+            self.error(f"语法错误：{e}")
+
 
     def handle_info(self, *args):
         "\x1b[1m命令\x1b[0m: #info {msg}\n" \

@@ -1,7 +1,7 @@
 # External Libraries
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import time
 
 from typing import Callable, Iterable, List, Optional, Sequence, Union
@@ -1013,16 +1013,26 @@ class Plugin:
         self.reload()
 
     def reload(self):
-        del self.modspec, self.mod
+        #del self.modspec, self.mod
         self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
         self.mod     = importlib.util.module_from_spec(self.modspec)
         self.modspec.loader.exec_module(self.mod)
-        self.name    = self.mod.__dict__["PLUGIN_NAME"]
-        self.desc    = self.mod.__dict__["PLUGIN_DESC"]
 
         self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
         self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
         self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
+        
+    @property
+    def name(self):
+        return self.mod.__dict__["PLUGIN_NAME"]
+    
+    @property
+    def desc(self):
+        return self.mod.__dict__["PLUGIN_DESC"]
+    
+    @property
+    def help(self):
+        return self.mod.__doc__
     
     def onAppInit(self, app):
         self._app_init(app)
@@ -1032,3 +1042,7 @@ class Plugin:
 
     def onSessionDestroy(self, session):
         self._session_destroy(session)
+
+    def __getattr__(self, __name: str) -> Any:
+        if hasattr(self.mod, __name):
+            return self.mod.__getattribute__(__name)

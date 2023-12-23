@@ -441,10 +441,6 @@ class PyMudApp:
             self.sessions[name] = session
             self.activate_session(name)
 
-            for plugin in self._plugins.values():
-                if isinstance(plugin, Plugin):
-                    plugin.onSessionCreate(session)
-
             result = True
         else:
             self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
@@ -913,6 +909,18 @@ class PyMudApp:
                     except Exception as e:
                         self.set_status(f"File: {plugins_dir}\{file} is not a valid plugin file. Loading error: {e}")
 
+
+    def reload_plugin(self, plugin: Plugin):
+        "重新加载指定插件"
+        for session in self.sessions.values():
+            plugin.onSessionDestroy(session)
+
+        plugin.reload()
+        plugin.onAppInit(self)
+
+        for session in self.sessions.values():
+            plugin.onSessionCreate(session)
+        
 
 def main(cfg_data = None):
     logging.disable()
