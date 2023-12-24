@@ -81,9 +81,10 @@
 |-|-|-|-|
 |PLUGIN_NAME|str|必须有|插件唯一名称|
 |PLUGIN_DESC|dict|必须有|插件描述信息的详情，必要关键字包含VERSION（版本）、AUTHOR（作者）、RELEASE_DATE（发布日期）、DESCRIPTION（简要描述）|
-|PLUGIN_PYMUD_START|func(app)|函数定义必须有，函数体可以为空|PYMUD自动读取并加载插件时自动调用的函数， app为APP本体。该函数仅会在程序运行时，自动加载一次|
+|PLUGIN_PYMUD_START|func(app)|函数定义必须有，函数体可以为空|PYMUD自动读取并加载插件时自动调用的函数， app为PyMudApp（pymud管理类）。该函数仅会在程序运行时，自动加载一次|
 |PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
-|PLUGIN_PYMUD_START|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
+|PLUGIN_SESSION_DESTROY|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
 
 ### 0.17.0b2 (2023-12-23)
 + 功能修改：对session自动加载mud文件中变量失败时的异常进行管理，此时将不加载变量，自动继续进行
++ 功能修改：所有匹配类对象的匹配模式patterns支持动态修改，涉及Alias，Trigger，Command。修改方式为直接对其patterns属性赋值。如tri.patterns = aNewPattern

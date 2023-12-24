@@ -306,14 +306,28 @@ class MatchObject(BaseObject):
     "支持匹配内容的对象，包括Alias, Trigger, Command, Module等等"
     __abbr__ = "mob"
     def __init__(self, session, patterns, *args, **kwargs):
-        self.patterns = patterns
-
         self.ignoreCase    = kwargs.get("ignoreCase", False)          # 忽略大小写，非默认
         self.isRegExp      = kwargs.get("isRegExp", True)             # 正则表达式，默认
         self.expandVar     = kwargs.get("expandVar", True)            # 扩展变量（将变量用值替代），默认
         self.keepEval      = kwargs.get("keepEval", False)            # 不中断，非默认
         self.raw           = kwargs.get("raw", False)                 # 原始数据匹配。当原始数据匹配时，不对VT100指令进行解析
         
+        self.patterns = patterns
+
+        self.wildcards = []
+        self.lines = []
+        self.event = asyncio.Event()
+
+        super().__init__(session, patterns = patterns, *args, **kwargs)
+
+    @property
+    def patterns(self):
+        return self._patterns
+
+    @patterns.setter
+    def patterns(self, patterns):
+        self._patterns = patterns
+
         if isinstance(patterns, str):
             self.multiline = False
             self.linesToMatch = 1
@@ -333,12 +347,6 @@ class MatchObject(BaseObject):
 
                 self.linesToMatch = len(self._regExps)
                 self._mline = 0
-
-        self.wildcards = []
-        self.lines = []
-        self.event = asyncio.Event()
-
-        super().__init__(session, patterns = patterns, *args, **kwargs)
 
     def reset(self):
         "复位事件，用于async执行"
