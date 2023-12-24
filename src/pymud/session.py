@@ -171,6 +171,8 @@ class Session:
                 asyncio.ensure_future(self.connect())
 
     def onConnected(self):
+        now = datetime.datetime.now()
+        self.info(f"{now}: 已成功连接到服务器")
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
 
@@ -189,6 +191,8 @@ class Session:
             self.handle_save()
         
         self.clean()
+        now = datetime.datetime.now()
+        self.info(f"{now}: 与服务器连接已断开")
 
     @property
     def connected(self):
