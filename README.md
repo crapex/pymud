@@ -85,6 +85,7 @@
 |PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
 |PLUGIN_SESSION_DESTROY|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
 
-### 0.17.0b2 (2023-12-23)
+### 0.17.0 (2023-12-24)
 + 功能修改：对session自动加载mud文件中变量失败时的异常进行管理，此时将不加载变量，自动继续进行
 + 功能修改：所有匹配类对象的匹配模式patterns支持动态修改，涉及Alias，Trigger，Command。修改方式为直接对其patterns属性赋值。如tri.patterns = aNewPattern
++ 功能修改：连接/断开连接时刻都会在提示中增加时刻殿信息，而不论是否异常。
