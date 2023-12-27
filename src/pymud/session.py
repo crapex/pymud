@@ -1,5 +1,6 @@
 import asyncio, logging, re, functools, math, os, pickle, datetime, importlib, importlib.util
 from collections.abc import Iterable
+from collections import OrderedDict
 
 from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
@@ -30,8 +31,10 @@ class Session:
 
         "command",      # 命令
         
-        "load",         # 加载脚本文件
-        "reload",       # 重新加载脚本文件
+        "modules",      # 模块清单
+        "load",         # 加载模块
+        "reload",       # 重新加载模块
+        "unload",       # 卸载模块
 
         "save",         # 将动态运行信息保存到磁盘
 
@@ -60,6 +63,7 @@ class Session:
         "mess": "message",
         "action": "trigger",
         "cls" : "clear",
+        "mods": "modules"
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, **kwargs):
@@ -72,7 +76,7 @@ class Session:
         self._eof       = False
         self._uid       = 0
 
-        self._auto_script = kwargs.get("script", None)
+        self._auto_script = kwargs.get("scripts", None)
 
         self._cmds_handler = dict()                         # 支持的命令的处理函数字典
         for cmd in self._sys_commands:
@@ -106,6 +110,8 @@ class Session:
             if isinstance(plugin, Plugin):
                 plugin.onSessionCreate(self)
 
+        self._modules = OrderedDict()
+
         # 将变量加载和脚本加载调整到会话创建时刻
         if Settings.client["var_autoload"]:
                 file = f"{self.name}.mud"
@@ -118,8 +124,12 @@ class Session:
                         except Exception as e:
                             self.warning(f"自动从{file}中加载变量失败，错误消息为： {e}")
 
+        
+
         if self._auto_script:
-            self.handle_load(self._auto_script)
+            self.info(f"即将自动加载以下模块:{self._auto_script}")
+            #self.handle_load(self._auto_script)
+            self.load_module(self._auto_script)
 
         if Settings.client["auto_connect"]:
             self.open()
@@ -221,6 +231,11 @@ class Session:
     def status_maker(self, value):
         if callable(value):
             self._status_maker = value
+
+    @property
+    def modules(self):
+        "返回本会话加载的所有模块，类型为顺序字典"
+        return self._modules
 
     @property
     def plugins(self):
@@ -1098,52 +1113,183 @@ class Session:
         except asyncio.CancelledError:
             pass
 
+    def load_module(self, module_names):
+        "当名称为元组/列表时，加载指定名称的系列模块，当名称为字符串时，加载单个模块"
+        if isinstance(module_names, (list, tuple)):
+            for mod in module_names:
+                mod = mod.strip()
+                self._load_module(mod)
+
+        elif isinstance(module_names, str):
+            mod = module_names.strip()
+            self._load_module(mod)
+
+    def _load_module(self, module_name):
+        "加载指定名称模块"
+        try:
+            if module_name not in self._modules.keys():
+                mod = importlib.import_module(module_name)
+                if hasattr(mod, 'Configuration'):
+                    config = mod.Configuration(self)
+                    self._modules[module_name] = {"module": mod, "config": config}
+                    self.info(f"主配置模块 {module_name} 加载完成.")
+                else:
+                    self._modules[module_name] = {"module": mod, "config": None}
+                    self.info(f"子配置模块 {module_name} 加载完成.")
+
+            else:
+                mod = self._modules[module_name]["module"]
+                config = self._modules[module_name]["config"]
+                if config: del config
+                mod = importlib.reload(mod)
+                if hasattr(mod, 'Configuration'):
+                    config = mod.Configuration(self)
+                    self._modules[module_name] = {"module": mod, "config": config}
+                    self.info(f"主配置模块 {module_name} 重新加载完成.")
+                else:
+                    self._modules[module_name] = {"module": mod, "config": None}
+                    self.info(f"子配置模块 {module_name} 重新加载完成.")
+
+        except Exception as e:
+            import traceback
+            self.error(f"模块 {module_name} 加载失败，异常为 {e}, 类型为 {type(e)}.")
+            self.error(f"异常追踪为： {traceback.format_exc()}")
+
+    def unload_module(self, module_names):
+        "当名称为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块"
+        if isinstance(module_names, (list, tuple)):
+            for mod in module_names:
+                mod = mod.strip()
+                self._unload_module(mod)
+
+        elif isinstance(module_names, str):
+            mod = module_names.strip()
+            self._unload_module(mod)
+
+    def _unload_module(self, module_name):
+        "卸载指定名称模块。卸载支持需要模块的Configuration实现__del__方法"
+        if module_name in self._modules.keys():
+            mod = self._modules[module_name]["module"]
+            config = self._modules[module_name]["config"]
+            if config: del config
+            del mod
+            self._modules.pop(module_name)
+            self.info(f"配置模块 {module_name} 已成功卸载.")
+
+        else:
+            self.warning(f"指定模块名称 {module_name} 并未加载.")
+
+    def reload_module(self, module_names = None):
+        "重新加载指定名称模块，可以字符串指定单个或以列表形式指定多个模块。若未指定名称，则重新加载所有已加载模块"
+        if module_names is None:
+            self.clean()
+            mods = list(self._modules.keys())
+            self.load_module(mods)
+
+            self.info(f"所有配置模块全部重新加载完成.")
+
+        elif isinstance(module_names, (list, tuple)):
+            for mod in module_names:
+                mod = mod.strip()
+                if mod in self._modules.keys():
+                    self.load_module(mod)
+                else:
+                    self.warning(f"指定模块名称 {mod} 并未加载，无法重新加载.")
+
+        elif isinstance(module_names, str):
+            if module_names in self._modules.keys():
+                mod = module_names.strip()
+                self.load_module(mod)
+            else:
+                self.warning(f"指定模块名称 {module_names} 并未加载，无法重新加载.")
+        
+
     def handle_load(self, *args):
         "\x1b[1m命令\x1b[0m: #load {config}\n" \
-        "      为当前session加载{config}指定的模块\n" \
-        "\x1b[1m相关\x1b[0m: reload"
+        "      为当前session加载{config}指定的模块。当要加载多个模块时，使用英文逗号隔开\n" \
+        "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n"
+        "      例, 加载名为pkuxkx的模块: #load pkuxkx \n"
+        "          加载名为pkuxkx和my的两个模块: #load pkuxkx,my \n"
+        "\x1b[1m相关\x1b[0m: unload, reload"
 
         if len(args) > 0:
-            module = args[0]
-            try:
-                self.config_name = module
+            modules = args[0].split(',')
+            self.load_module(modules)
+            # try:
+            #     self.config_name = module
 
-                if hasattr(self, "cfg_module") and self.cfg_module:
-                    del self.cfg_module
-                    self.clean()
+            #     if hasattr(self, "cfg_module") and self.cfg_module:
+            #         del self.cfg_module
+            #         self.clean()
 
-                self.cfg_module = importlib.import_module(module)
-                self.config = self.cfg_module.Configuration(self)
-                self.info(f"配置模块 {module} 加载完成.")
-            except Exception as e:
-                import traceback
-                self.error(f"配置模块 {module} 加载失败，异常为 {e}, 类型为 {type(e)}.")
-                self.error(f"异常追踪为： {traceback.format_exc()}")
+            #     self.cfg_module = importlib.import_module(module)
+            #     self.config = self.cfg_module.Configuration(self)
+            #     self.info(f"配置模块 {module} 加载完成.")
+            # except Exception as e:
+            #     import traceback
+            #     self.error(f"配置模块 {module} 加载失败，异常为 {e}, 类型为 {type(e)}.")
+            #     self.error(f"异常追踪为： {traceback.format_exc()}")
 
     def handle_reload(self, *args):
-        "\x1b[1m命令\x1b[0m: #reload {plugin}\n" \
-        "      不带参数时(#reload)，为当前session重新加载配置模块\n" \
-        "      带参数时(#reload {plugin}_，为PYMUD重新加载指定名称的插件，此时对所有会话均生效。\n" \
-        "\x1b[1m相关\x1b[0m: load"
+        "\x1b[1m命令\x1b[0m: #reload {mods/plugins}\n" \
+        "      不带参数时(#reload)，为当前session重新加载所有配置模块（不是重新加载插件) \n" \
+        "      带参数时(#reload {mods/plugins}, 若指定名称为模块，则重新加载模块；若指定名称为插件，则重新加载插件。\n" \
+        "                                      若指定名称既有模块也有插件，则仅重新加载模块（建议不要重名）。\n" \
+        "      若要重新加载多个模块，可以在参数中使用逗号隔开多个模块名称 \n" \
+        "\x1b[1m相关\x1b[0m: load, unload"
 
         if len(args) == 0:
-            if hasattr(self, "config_name"):
-                try:
-                    del self.config
-                    self.clean()
-                    self.cfg_module = importlib.reload(self.cfg_module)
-                    self.config = self.cfg_module.Configuration(self)
-                    self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
-                except:
-                    self.error(f"配置模块 {self.cfg_module} 重新加载失败.")
-            else:
-                self.error(f"原先未加载过配置模块，怎么能重新加载！")
+            self.reload_module()
+            # if hasattr(self, "config_name"):
+            #     try:
+            #         del self.config
+            #         self.clean()
+            #         self.cfg_module = importlib.reload(self.cfg_module)
+            #         self.config = self.cfg_module.Configuration(self)
+            #         self.info(f"配置模块 {self.cfg_module} 重新加载完成.")
+            #     except:
+            #         self.error(f"配置模块 {self.cfg_module} 重新加载失败.")
+            # else:
+            #     self.error(f"原先未加载过配置模块，怎么能重新加载！")
+
         elif len(args) == 1:
-            name = args[0]
-            if name in self.plugins.keys():
-                self.application.reload_plugin(self.plugins[name])
+            modules = args[0].split(',')
+            for mod in modules:
+                mod = mod.strip()
+                if mod in self._modules.keys():
+                    self.reload_module(mod)
 
+                elif mod in self.plugins.keys():
+                    self.application.reload_plugin(self.plugins[mod])
 
+                else:
+                    self.warning(f"指定名称 {mod} 既未找到模块，也未找到插件，重新加载失败..")
+
+    def handle_unload(self, *args):
+        "\x1b[1m命令\x1b[0m: #unload {config}\n" \
+        "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用英文逗号隔开\n" \
+        "      卸载模块时，将调用模块Configuration类的__del__方法，请将模块清理工作代码形式卸载此方法中 \n"
+        "      例, 卸载名为pkuxkx的模块: #unload pkuxkx \n"
+        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx,my \n"
+        "\x1b[1m相关\x1b[0m: load, reload"
+        if len(args) == 0:
+            self.error("卸载模块时，必须指定模块名称")
+
+        elif len(args) == 1:
+            modules = args[0].split(',')
+            self.unload_module(modules)
+
+    def handle_modules(self, *args):
+        "\x1b[1m命令\x1b[0m: #modules/mods\n" \
+        "      模块命令，该命令不带参数。列出本程序当前已加载的所有模块信息. \n" \
+        "\x1b[1m相关\x1b[0m: load, unload, reload, plugins"
+        
+        count = len(self._modules.keys())
+        if count == 0:
+            self.info("当前会话并未加载任何模块。", "MODULES")
+        else:
+            self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
+    
     def handle_save(self, *args):
         "\x1b[1m命令\x1b[0m: #save\n" \
         "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
@@ -1214,8 +1360,8 @@ class Session:
     def handle_plugins(self, *args):
         "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
         "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
-        "      当带参数时，列出指定名称插件的详细信息"
-        "\x1b[1m相关\x1b[0m: help"
+        "      当带参数时，列出指定名称插件的详细信息 \n"
+        "\x1b[1m相关\x1b[0m: modules, reload"
         if len(args) == 0:
             count = len(self.plugins.keys())
             if count == 0:

@@ -313,11 +313,29 @@ class PyMudApp:
             port = site["port"]
             encoding = site["encoding"]
             autologin = site["autologin"]
-            script = site["default_script"]
+            scripts = list()
+            default_script = site["default_script"]
+            
+            if isinstance(default_script, str):
+                ss = default_script.split(",")
+                scripts.extend(ss)
+            elif isinstance(default_script, (list, tuple)):
+                scripts.extend(default_script)
+
             menu = MenuItem(key)
             for name, info in site["chars"].items():
-                after_connect = autologin.format(*info)
-                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, script))
+                after_connect = autologin.format(info[0], info[1])
+
+                if len(info) == 3:
+                    session_script = info[2]
+                    if session_script:
+                        if isinstance(session_script, str):
+                            ss = session_script.split(",")
+                            scripts.extend(ss)
+                        elif isinstance(session_script, (list, tuple)):
+                            scripts.extend(session_script)
+
+                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, scripts))
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -432,12 +450,12 @@ class PyMudApp:
         else:
             self.set_status("未选中任何内容...")
 
-    def create_session(self, name, host, port, encoding = None, after_connect = None, script = None):
+    def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None):
         result = False
         encoding = encoding or Settings.server["default_encoding"]
 
         if name not in self.sessions.keys():
-            session = Session(self, name, host, port, encoding, after_connect, script = script)
+            session = Session(self, name, host, port, encoding, after_connect, scripts = scripts)
             self.sessions[name] = session
             self.activate_session(name)
 

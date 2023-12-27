@@ -88,4 +88,40 @@
 ### 0.17.0 (2023-12-24)
 + 功能修改：对session自动加载mud文件中变量失败时的异常进行管理，此时将不加载变量，自动继续进行
 + 功能修改：所有匹配类对象的匹配模式patterns支持动态修改，涉及Alias，Trigger，Command。修改方式为直接对其patterns属性赋值。如tri.patterns = aNewPattern
-+ 功能修改：连接/断开连接时刻都会在提示中增加时刻殿信息，而不论是否异常。
++ 功能修改：连接/断开连接时刻都会在提示中增加时刻信息，而不论是否异常。
+
+### 0.17.1 (2023-12-27)
+本版对模块功能进行了整体调整，支持加载/卸载/重载/预加载多个模块，具体内容如下：
++ 当模块中存在名为Configuration类时，以主模块形式加载，即：自动创建该Configuration类的实例（与原脚本相同）
++ 当模块中不存在名为Configuration类时，以子模块形式加载，即：仅加载该模块，但不会创建Configuration的实例
++ #load命令支持同时加载多个模块，模块名以半角逗号（,）隔开即可。此时按给定的名称顺序逐一加载。如：#load mod1,mod2
++ 增加#unload命令，卸载卸载名称模块，同时卸载多个模块时，模块名以半角逗号（,）隔开即可。卸载时，如果该模块有Configuration类，会自动调用其__del__方法
++ 修改reload命令功能，当不带参数时，重新加载所有已加载模块，带参数时，首先尝试重新加载指定名称模块，若模块中不存在该名称模块，则重新加载指定名称的插件。若存在同名模块和插件，则仅重新加载插件（建议不要让插件和模块同名）
++ 增加#modules（简写为#mods）命令，可以列出所有已经加载的模块清单
++ Session类新增load_module方法，可以在脚本中调用以加载给定名称的模块。该方法接受1个参数，可以使用元组/列表形式指定多个模块，也可以使用字符串指定单个模块
++ Session类新增unload_module方法，可以在脚本中调用以卸载给定名称的模块。参数与load_module类似。
++ Session类新增reload_module方法，可以在脚本中调用以重新加载给定名称的模块。当不指定参数时，重新加载所有模块。当指定1个参数时，与load_module和unload_module方法类似
++ 修改Settings.py和本地pymud.cfg文件中sessions块脚本的定义的可接受值。默认加载脚本default_script现可接受字符串和列表以支持多个模块加载。多个模块加载有两种形式，既可以用列表形式指定多个，如["script1","script2"]，也可以用字符串以逗号隔开指定多个，如"script1,script2"
++ 修改Settings.py和本地pymud.cfg文件中sessions块脚本中chars指定的会话菜单参数。当前，菜单后面的列表参数可以支持额外增加第3个对象，其中第3个为该会话特定需要加载的模块。该参数也可以使用逗号分隔或者列表形式。
++ 当创建会话时，自动加载的模块会首先加载default_script中指定的模块名称，然后再加载chars中指定的模块名称。
++ 上述所有修改均向下兼容，不影响原脚本使用。
++ 一个新的修改后的pymud.cfg示例如下
+```
+{
+    "sessions": {
+        "pkuxkx" : {
+            "host" : "mud.pkuxkx.net",
+            "port" : "8081",
+            "encoding" : "utf8",
+            "autologin" : "{0};{1}",
+            "default_script": ["pkuxkx.common", "pkuxkx.commands", "pkuxkx.main"],
+            "chars" : {
+                "char1": ["yourid1", "yourpassword1"],
+                "char2": ["yourid2", "yourpassword2", "pkuxkx.wudang"],
+                "char3": ["yourid3", "yourpassword3", "pkuxkx.wudang,pkuxkx.lingwu"],
+                "char4": ["yourid4", "yourpassword4", ["pkuxkx.shaolin","pkuxkx.lingwu"]]
+            }
+        }
+    }
+ }
+```
