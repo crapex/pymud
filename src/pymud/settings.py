@@ -86,6 +86,7 @@ class Settings:
         "copyraw"           : "复制(ANSI)",
         "clearsession"      : "清空会话内容",
         "closesession"      : "关闭当前会话",
+        "autoreconnect"     : "打开/关闭自动重连",
         "loadconfig"        : "加载脚本配置",
         "reloadconfig"      : "重新加载脚本配置",
         "layout"            : "布局",

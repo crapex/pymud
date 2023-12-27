@@ -176,8 +176,8 @@ class Session:
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
-                self.info(f"10秒之后将自动重新连接...")
-                await asyncio.sleep(10)
+                self.info(f"15秒之后将自动重新连接...")
+                await asyncio.sleep(15)
                 asyncio.ensure_future(self.connect())
 
     def onConnected(self):
@@ -203,6 +203,11 @@ class Session:
         self.clean()
         now = datetime.datetime.now()
         self.info(f"{now}: 与服务器连接已断开")
+
+        if Settings.client["auto_reconnect"]:
+            self.info(f"15秒之后将自动重新连接...")
+            delay_task = self.create_task(asyncio.sleep(15))
+            delay_task.add_done_callback(self.connect)
 
     @property
     def connected(self):
@@ -561,7 +566,7 @@ class Session:
                 cmd.enabled = enabled
 
         for tmr in self._timers.values():
-            if isinstance(cmd, Timer) and tmr.group == group:
+            if isinstance(tmr, Timer) and tmr.group == group:
                 tmr.enabled = enabled
 
         for gmcp in self._gmcp.values():
@@ -1086,15 +1091,15 @@ class Session:
     def clean(self):
         "清除会话有关信息"
         try:
-            # 重新加载时，仅取消所有任务，停止所有定时器，复位所有async对象
+            # 加载时，仅取消所有任务，复位所有async对象, 定时器不作调整
             for task in self._tasks:
                 if isinstance(task, asyncio.Task) and not task.done():
                     task.cancel("session exit.")
 
             self._tasks.clear()
 
-            for tm in self._timers.values():
-                tm.enabled = False
+            # for tm in self._timers.values():
+            #     tm.enabled = False
             
             # self._timers.clear()
             # self._triggers.clear()

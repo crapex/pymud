@@ -264,6 +264,7 @@ class PyMudApp:
                         MenuItem(Settings.text["connect"], handler = self.act_connect),
                         MenuItem(Settings.text["disconnect"], handler = self.act_discon),
                         MenuItem(Settings.text["closesession"], handler = self.act_close_session),
+                        MenuItem(Settings.text["autoreconnect"], handler = self.act_autoreconnect),
                         MenuItem("-", disabled=True),
                         MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
                         MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
@@ -537,6 +538,10 @@ class PyMudApp:
     def act_echoinput(self):
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
+
+    def act_autoreconnect(self):
+        val = not Settings.client["auto_reconnect"]
+        Settings.client["auto_reconnect"] = val
 
     def act_copy(self):
         "复制菜单"
