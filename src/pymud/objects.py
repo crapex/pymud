@@ -646,6 +646,8 @@ class Timer(BaseObject):
     def __init__(self, session, *args, **kwargs):
         super().__init__(session, *args, **kwargs)
 
+        self._task = None
+        
         if self._enabled:
             self._renewTask()
 
@@ -663,11 +665,9 @@ class Timer(BaseObject):
     def reset(self):
         "复位定时器，清除所创建的定时任务"
         try:
-            task = self._task
-            if isinstance(task, asyncio.Task):
-                if not task.done():
-                    task.cancel("Timer has been reset.")
-                    del task
+            if isinstance(self._task, asyncio.Task) and (not self._task.done()):
+                task.cancel("Timer has been reset.")
+                del task
 
             self._task = None
         except asyncio.CancelledError:
