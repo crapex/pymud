@@ -274,6 +274,9 @@ class GMCPTrigger(BaseObject):
         self.value = None
         super().__init__(session, id = name, *args, **kwargs)
 
+    def __del__(self):
+        self.reset()
+
     def reset(self):
         "复位事件，用于async执行"
         self.event.clear()
@@ -319,6 +322,9 @@ class MatchObject(BaseObject):
         self.event = asyncio.Event()
 
         super().__init__(session, patterns = patterns, *args, **kwargs)
+
+    def __del__(self):
+        self.reset()
 
     @property
     def patterns(self):
@@ -643,9 +649,29 @@ class Timer(BaseObject):
         if self._enabled:
             self._renewTask()
 
+    def __del__(self):
+        self.reset()
+
     def _renewTask(self):
-        self._task = self.session.create_task(asyncio.sleep(self.timeout), name = self.id)
-        self._task.add_done_callback(self.onTimer)
+        # 修改以确保renew不会创建新定时任务
+        if isinstance(self._task, asyncio.Task) and (not self._task.done()):
+            pass
+        else:
+            self._task = self.session.create_task(asyncio.sleep(self.timeout), name = self.id)
+            self._task.add_done_callback(self.onTimer)
+
+    def reset(self):
+        "复位定时器，清除所创建的定时任务"
+        try:
+            task = self._task
+            if isinstance(task, asyncio.Task):
+                if not task.done():
+                    task.cancel("Timer has been reset.")
+                    del task
+
+            self._task = None
+        except asyncio.CancelledError:
+            pass
 
     @property
     def enabled(self):
@@ -655,7 +681,7 @@ class Timer(BaseObject):
     def enabled(self, en: bool):
         self._enabled = en
         if not en:
-            self._task = None
+            self.reset()
         else:
             self._renewTask()
 

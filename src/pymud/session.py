@@ -128,7 +128,6 @@ class Session:
 
         if self._auto_script:
             self.info(f"即将自动加载以下模块:{self._auto_script}")
-            #self.handle_load(self._auto_script)
             self.load_module(self._auto_script)
 
         if Settings.client["auto_connect"]:
@@ -150,8 +149,8 @@ class Session:
         self._command_history = []
 
     def open(self):
-        # daka
-        self.clean()
+        # clean仅保留在断开和重新加载脚本时处理
+        #self.clean()
         asyncio.ensure_future(self.connect())
 
     async def connect(self):
@@ -1089,31 +1088,34 @@ class Session:
         self.application.show_message(title, msg, False)
 
     def clean(self):
-        "清除会话有关信息"
+        "清除会话有关任务项和事件标识"
         try:
-            # 加载时，仅取消所有任务，复位所有async对象, 定时器不作调整
+            # 加载时，取消所有任务，复位所有含async的对象, 保留变量
             for task in self._tasks:
-                if isinstance(task, asyncio.Task) and not task.done():
-                    task.cancel("session exit.")
+                if isinstance(task, asyncio.Task) and (not task.done()):
+                    task.cancel("session clean.")
 
             self._tasks.clear()
 
-            # for tm in self._timers.values():
-            #     tm.enabled = False
+            for tm in self._timers.values():
+                if isinstance(tm, Timer):
+                    tm.reset()
             
-            # self._timers.clear()
-            # self._triggers.clear()
-            # self._aliases.clear()
+            for tri in self._triggers.values():
+                if isinstance(tri, Trigger):
+                    tri.reset()
 
-            # 重新加载脚本时，变量考虑保留
-            #self._variables.clear()
+            for ali in self._aliases.values():
+                if isinstance(ali, Alias):
+                    ali.reset()
+
+            for gmcp in self._gmcp.values():
+                if isinstance(gmcp, GMCPTrigger):
+                    gmcp.reset()
 
             for cmd in self._commands.values():
                 if isinstance(cmd, Command):
                     cmd.reset()
-                    #del cmd
-
-            #self._commands.clear()
             
         except asyncio.CancelledError:
             pass

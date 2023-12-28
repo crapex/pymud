@@ -1,13 +1,10 @@
 import asyncio, functools, re, logging, math, json, os
 import importlib, importlib.util
-from datetime import datetime, time, timedelta
-from prompt_toolkit.widgets import Button, Dialog, FormattedTextToolbar
+from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
 from prompt_toolkit import ANSI, HTML, print_formatted_text
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.document import Document
-from prompt_toolkit.selection import SelectionState, SelectionType
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition
@@ -19,8 +16,6 @@ from prompt_toolkit.layout.dimension import Dimension, D
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame
-from prompt_toolkit.lexers.pygments import PygmentsLexer
-from pygments.lexers.html import HtmlLexer
 from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
@@ -124,6 +119,7 @@ class PyMudApp:
             cursor=CursorShape.BLINKING_UNDERLINE
         )
 
+        set_title("{} {}".format(Settings.__appname__, Settings.__version__))
         self.set_status(Settings.text["welcome"])
 
         self.load_plugins()
@@ -538,10 +534,14 @@ class PyMudApp:
     def act_echoinput(self):
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
+        if self.current_session:
+            self.current_session.info(f"回显输入命令被设置为：{'打开' if val else '关闭'}")
 
     def act_autoreconnect(self):
         val = not Settings.client["auto_reconnect"]
         Settings.client["auto_reconnect"] = val
+        if self.current_session:
+            self.current_session.info(f"自动重连被设置为：{'打开' if val else '关闭'}")
 
     def act_copy(self):
         "复制菜单"
