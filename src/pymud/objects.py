@@ -667,7 +667,7 @@ class Timer(BaseObject):
         try:
             if isinstance(self._task, asyncio.Task) and (not self._task.done()):
                 self._task.cancel("Timer has been reset.")
-                del task
+                del self._task
 
             self._task = None
         except asyncio.CancelledError:
