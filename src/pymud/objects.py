@@ -666,7 +666,7 @@ class Timer(BaseObject):
         "复位定时器，清除所创建的定时任务"
         try:
             if isinstance(self._task, asyncio.Task) and (not self._task.done()):
-                task.cancel("Timer has been reset.")
+                self._task.cancel("Timer has been reset.")
                 del task
 
             self._task = None
