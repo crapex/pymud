@@ -313,26 +313,27 @@ class PyMudApp:
             scripts = list()
             default_script = site["default_script"]
             
+            def_scripts = list()
             if isinstance(default_script, str):
-                ss = default_script.split(",")
-                scripts.extend(ss)
+                def_scripts.extend(default_script.split(","))
             elif isinstance(default_script, (list, tuple)):
-                scripts.extend(default_script)
+                def_scripts.extend(default_script)
 
             menu = MenuItem(key)
             for name, info in site["chars"].items():
                 after_connect = autologin.format(info[0], info[1])
-
+                sess_scripts = list()
+                sess_scripts.extend(def_scripts)
+                
                 if len(info) == 3:
                     session_script = info[2]
                     if session_script:
                         if isinstance(session_script, str):
-                            ss = session_script.split(",")
-                            scripts.extend(ss)
+                            sess_scripts.extend(session_script.split(","))
                         elif isinstance(session_script, (list, tuple)):
-                            scripts.extend(session_script)
+                            sess_scripts.extend(session_script)
 
-                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, scripts))
+                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, sess_scripts))
                 menu.children.append(sub)
             menus.append(menu)
 
