@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
-from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, GMCPTrigger
+from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger
 from .settings import Settings
 
 
@@ -804,7 +804,7 @@ class Session:
     def handle_connect(self, *args):
         "\x1b[1m命令\x1b[0m: #connect|#con\n" \
         "      连接到远程服务器（仅当远程服务器未连接时有效）\n" \
-        "\x1b[1m相关\x1b[0m: disconnect"
+        "\x1b[1m相关\x1b[0m: disconnect\n"
 
         if not self.connected:
             self.open()
@@ -828,7 +828,7 @@ class Session:
         "      不带参数时，列出当前会话中所有的变量清单\n" \
         "      带1个参数时，列出当前会话中名称为该参数的变量值\n" \
         "      带2个参数时，设置名称为该参数的变量值\n" \
-        "\x1b[1m相关\x1b[0m: alias, trigger, command"
+        "\x1b[1m相关\x1b[0m: alias, trigger, command\n"
 
         if len(args) == 0:
             vars = self._variables
@@ -893,7 +893,7 @@ class Session:
         "      不带参数时，列出程序当前所有全局变量清单\n" \
         "      带1个参数时，列出程序当前名称我为该参数的全局变量值\n" \
         "      带2个参数时，设置名称为该全局变量的变量值\n" \
-        "\x1b[1m相关\x1b[0m: variable"
+        "\x1b[1m相关\x1b[0m: variable\n"
 
         if len(args) == 0:
             vars = self.application.globals
@@ -980,45 +980,69 @@ class Session:
                 elif args[1] == "off":
                     obj.enabled = False
                     self.info(f"对象 {obj} 的使能状态已禁用.")
+                elif args[1] == "del":
+                    obj.enabled = False
+                    objs.pop(args[0])
+                    self.info(f"对象 {obj} 已从会话中删除.")
                 else:
-                    self.error(f"#{name.lower()}命令的第二个参数仅能接受on或off")
+                    self.error(f"#{name.lower()}命令的第二个参数仅能接受on/off/del")
             
-            # 当第一个参数为不是对象obj名称时，创建新对象
+            # 当第一个参数为不是对象obj名称时，创建新对象 (此处还有BUG，调试中)
             else:
-                name = name.lower()
-                if name == "alias":
-                    ali = SimpleAlias(self, args[0], args[1])
-                    self.addAlias(ali)
-                    self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__()))
-                elif name == "trigger":
-                    tri = SimpleTrigger(self, args[0], args[1])
-                    self.addTrigger(tri)
-                    self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__()))
+                self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
+
+                # name = name.lower()
+                # if name == "alias":
+                #     ali = SimpleAlias(self, args[0], args[1])
+                #     self.addAlias(ali)
+                #     self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__()))
+                # elif name == "trigger":
+                #     tri = SimpleTrigger(self, args[0], args[1])
+                #     self.addTrigger(tri)
+                #     self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__()))
+                # elif name == "timer":
+                #     if args[1].isnumeric():
+                #         timeout = float(args[1])
+                #         if timeout > 0:
+                #             ti  = SimpleTimer(self, args[2], timeout = timeout)
+                #             self.addTimer(ti)
+                #             self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
+
 
     def handle_alias(self, *args):
         "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
         "      不指定参数时, 列出当前会话中所有的别名清单\n" \
         "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Alias的id, 第二个应为on/off, 可修改Alias的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: variable, trigger, command, timer"
+        "      为两个参数时, 第一个参数应为Alias的id, 第二个应为on/off/del, 可修改Alias的使能状态，或者从会话中移除该Alias\n" \
+        "\x1b[1m相关\x1b[0m: variable, trigger, command, timer\n"
+        # "      为两个参数时, 可以进行如下操作\n" \
+        # "         1. 当第一个参数为一个已存在Alias的id, 第二个为on/off时, 可修改Alias的使能状态\n" \
+        # "         2. 当第一个参数为一个已存在Alias的id, 第二个为del时, 可从会话中删除该Alias\n" \
+        # "         3. 当第一个参数不存在于Alias的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleAlias \n" \
+        
 
         self._handle_objs("Alias", self._aliases, *args)
 
 
     def handle_timer(self, *args):
-        "\x1b[1m命令\x1b[0m: #timer|#tmr\n" \
+        "\x1b[1m命令\x1b[0m: #timer|#ti\n" \
         "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
         "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Timer的id, 第二个应为on/off, 可修改Timer的使能状态\n" \
-        "\x1b[1m相关\x1b[0m: variable, alias, trigger, command"
-   
+        "      为两个参数时, 第一个参数应为Timer的id, 第二个应为on/off/del, 可修改Timer的使能状态，或者从会话中移除该Timer\n" \
+        "\x1b[1m相关\x1b[0m: variable, alias, trigger, command\n"
+        # "      为两个参数时, 可以进行如下操作\n" \
+        # "         1. 当第一个参数为一个已存在Timer的id, 第二个为on/off时, 可修改Timer的使能状态\n" \
+        # "         2. 当第一个参数为一个已存在Timer的id, 第二个为del时, 可从会话中删除该Timer\n" \
+        # "         3. 当第一个参数为数字时，第一个参数被识别为定时器时间，第二个参数识别为执行的代码, 此时创建一个SimpleTimer \n" \
+
         self._handle_objs("Timer", self._timers, *args)
 
+        
     def handle_command(self, *args):
         "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
         "      不指定参数时, 列出当前会话中所有的命令清单\n" \
         "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Command的id, 第二个应为on/off, 可修改Command的使能状态\n" \
+        "      为两个参数时, 第一个参数应为Command的id, 第二个应为on/off/del, 可修改Command的使能状态，或者从会话中移除该Command\n" \
         "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer"
 
         self._handle_objs("Command", self._commands, *args)
@@ -1027,8 +1051,13 @@ class Session:
         "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
         "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
         "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
-        "      为一个参数时, 第一个参数应为Trigger的id, 第二个应为on/off, 可修改Trigger的使能状态\n" \
+        "      为两个参数时, 第一个参数应为Trigger的id, 第二个应为on/off/del, 可修改Trigger的使能状态，或者从会话中移除该Trigger\n" \
         "\x1b[1m相关\x1b[0m: alias, variable, command, timer"
+        # "      为两个参数时, 可以进行如下操作\n" \
+        # "         1. 当第一个参数为一个已存在Trigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
+        # "         2. 当第一个参数为一个已存在Trigger的id, 第二个为del时, 可从会话中删除该\n" \
+        # "         3. 当第一个参数不存在于Trigger的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleTrigger \n" \
+        
                 
         self._handle_objs("Trigger", self._triggers, *args)
 
@@ -1036,7 +1065,7 @@ class Session:
     def handle_repeat(self, *args):
         "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
         "      重复向session输出上一次人工输入的命令 \n" \
-        "\x1b[1m相关\x1b[0m: num"
+        "\x1b[1m相关\x1b[0m: num\n"
 
         if self.connected and self.last_command:
             self.exec_command(self.last_command)
@@ -1047,7 +1076,7 @@ class Session:
         "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
         "      向session中输出{num}次{cmd} \n" \
         "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
-        "\x1b[1m相关\x1b[0m: repeat"
+        "\x1b[1m相关\x1b[0m: repeat\n"
         
         if self.connected:
             if len(args) > 0:
@@ -1061,14 +1090,14 @@ class Session:
         "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
         "      指定key时，显示由GMCP收到的key信息\n" \
         "      不指定key时，显示所有GMCP收到的信息\n" \
-        "\x1b[1m相关\x1b[0m: 暂无"
+        "\x1b[1m相关\x1b[0m: Trigger\n"
 
         self._handle_objs("GMCPs", self._gmcp, *args)
 
     def handle_message(self, *args):
         "\x1b[1m命令\x1b[0m: #message|#mess {msg}\n" \
         "      使用弹出窗体显示信息\n" \
-        "\x1b[1m相关\x1b[0m: 暂无"
+        "\x1b[1m相关\x1b[0m: 暂无\n"
 
         title = "来自会话 {} 的消息".format(self.name)
         
@@ -1091,12 +1120,6 @@ class Session:
         "清除会话有关任务项和事件标识"
         try:
             # 加载时，取消所有任务，复位所有含async的对象, 保留变量
-            for task in self._tasks:
-                if isinstance(task, asyncio.Task) and (not task.done()):
-                    task.cancel("session clean.")
-
-            self._tasks.clear()
-
             for tm in self._timers.values():
                 if isinstance(tm, Timer):
                     tm.reset()
@@ -1117,6 +1140,11 @@ class Session:
                 if isinstance(cmd, Command):
                     cmd.reset()
             
+            for task in self._tasks:
+                if isinstance(task, asyncio.Task) and (not task.done()):
+                    task.cancel("session clean.")
+
+            self._tasks.clear()
         except asyncio.CancelledError:
             pass
 
@@ -1217,7 +1245,7 @@ class Session:
         "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n"
         "      例, 加载名为pkuxkx的模块: #load pkuxkx \n"
         "          加载名为pkuxkx和my的两个模块: #load pkuxkx,my \n"
-        "\x1b[1m相关\x1b[0m: unload, reload"
+        "\x1b[1m相关\x1b[0m: unload, reload\n"
 
         if len(args) > 0:
             modules = args[0].split(',')
@@ -1243,7 +1271,7 @@ class Session:
         "      带参数时(#reload {mods/plugins}, 若指定名称为模块，则重新加载模块；若指定名称为插件，则重新加载插件。\n" \
         "                                      若指定名称既有模块也有插件，则仅重新加载模块（建议不要重名）。\n" \
         "      若要重新加载多个模块，可以在参数中使用逗号隔开多个模块名称 \n" \
-        "\x1b[1m相关\x1b[0m: load, unload"
+        "\x1b[1m相关\x1b[0m: load, unload\n"
 
         if len(args) == 0:
             self.reload_module()
@@ -1278,7 +1306,7 @@ class Session:
         "      卸载模块时，将调用模块Configuration类的__del__方法，请将模块清理工作代码形式卸载此方法中 \n"
         "      例, 卸载名为pkuxkx的模块: #unload pkuxkx \n"
         "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx,my \n"
-        "\x1b[1m相关\x1b[0m: load, reload"
+        "\x1b[1m相关\x1b[0m: load, reload\n"
         if len(args) == 0:
             self.error("卸载模块时，必须指定模块名称")
 
@@ -1289,7 +1317,7 @@ class Session:
     def handle_modules(self, *args):
         "\x1b[1m命令\x1b[0m: #modules/mods\n" \
         "      模块命令，该命令不带参数。列出本程序当前已加载的所有模块信息. \n" \
-        "\x1b[1m相关\x1b[0m: load, unload, reload, plugins"
+        "\x1b[1m相关\x1b[0m: load, unload, reload, plugins\n"
         
         count = len(self._modules.keys())
         if count == 0:
@@ -1301,7 +1329,7 @@ class Session:
         "\x1b[1m命令\x1b[0m: #save\n" \
         "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
         "      文件保存在当前目录下，文件名为 {会话名}.mud \n" \
-        "\x1b[1m相关\x1b[0m: variable"
+        "\x1b[1m相关\x1b[0m: variable\n"
         file = f"{self.name}.mud"
 
         with open(file, "wb") as fp:
@@ -1321,14 +1349,14 @@ class Session:
     def handle_clear(self, *args):
         "\x1b[1m命令\x1b[0m: #clear #cls {msg}\n" \
         "      清屏命令，清除当前会话所有缓存显示内容\n" \
-        "\x1b[1m相关\x1b[0m: connect, exit"
+        "\x1b[1m相关\x1b[0m: connect, exit\n"
         self.buffer.text = ""
 
     def handle_test(self, *args):
         "\x1b[1m命令\x1b[0m: #test {msg}\n" \
         "      用于测试脚本的命令，会将msg发送并显示在session中，同时触发触发器\n" \
-        "\x1b[1m相关\x1b[0m: trigger"
-        "把当前接收缓冲内容放到显示缓冲中"
+        "\x1b[1m相关\x1b[0m: trigger\n"
+        #"把当前接收缓冲内容放到显示缓冲中"
 
         line = "".join(args)
         if "\n" in line:
@@ -1368,7 +1396,7 @@ class Session:
         "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
         "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
         "      当带参数时，列出指定名称插件的详细信息 \n"
-        "\x1b[1m相关\x1b[0m: modules, reload"
+        "\x1b[1m相关\x1b[0m: modules, reload\n"
         if len(args) == 0:
             count = len(self.plugins.keys())
             if count == 0:
@@ -1389,7 +1417,7 @@ class Session:
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
         "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
         "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
-        "\x1b[1m相关\x1b[0m: gag"
+        "\x1b[1m相关\x1b[0m: gag\n"
         
         new_msg = ""
         if len(args) > 0:
@@ -1404,14 +1432,14 @@ class Session:
         "\x1b[1m命令\x1b[0m: #gag\n" \
         "      在主窗口中不显示当前行\n" \
         "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效"
-        "\x1b[1m相关\x1b[0m: replace"
+        "\x1b[1m相关\x1b[0m: replace\n"
         self.display_line = ""
 
     def handle_py(self, *args):
         "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
         "      直接执行后面跟着的python语句\n" \
         "      执行语句时，环境为当前上下文环境，此时self代表当前会话。"
-        "\x1b[1m相关\x1b[0m: replace"
+        "\x1b[1m相关\x1b[0m: 暂无\n"
         sentence = " ".join(args)
         try:
             exec(sentence)
@@ -1422,7 +1450,7 @@ class Session:
     def handle_info(self, *args):
         "\x1b[1m命令\x1b[0m: #info {msg}\n" \
         "      使用info输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: warning, error"
+        "\x1b[1m相关\x1b[0m: warning, error\n"
 
         if len(args) > 0:
             self.info(" ".join(args))
@@ -1430,7 +1458,7 @@ class Session:
     def handle_warning(self, *args):
         "\x1b[1m命令\x1b[0m: #warning {msg}\n" \
         "      使用warning输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, error"
+        "\x1b[1m相关\x1b[0m: info, error\n"
         
         if len(args) > 0:
             self.warning(" ".join(args))
@@ -1438,7 +1466,7 @@ class Session:
     def handle_error(self, *args):
         "\x1b[1m命令\x1b[0m: #error {msg}\n" \
         "      使用error输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, warning"
+        "\x1b[1m相关\x1b[0m: info, warning\n"
         
         if len(args) > 0:
             self.error(" ".join(args))

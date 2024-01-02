@@ -680,7 +680,7 @@ class PyMudApp:
         "      当不指定编码格式时, 默认使用utf-8编码 \n" \
         "      如， #session newstart mud.pkuxkx.net 8081 \n" \
         "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
-        "\x1b[1m相关\x1b[0m: help, exit"
+        "\x1b[1m相关\x1b[0m: help, exit\n"
 
         nothandle = True
 
@@ -702,7 +702,7 @@ class PyMudApp:
     def handle_help(self, *args):
         "\x1b[1m命令\x1b[0m: #help {主题}\n" \
         "      当不带参数时, #help会列出所有可用的帮助主题\n" \
-        "\x1b[1m相关\x1b[0m: session, exit"
+        "\x1b[1m相关\x1b[0m: session, exit\n"
 
         if self.current_session:
             if len(args) == 0:      # 不带参数，打印所有支持的help主题
@@ -764,12 +764,12 @@ class PyMudApp:
     def handle_exit(self, *args):
         "\x1b[1m命令\x1b[0m: #exit \n" \
         "      退出PYMUD程序\n" \
-        "\x1b[1m相关\x1b[0m: session"
+        "\x1b[1m相关\x1b[0m: session\n"
     
     def handle_all(self, cmd):
         "\x1b[1m命令\x1b[0m: #all xxx \n" \
         "      向所有的活动的session发送同样的命令\n" \
-        "\x1b[1m相关\x1b[0m: session"
+        "\x1b[1m相关\x1b[0m: session\n"
         for ss in self.sessions.values():
             if isinstance(ss, Session) and ss.connected:
                 ss.exec_command(cmd)
@@ -780,6 +780,9 @@ class PyMudApp:
         if len(cmd_line) == 0:
             if self.current_session:
                 self.current_session.writeline("")
+        elif cmd_line[0] != Settings.client["appcmdflag"]:
+            if self.current_session:
+                self.current_session.last_command = cmd_line
 
         if cmd_line == "#exit":
             self.act_exit()

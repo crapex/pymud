@@ -182,11 +182,11 @@ class BaseObject:
     __abbr__ = "obj"
     def __init__(self, session, *args, **kwargs):
         self.session    = session
-
+        self._enabled   = True              # give a default value
         self.log        = logging.getLogger(f"pymud.{self.__class__.__name__}")
         self.id         = kwargs.get("id", session.getUniqueID(self.__class__.__abbr__))
         self.group      = kwargs.get("group", "")                  # 组
-        self._enabled   = kwargs.get("enabled", True)              # 使能与否
+        self.enabled    = kwargs.get("enabled", True)              # 使能与否
         self.priority   = kwargs.get("priority", 100)              # 优先级
         self.timeout    = kwargs.get("timeout", 10)                # 超时时间
         self.sync       = kwargs.get("sync", True)                 # 同步模式，默认
@@ -644,30 +644,34 @@ class Timer(BaseObject):
     __abbr__ = "tmr"
 
     def __init__(self, session, *args, **kwargs):
-        super().__init__(session, *args, **kwargs)
-
         self._task = None
-        
-        if self._enabled:
-            self._renewTask()
+        super().__init__(session, *args, **kwargs)
 
     def __del__(self):
         self.reset()
 
-    def _renewTask(self):
-        # 修改以确保renew不会创建新定时任务
-        if isinstance(self._task, asyncio.Task) and (not self._task.done()):
-            pass
-        else:
-            self._task = self.session.create_task(asyncio.sleep(self.timeout), name = self.id)
-            self._task.add_done_callback(self.onTimer)
+    def startTimer(self):
+        if not isinstance(self._task, asyncio.Task):
+            self._task = asyncio.create_task(self.onTimerTask())
+
+        asyncio.ensure_future(self._task)
+
+    async def onTimerTask(self):
+        if self.enabled:
+            await asyncio.sleep(self.timeout)
+            if callable(self._onSuccess):
+                self._onSuccess(self.id)
+
+            if self.oneShot:
+                self.enabled = False
+            else:   
+                await asyncio.create_task(self.onTimerTask())
 
     def reset(self):
         "复位定时器，清除所创建的定时任务"
         try:
             if isinstance(self._task, asyncio.Task) and (not self._task.done()):
                 self._task.cancel("Timer has been reset.")
-                del self._task
 
             self._task = None
         except asyncio.CancelledError:
@@ -683,19 +687,13 @@ class Timer(BaseObject):
         if not en:
             self.reset()
         else:
-            self._renewTask()
+            self.startTimer()
 
-    def onTimer(self, *args, **kwargs):
-        "定时器到点时执行"
-        if self.enabled:
-            if callable(self._onSuccess):
-                self._onSuccess(self.id, *args, **kwargs)
-
-            if not self.oneShot:
-                self._renewTask()
-            else:
-                del self._task
-                self._task = None
+    def __detailed__(self) -> str:
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout}'
+    
+    def __repr__(self) -> str:
+        return self.__detailed__()
             
 class SimpleTimer(Timer):
     def __init__(self, session, code, *args, **kwargs):
@@ -707,7 +705,4 @@ class SimpleTimer(Timer):
         self._codeblock.execute(self.session)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> enabled = {self.enabled} timeout = "{self.timeout}" code = "{self._code}"'
-    
-    def __repr__(self) -> str:
-        return self.__detailed__()
+        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
