@@ -992,7 +992,7 @@ class MenuItem:
 
 class DotDict(dict):
     def __getattr__(self, __key):
-        if not __key in self.__dict__:
+        if (not __key in self.__dict__) and (not __key.startswith("__")):
             return self.__getitem__(__key)
 
     def __setattr__(self, __name: str, __value):
