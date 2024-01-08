@@ -156,5 +156,6 @@
 + 功能调整：调整了Timer和SimpleTimer在#timer时的显示格式。
 + 实现调整：调整了Session.clean实现中各对象清理的顺序，将任务清除移到了最后。
 
-### 0.18.0a1 (2024-01-07)
+### 0.17.4a1 (2024-01-08)
 + 问题修复：处理DotDict在Ubuntu下, 保存容易产生异常的问题
++ 功能增加：为Session增加两个事件属性，分别为event_connected和event_disconnected，接受一个带有session参数的函数，在连接和连接断开时触发。

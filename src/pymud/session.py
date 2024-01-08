@@ -75,6 +75,9 @@ class Session:
         self.state      = "INITIALIZED"
         self._eof       = False
         self._uid       = 0
+        self._events    = dict()
+        self._events["connected"]    = None
+        self._events["disconnected"] = None
 
         self._auto_script = kwargs.get("scripts", None)
 
@@ -185,6 +188,10 @@ class Session:
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
 
+        event_connected = self._events["connected"]
+        if callable(event_connected):
+            event_connected(self)
+
     def disconnect(self):
         if self.connected:
             self.write_eof()
@@ -202,6 +209,10 @@ class Session:
         self.clean()
         now = datetime.datetime.now()
         self.info(f"{now}: 与服务器连接已断开")
+
+        event_disconnected = self._events["disconnected"]
+        if callable(event_disconnected):
+            event_disconnected(self)
 
         if Settings.client["auto_reconnect"]:
             self.info(f"15秒之后将自动重新连接...")
@@ -235,6 +246,22 @@ class Session:
     def status_maker(self, value):
         if callable(value):
             self._status_maker = value
+
+    @property
+    def event_connected(self):
+        return self._events["connected"]
+    
+    @event_connected.setter
+    def event_connected(self, event):
+        self._events["connected"] = event
+
+    @property
+    def event_disconnected(self):
+        return self._events["disconnected"]
+    
+    @event_disconnected.setter
+    def event_disconnected(self, event):
+        self._events["disconnected"] = event
 
     @property
     def modules(self):
