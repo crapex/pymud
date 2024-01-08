@@ -173,17 +173,20 @@ class Session:
             self.onConnected()
 
         except Exception as exc:
-            now = datetime.datetime.now()
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.error(f"创建连接过程中发生错误, 错误发生时刻 {now}, 错误信息为 {exc}, ")
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
-                self.info(f"15秒之后将自动重新连接...")
-                await asyncio.sleep(15)
-                asyncio.ensure_future(self.connect())
+                asyncio.ensure_future(self.reconnect())
+
+    async def reconnect(self, timeout = 15):
+        self.info(f"{timeout}秒之后将自动重新连接...")
+        await asyncio.sleep(timeout)
+        await asyncio.create_task(self.connect())
 
     def onConnected(self):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.info(f"{now}: 已成功连接到服务器")
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
@@ -207,7 +210,7 @@ class Session:
             self.handle_save()
         
         self.clean()
-        now = datetime.datetime.now()
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.info(f"{now}: 与服务器连接已断开")
 
         event_disconnected = self._events["disconnected"]
@@ -215,9 +218,7 @@ class Session:
             event_disconnected(self)
 
         if Settings.client["auto_reconnect"]:
-            self.info(f"15秒之后将自动重新连接...")
-            delay_task = self.create_task(asyncio.sleep(15))
-            delay_task.add_done_callback(self.connect)
+            asyncio.ensure_future(self.reconnect())
 
     @property
     def connected(self):

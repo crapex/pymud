@@ -1,7 +1,7 @@
 # 示例脚本：如何在PyMud中玩PKUXKX
 
 import webbrowser
-from .objects import Alias, Trigger, SimpleCommand, Timer, SimpleTrigger, SimpleAlias
+from pymud import Alias, Trigger, SimpleCommand, Timer, SimpleTrigger, SimpleAlias
 
 # 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑
 # 本示例脚本对PyMud支持的变量(Variable)、触发器(Trigger，包含单行与多行触发)、别名(Alias)、定时器(Timer)、命令(Command，本示例中使用了SimpleCommand子类)都进行了代码示例
@@ -156,4 +156,4 @@ class Configuration:
         line3 = "【食物】 {0:<4} 【饮水】{1:<4} 【经验】{2:<9} 【潜能】{3:<10}【{4}】【{5}】".format(var3[0], var3[1], var3[2], var3[3],  "未战斗" if var3[4] == "0" else "战斗中", "不忙" if var3[5] == "0" else "忙")
         self.session.info(line1, "状态")
         self.session.info(line2, "状态")
-        self.sessionpp.info(line3, "状态")
+        self.session.info(line3, "状态")

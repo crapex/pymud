@@ -1001,6 +1001,11 @@ class DotDict(dict):
         else:
             self.__setitem__(__name, __value)
 
+    def __getstate__(self):
+        return self
+    
+    def __setstate__(self, state):
+        self.update(state)
 
 import importlib
 import importlib.util
