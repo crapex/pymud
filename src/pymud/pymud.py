@@ -470,7 +470,7 @@ class PyMudApp:
         if isinstance(session, Session):
             self.current_session = session
             self.consoleView.buffer = session.buffer
-            self.set_status(Settings.text["session_changed"].format(session.name))
+            #self.set_status(Settings.text["session_changed"].format(session.name))
             self.app.invalidate()
 
     def close_session(self):
@@ -494,11 +494,11 @@ class PyMudApp:
                 self.current_session = None
                 self.consoleView.buffer = SessionBuffer()
                 self.sessions.pop(name)
-                self.set_status(f"会话 {name} 已关闭")
+                #self.set_status(f"会话 {name} 已关闭")
                 if len(self.sessions.keys()) > 0:
                     new_sess = list(self.sessions.keys())[0]
                     self.activate_session(new_sess)
-                    self.set_status(f"当前会话已切换为 {self.current_session.name}")
+                    #self.set_status(f"当前会话已切换为 {self.current_session.name}")
 
         asyncio.ensure_future(coroutine())
 
@@ -919,7 +919,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"File: {plugins_dir}\{file} is not a valid plugin file. Loading error: {e}")
+                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -934,7 +934,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"File: {plugins_dir}\{file} is not a valid plugin file. Loading error: {e}")
+                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件. 加载错误，信息为: {e}")
 
 
     def reload_plugin(self, plugin: Plugin):

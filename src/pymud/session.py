@@ -35,6 +35,8 @@ class Session:
         "load",         # 加载模块
         "reload",       # 重新加载模块
         "unload",       # 卸载模块
+        "reset",        # 复位并卸载所有脚本，清除所有内容（含变量?）
+        "ignore",       # 忽略所有触发器
 
         "save",         # 将动态运行信息保存到磁盘
 
@@ -75,6 +77,7 @@ class Session:
         self.state      = "INITIALIZED"
         self._eof       = False
         self._uid       = 0
+        self._ignore    = False
         self._events    = dict()
         self._events["connected"]    = None
         self._events["disconnected"] = None
@@ -388,24 +391,25 @@ class Session:
         # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
         self.display_line = raw_line
 
-        all_tris = list(self._triggers.values())
-        all_tris.sort(key = lambda tri: tri.priority)
+        if not self._ignore:
+            all_tris = list(self._triggers.values())
+            all_tris.sort(key = lambda tri: tri.priority)
 
-        for tri in all_tris:
-            if isinstance(tri, Trigger) and tri.enabled:
-                if tri.raw:
-                    state = tri.match(raw_line, docallback = True)
-                else:
-                    state = tri.match(tri_line, docallback = True)
-
-                if state.result == Trigger.SUCCESS:
-                    if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                        self._triggers.pop(tri.id)
-
-                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        break
+            for tri in all_tris:
+                if isinstance(tri, Trigger) and tri.enabled:
+                    if tri.raw:
+                        state = tri.match(raw_line, docallback = True)
                     else:
-                        pass
+                        state = tri.match(tri_line, docallback = True)
+
+                    if state.result == Trigger.SUCCESS:
+                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                            self._triggers.pop(tri.id)
+
+                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                            break
+                        else:
+                            pass
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
@@ -638,6 +642,11 @@ class Session:
         elif cls == GMCPTrigger:
             self._gmcp.pop(id, None)
 
+    def _delObjects(self, ids: Iterable, cls: type):
+        "删除多个指定元素"
+        for id in ids:
+            self._delObject(id, cls)
+
     def addAliases(self, alis: dict):
         "向会话中增加多个别名"
         self._addObjects(alis, Alias)
@@ -678,25 +687,65 @@ class Session:
         "增加GMCP处理函数"
         self._addObject(gmcp, GMCPTrigger)
 
-    def delAlias(self, ali: Alias):
-        "从会话中移除别名"
-        self._delObject(ali, Alias)
+    def delAlias(self, ali):
+        "从会话中移除别名，可接受Alias对象或alias的id"
+        if isinstance(ali, Alias):
+            self._delObject(ali.id, Alias)
+        elif isinstance(ali, str) and (ali in self._aliases.keys()):
+            self._delObject(ali, Alias)
 
-    def delCommand(self, cmd: Command):
-        "从会话中移除命令"
-        self._delObject(cmd, Command)
+    def delAliases(self, ali_es: Iterable):
+        "删除一组别名"
+        for ali in ali_es:
+            self.delAlias(ali)
 
-    def delTrigger(self, tri: Trigger):
-        "从会话中移除触发器"
-        self._delObject(tri, Trigger)
+    def delCommand(self, cmd):
+        "从会话中移除命令，可接受Command对象或command的id"
+        if isinstance(cmd, Command):
+            self._delObject(cmd.id, Command)
+        elif isinstance(cmd, str) and (cmd in self._commands.keys()):
+            self._delObject(cmd, Command)
 
-    def delTimer(self, ti: Timer):
-        "从会话中移除定时器"
-        self._delObject(ti, Timer)
+    def delCommands(self, cmd_s: Iterable):
+        "删除一组命令"
+        for cmd in cmd_s:
+            self.delCommand(cmd)
+
+    def delTrigger(self, tri):
+        "从会话中移除触发器，可接受Trigger对象或trigger的id"
+        if isinstance(tri, Trigger):
+            self._delObject(tri.id, Trigger)
+        elif isinstance(tri, str) and (tri in self._triggers.keys()):
+            self._delObject(tri, Trigger)
+
+    def delTriggers(self, tri_s: Iterable):
+        "删除一组触发器"
+        for tri in tri_s:
+            self.delTrigger(tri)
+
+    def delTimer(self, ti):
+        "从会话中移除定时器，可接受Timer对象或者timer的id"
+        if isinstance(ti, Timer):
+            self._delObject(ti.id, Timer)
+        elif isinstance(ti, str) and (ti in self._timers.keys()):
+            self._delObject(ti, Timer)
+
+    def delTimers(self, ti_s: Iterable):
+        "删除一组定时器"
+        for ti in ti_s:
+            self.delTimer(ti)
 
     def delGMCP(self, gmcp: GMCPTrigger):
-        "从会话中移除定时器"
-        self._delObject(gmcp, GMCPTrigger)
+        "从会话中移除GMCP触发器，可接受GMCPTrigger对象或其id"
+        if isinstance(gmcp, GMCPTrigger):
+            self._delObject(gmcp.id, GMCPTrigger)
+        elif isinstance(gmcp, str) and (gmcp in self._gmcp.keys()):
+            self._delObject(gmcp, GMCPTrigger)
+
+    def delGMCPs(self, gmcp_s: Iterable):
+        "删除一组GMCP"
+        for gmcp in gmcp_s:
+            self.delGMCP(gmcp)
 
     def replace(self, newstr):
         "替换当前行内容显示为newstr"
@@ -1176,6 +1225,21 @@ class Session:
         except asyncio.CancelledError:
             pass
 
+    def reset(self):
+        "复位：清除所有异步项和等待对象，卸载所有模块，清除所有会话有关对象"
+        self.clean()
+
+        modules = self._modules.values()
+        self.unload_module(modules)
+
+        self._timers.clear()
+        self._commands.clear()
+        self._triggers.clear()
+        self._gmcp.clear()
+        self._aliases.clear()
+        self._variables.clear()
+        self._tasks.clear()
+
     def load_module(self, module_names):
         "当名称为元组/列表时，加载指定名称的系列模块，当名称为字符串时，加载单个模块"
         if isinstance(module_names, (list, tuple)):
@@ -1332,11 +1396,16 @@ class Session:
         "\x1b[1m命令\x1b[0m: #unload {config}\n" \
         "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用英文逗号隔开\n" \
         "      卸载模块时，将调用模块Configuration类的__del__方法，请将模块清理工作代码形式卸载此方法中 \n"
-        "      例, 卸载名为pkuxkx的模块: #unload pkuxkx \n"
+        "      当不指定模块名称时，将卸载所有模块，并执行reset \n"
+        "      例, 卸载所有模块，并清除所有相关信息： #unload   \n"
+        "          卸载名为pkuxkx的模块: #unload pkuxkx \n"
         "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx,my \n"
         "\x1b[1m相关\x1b[0m: load, reload\n"
         if len(args) == 0:
-            self.error("卸载模块时，必须指定模块名称")
+            #self.error("卸载模块时，必须指定模块名称")
+            modules = self._modules.values()
+            self.unload_module(modules)
+            self.reset()
 
         elif len(args) == 1:
             modules = args[0].split(',')
@@ -1353,6 +1422,12 @@ class Session:
         else:
             self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
     
+    def handle_reset(self, *args):
+        "\x1b[1m命令\x1b[0m: #reset\n" \
+        "      复位全部脚本。将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量等待. \n" \
+        "\x1b[1m相关\x1b[0m: load, unload, reload, modules\n"
+        self.reset()
+
     def handle_save(self, *args):
         "\x1b[1m命令\x1b[0m: #save\n" \
         "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
