@@ -664,9 +664,11 @@ class Session:
         #         exec_one_command(cmd)
         # else:
         #     exec_one_command(line)
-
-        cb = CodeBlock(line)
-        cb.execute(self)
+        if (not ";" in line) and (line[0] != "#"):
+            self.exec_text(line)
+        else:
+            cb = CodeBlock(line)
+            cb.execute(self)
 
     def exec_command_after(self, wait: float, line: str):
         "延时一段时间之后，执行命令(exec_command)"
