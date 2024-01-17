@@ -14,7 +14,8 @@ class CodeLine:
     PyMUD中可执行的代码块（单行）"""
 
     @classmethod
-    def create_line(cls, line: str) -> tuple:
+    def create_line(cls, line: str):
+        hasvar = False
         code_params = []
         arg = ""
         brace_count, single_quote, double_quote = 0, 0, 0
@@ -61,19 +62,34 @@ class CodeLine:
             
             if arg:
                 code_params.append(arg)
+                if arg[0] in ("@", "%"):
+                    hasvar = True
 
-            return tuple(code_params)
+            return hasvar, tuple(code_params)
         else:
-            return tuple()
+            return hasvar, tuple()
 
     def __init__(self, _code: str) -> None:
         self.__code = _code
-        self.code = CodeLine.create_line(_code)
+        self.__hasvar, self.code = CodeLine.create_line(_code)
+
+    @property
+    def length(self):
+        return len(self.code)
+
+    @property
+    def hasvar(self):
+        return self.__hasvar
+
+    @property
+    def commandText(self):
+        return self.__code
 
     def execute(self, session, wildcards = None):
-        asyncio.ensure_future(self.async_execute(session, wildcards))
+        #asyncio.ensure_future(self.async_execute(session, wildcards))
+        session.exec_code(self, wildcards)
 
-    async def async_execute(self, session, wildcards = None):           
+    def expand(self, session, wildcards = None):
         new_code_str = self.__code
         new_code = []
 
@@ -104,7 +120,42 @@ class CodeLine:
             else:
                 new_code.append(item)
 
-        await session.exec_command_async(new_code_str)
+        return new_code_str, new_code
+
+    async def async_execute(self, session, wildcards = None):           
+        # new_code_str = self.__code
+        # new_code = []
+
+        # for item in self.code:
+        #     if len(item) == 0: continue
+        #     # %1~%9，特指捕获中的匹配内容
+        #     if item in (f"%{i}" for i in range(1, 10)):
+        #         idx = int(item[1:])
+        #         if idx <= len(wildcards):
+        #             item_val = wildcards[idx-1]
+        #         else:
+        #             item_val = None
+        #         new_code.append(item_val)
+        #         new_code_str = new_code_str.replace(item, item_val, 1)
+
+        #     # 系统变量，%开头，直接%引用，如%line
+        #     elif item[0] == "%":
+        #         item_val = session.getVariable(item, "")
+        #         new_code.append(item_val)
+        #         new_code_str = new_code_str.replace(item, item_val, 1)
+
+        #     # 非系统变量，@开头，在变量明前加@引用
+        #     elif item[0] == "@":
+        #         item_val = session.getVariable(item[1:], "")
+        #         new_code.append(item_val)
+        #         new_code_str = new_code_str.replace(item, item_val, 1)
+
+        #     else:
+        #         new_code.append(item)
+        # new_code_str, new_code = self.expand(session, wildcards)
+        # await session.exec_command_async(new_code_str)
+
+        await session.exec_code_async(self, wildcards)
         # if new_code[0] == "#":
         #     await session.handle_input_async(new_code_str)
         # else:
@@ -119,6 +170,9 @@ class CodeBlock:
     @classmethod
     def create_block(cls, code: str) -> tuple:
         "创建代码块，并返回对象自身"
+        #若block由{}包裹，则去掉大括号直接分解
+        if (len(code) >= 2) and (code[0] == '{') and (code[-1] == '}'):
+            code = code[1:-1]
 
         code_lines = []
         line = ""
@@ -160,6 +214,9 @@ class CodeBlock:
 
     def execute(self, session, wildcards = None):
         asyncio.ensure_future(self.async_execute(session, wildcards))
+        # for code in self.codes:
+        #     if isinstance(code, CodeLine):
+        #         code.execute(session, wildcards)
 
     async def async_execute(self, session, wildcards = None):
         for code in self.codes:
@@ -641,7 +698,7 @@ class SimpleCommand(Command):
 
 class Timer(BaseObject):
     "PYMUD定时器"
-    __abbr__ = "tmr"
+    __abbr__ = "ti"
 
     def __init__(self, session, *args, **kwargs):
         self._task = None

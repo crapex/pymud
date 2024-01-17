@@ -636,8 +636,11 @@ class PyMudApp:
         ]
     
     def get_statusbar_right_text(self):
-        con_str = ""
+        con_str, tri_status = "", ""
         if self.current_session:
+            if self.current_session._ignore:
+                tri_status = "全局禁用"
+
             if not self.current_session.connected:
                 con_str = "未连接"
             else:
@@ -660,7 +663,7 @@ class PyMudApp:
                 else:
                     con_str = "已连接：{:.0f}秒".format(sec)
 
-        return "{} {} {} ".format(con_str, Settings.__appname__, Settings.__version__)
+        return "{} {} {} {} ".format(tri_status, con_str, Settings.__appname__, Settings.__version__)
 
     def get_statuswindow_text(self):
         text = ""
@@ -776,6 +779,7 @@ class PyMudApp:
 
     def enter_pressed(self, buffer: Buffer):
         cmd_line = buffer.text
+        space_index = cmd_line.find(" ")
         
         if len(cmd_line) == 0:
             if self.current_session:
@@ -805,6 +809,20 @@ class PyMudApp:
 
         elif cmd_line[1:] in self.sessions.keys():
             self.activate_session(cmd_line[1:])
+
+        # 命令行增加#miui xxx可以直接向miui会话发送命令的输出
+        elif (space_index >= 0) and (cmd_line[1:space_index] in self.sessions.keys()):
+            name = cmd_line[1:space_index]
+            cmd  = cmd_line[space_index+1:]
+            session = self.sessions[name]
+            if len(cmd) == 0:
+                session.writeline("")
+            else:
+                try:
+                    cb = CodeBlock(cmd)
+                    cb.execute(session)
+                except Exception as e:
+                    session.exec_command(cmd)
 
         else:
             if self.current_session:

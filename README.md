@@ -162,10 +162,16 @@
 + 功能增加：为Session增加两个事件属性，分别为event_connected和event_disconnected，接受一个带有session参数的函数，在连接和连接断开时触发。
 + 功能调整：调整了时间显示格式，只显示到秒，不显示毫秒数。
 
-### 0.18.0a1 (2024-01-10) 完善中
+### 0.18.0b1 (2024-01-17) 
 + 问题修复：修复了delTrigger/delAlias等等无法删除对象的问题
 + 功能调整：delTrigger等函数，修改为既可以接受Trigger对象本身，也可以接受其id。其他类似
 + 功能增加：增加了delTriggers（注意，带s）等函数，可以删除多个指定对象。可接受列表、元组等可迭代对象，并且其内容既可以为对象本身，也可以为id。
 + 功能增加：增加了session.reset()功能，可清除会话所有有关脚本信息。也可以在命令行使用#reset调用，另外，#unload不带参数调用时，有同样效果
-+ 功能增加：增加了#ignore参数，类似于zmud的#ignore功能，可以禁止所有触发器被触发。(还没改好)（待在状态栏增加一个几个标记显示）
++ 功能增加：增加了#ignore/#ig参数，类似于zmud的#ignore功能，可以切换全局触发器禁用状态。当全局被禁用时，底部状态栏右侧会显示此状态。（未全局禁用时不显示）
 + 功能调整：移除了会话切换时，状态栏显示的内容
++ 功能调整：会话命令的执行整体进行了实现调整，将参数替代延迟到特定命令执行时刻。
++ 功能新增：增加了#ali,#tri,#ti的三参数使用，可以在命令行直接代码创建SimpleAlias, SimpleTrigger和SimpleTimer。
++ 使用示例：#ali {gp\s(\S+)} {get %1 from corpse}, #tri {^[> ]*【\S+】.+} {#mess %line}, #ti 10 {xixi;haha}
++ 功能新增：新增#session_name cmd命令，可以直接使名为session_name的会话执行cmd命令
++ 功能新增：session类型新增exec方法，使用方法为：session.exec(cmd, session_name)。可以使名为session_name的会话执行cmd命令。当不指定session_name时，在当前会话执行。
++ 功能调整：定时器创建时若不指定id，其自动生成的id前缀由tmr调整为ti
