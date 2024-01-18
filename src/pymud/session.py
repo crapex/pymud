@@ -664,11 +664,20 @@ class Session:
         #         exec_one_command(cmd)
         # else:
         #     exec_one_command(line)
-        if (not ";" in line) and (line[0] != "#"):
-            self.exec_text(line)
+        if not "#" in line:
+            cmds = line.split(self.seperator)
+            for cmd in cmds:
+                self.exec_text(cmd)
+
         else:
             cb = CodeBlock(line)
             cb.execute(self)
+
+        # if (not ";" in line) and (line[0] != "#"):
+        #     self.exec_text(line)
+        # else:
+        #     cb = CodeBlock(line)
+        #     cb.execute(self)
 
     def exec_command_after(self, wait: float, line: str):
         "延时一段时间之后，执行命令(exec_command)"
@@ -730,8 +739,23 @@ class Session:
         # else:
         #     await exec_one_command_async(line)              # 这一句是异步变化，修改为异步等待Command执行完毕
 
-        cb = CodeBlock(line)
-        await cb.async_execute(self)
+        if not "#" in line:
+            cmds = line.split(self.seperator)
+            for cmd in cmds:
+                await self.exec_text_async(cmd)
+                if Settings.client["interval"] > 0:
+                    await asyncio.sleep(Settings.client["interval"] / 1000.0)
+        else:
+            cb = CodeBlock(line)
+            await cb.async_execute(self)
+
+        # if (not ";" in line) and (line[0] != "#"):
+        #     await self.exec_text_async(line)
+        # else:
+        #     cb = CodeBlock(line)
+        #     await cb.async_execute(self)
+        # cb = CodeBlock(line)
+        # await cb.async_execute(self)
 
     def write_eof(self) -> None:
         self._transport.write_eof()
