@@ -492,7 +492,7 @@ class Session:
                     pass
 
                 if times > 0:
-                    self.create_task(self.handle_num(times, code = cl))
+                    self.create_task(self.handle_num(times, code = cl, wildcards = wildcards))
                 else:
                     self.warning("#{num} {cmd}只能支持正整数!")
             else:
@@ -534,7 +534,7 @@ class Session:
                     pass
 
                 if times > 0:
-                    await self.handle_num(times, code = cl)
+                    await self.handle_num(times, code = cl, wildcards = wildcards)
                 else:
                     self.warning("#{num} {cmd}只能支持正整数!")
             else:
@@ -1273,12 +1273,15 @@ class Session:
         "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
         "      不指定参数时, 列出当前会话中所有的别名清单\n" \
         "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
-        "      为两个参数时, 第一个参数应为Alias的id, 第二个应为on/off/del, 可修改Alias的使能状态，或者从会话中移除该Alias\n" \
+        "      为两个参数时, 可以进行如下操作\n" \
+        "         1. 当第一个参数为一个已存在Alias的id, 第二个为on/off时, 可修改Alias的使能状态\n" \
+        "         2. 当第一个参数为一个已存在Alias的id, 第二个为del时, 可从会话中删除该Alias\n" \
+        "         3. 当第一个参数不存在于Alias的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleAlias \n" \
+        "      使用示例： \n "
+        "         1. #ali ali_001 off    -> 禁用id为ali_001的别名 \n"
+        "         2. #ali ali_001 del    -> 删除id为ali_001的别名 \n"
+        "         3. #ali {^gp\s(.+)$} {get %1 from corpse}   -> 创建一个SimpleAlias别名，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n"
         "\x1b[1m相关\x1b[0m: variable, trigger, command, timer\n"
-        # "      为两个参数时, 可以进行如下操作\n" \
-        # "         1. 当第一个参数为一个已存在Alias的id, 第二个为on/off时, 可修改Alias的使能状态\n" \
-        # "         2. 当第一个参数为一个已存在Alias的id, 第二个为del时, 可从会话中删除该Alias\n" \
-        # "         3. 当第一个参数不存在于Alias的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleAlias \n" \
         
         cl = kwargs.get("code", None)
         if isinstance(cl, CodeLine):
@@ -1291,12 +1294,15 @@ class Session:
         "\x1b[1m命令\x1b[0m: #timer|#ti\n" \
         "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
         "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
-        "      为两个参数时, 第一个参数应为Timer的id, 第二个应为on/off/del, 可修改Timer的使能状态，或者从会话中移除该Timer\n" \
+        "      为两个参数时, 可以进行如下操作\n" \
+        "         1. 当第一个参数为一个已存在Timer的id, 第二个为on/off时, 可修改Timer的使能状态\n" \
+        "         2. 当第一个参数为一个已存在Timer的id, 第二个为del时, 可从会话中删除该Timer\n" \
+        "         3. 当第一个参数为数字时，第一个参数被识别为定时器时间，第二个参数识别为执行的代码, 此时创建一个SimpleTimer \n" \
+        "      使用示例： \n "
+        "         1. #ti ti_001 off    -> 禁用id为ti_001的定时器 \n"
+        "         2. #ti ti_001 del    -> 删除id为ti_001的定时器 \n"
+        "         3. #ti 100 {drink jiudai;#wa 200;eat liang}   -> 创建一个每隔100s执行一次的定时器，执行内容使用{}括起来 \n"
         "\x1b[1m相关\x1b[0m: variable, alias, trigger, command\n"
-        # "      为两个参数时, 可以进行如下操作\n" \
-        # "         1. 当第一个参数为一个已存在Timer的id, 第二个为on/off时, 可修改Timer的使能状态\n" \
-        # "         2. 当第一个参数为一个已存在Timer的id, 第二个为del时, 可从会话中删除该Timer\n" \
-        # "         3. 当第一个参数为数字时，第一个参数被识别为定时器时间，第二个参数识别为执行的代码, 此时创建一个SimpleTimer \n" \
 
         cl = kwargs.get("code", None)
         if isinstance(cl, CodeLine):
@@ -1324,12 +1330,15 @@ class Session:
         "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
         "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
         "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
-        "      为两个参数时, 第一个参数应为Trigger的id, 第二个应为on/off/del, 可修改Trigger的使能状态，或者从会话中移除该Trigger\n" \
+        "      为两个参数时, 可以进行如下操作\n" \
+        "         1. 当第一个参数为一个已存在Trigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
+        "         2. 当第一个参数为一个已存在Trigger的id, 第二个为del时, 可从会话中删除该\n" \
+        "         3. 当第一个参数不存在于Trigger的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleTrigger \n" \
+        "      使用示例： \n "
+        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n"
+        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n"
+        "         3. #tri {^[> ]*你深深吸了口气，站了起来。} {dazuo 10}   -> 创建一个SimpleTrigger触发器，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n"
         "\x1b[1m相关\x1b[0m: alias, variable, command, timer"
-        # "      为两个参数时, 可以进行如下操作\n" \
-        # "         1. 当第一个参数为一个已存在Trigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
-        # "         2. 当第一个参数为一个已存在Trigger的id, 第二个为del时, 可从会话中删除该\n" \
-        # "         3. 当第一个参数不存在于Trigger的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleTrigger \n" \
         
         cl = kwargs.get("code", None)
         if isinstance(cl, CodeLine):
@@ -1365,12 +1374,17 @@ class Session:
         "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
         "\x1b[1m相关\x1b[0m: repeat\n"
         cl = kwargs.get("code", None)
+        wild = kwargs.get("wildcards", None)
         if isinstance(cl, CodeLine):
             #cmd = cl.code[2]
-            cmd = CodeBlock(cl.code[2])
+            if cl.length == 3:
+                cmd = CodeBlock(cl.code[2])
+            else:
+                cmd = CodeBlock(" ".join(cl.code[2:]))
+
             if self.connected:
                 for i in range(0, times):
-                    await cmd.async_execute(self)
+                    await cmd.async_execute(self, wild)
         else:
             if self.connected:
                 if len(args) > 0:
