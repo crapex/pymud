@@ -860,7 +860,10 @@ class Session:
 
     def replace(self, newstr):
         "替换当前行内容显示为newstr"
-        self.handle_replace(newstr)
+        if len(newstr) > 0:
+            newstr += Settings.client["newline"]
+        self.display_line = newstr
+
 
     ## ###################
     ## 变量 Variables 处理
@@ -955,19 +958,12 @@ class Session:
             else:
                 self.warning("未识别的命令: %s" % " ".join(args))
 
-    async def handle_wait(self, msec: str, *args, **kwargs):
+    async def handle_wait(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "异步等待，毫秒后结束"
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            wait_time = cl.code[2]
-            if wait_time.isnumeric():
-                msec = float(wait_time) / 1000.0
-                await asyncio.sleep(msec)
-
-        else:
-            if msec.isnumeric():
-                wait_time = float(msec) / 1000.0
-                await asyncio.sleep(wait_time)
+        wait_time = code.code[2]
+        if wait_time.isnumeric():
+            msec = float(wait_time) / 1000.0
+            await asyncio.sleep(msec)
 
     def handle_connect(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #connect|#con\n" \
@@ -1615,7 +1611,8 @@ class Session:
         "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
         "\x1b[1m相关\x1b[0m: gag\n"
         
-        self.display_line = code.commandText[9:]
+        self.replace(code.commandText[9:])
+        #self.display_line = code.commandText[9:]
         
     def handle_gag(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gag\n" \
