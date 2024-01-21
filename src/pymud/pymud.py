@@ -380,9 +380,10 @@ class PyMudApp:
     def complete_autosuggest(self, event: KeyPressEvent):
         """自动完成建议"""
         b = event.current_buffer
-        s = b.auto_suggest.get_suggestion(b, b.document)
-        if s:
-            b.insert_text(s.text, fire_event=False)
+        if b.cursor_position == len(b.text):
+            s = b.auto_suggest.get_suggestion(b, b.document)
+            if s:
+                b.insert_text(s.text, fire_event=False)
         else:
             b.cursor_right()
 
@@ -714,7 +715,7 @@ class PyMudApp:
             elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
                 topic = args[0]
 
-                if topic in ("exit", "close", "session", "all", "help"):
+                if topic in ("exit", "close", "session", "help"):
                     command = getattr(self, f"handle_{topic}", None)
                     docstring = command.__doc__
                 elif topic in self.current_session._commands_alias.keys():
@@ -769,13 +770,13 @@ class PyMudApp:
         "      退出PYMUD程序\n" \
         "\x1b[1m相关\x1b[0m: session\n"
     
-    def handle_all(self, cmd):
-        "\x1b[1m命令\x1b[0m: #all xxx \n" \
-        "      向所有的活动的session发送同样的命令\n" \
-        "\x1b[1m相关\x1b[0m: session\n"
-        for ss in self.sessions.values():
-            if isinstance(ss, Session) and ss.connected:
-                ss.exec_command(cmd)
+    # def handle_all(self, cmd):
+    #     "\x1b[1m命令\x1b[0m: #all xxx \n" \
+    #     "      向所有的活动的session发送同样的命令\n" \
+    #     "\x1b[1m相关\x1b[0m: session\n"
+    #     for ss in self.sessions.values():
+    #         if isinstance(ss, Session) and ss.connected:
+    #             ss.exec_command(cmd)
 
     def enter_pressed(self, buffer: Buffer):
         cmd_line = buffer.text
@@ -784,6 +785,7 @@ class PyMudApp:
         if len(cmd_line) == 0:
             if self.current_session:
                 self.current_session.writeline("")
+        
         elif cmd_line[0] != Settings.client["appcmdflag"]:
             if self.current_session:
                 self.current_session.last_command = cmd_line
@@ -803,26 +805,26 @@ class PyMudApp:
             cmd_tuple = cmd_line[1:].split()
             self.handle_help(*cmd_tuple[1:])
 
-        elif cmd_line.startswith("#all "):
-            cmd = cmd_line[4:].strip()
-            self.handle_all(cmd)
+        # elif cmd_line.startswith("#all "):
+        #     cmd = cmd_line[4:].strip()
+        #     self.handle_all(cmd)
 
         elif cmd_line[1:] in self.sessions.keys():
             self.activate_session(cmd_line[1:])
 
         # 命令行增加#miui xxx可以直接向miui会话发送命令的输出
-        elif (space_index >= 0) and (cmd_line[1:space_index] in self.sessions.keys()):
-            name = cmd_line[1:space_index]
-            cmd  = cmd_line[space_index+1:]
-            session = self.sessions[name]
-            if len(cmd) == 0:
-                session.writeline("")
-            else:
-                try:
-                    cb = CodeBlock(cmd)
-                    cb.execute(session)
-                except Exception as e:
-                    session.exec_command(cmd)
+        # elif (space_index >= 0) and (cmd_line[1:space_index] in self.sessions.keys()):
+        #     name = cmd_line[1:space_index]
+        #     cmd  = cmd_line[space_index+1:]
+        #     session = self.sessions[name]
+        #     if len(cmd) == 0:
+        #         session.writeline("")
+        #     else:
+        #         try:
+        #             cb = CodeBlock(cmd)
+        #             cb.execute(session)
+        #         except Exception as e:
+        #             session.exec_command(cmd)
 
         else:
             if self.current_session:

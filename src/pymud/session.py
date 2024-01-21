@@ -51,6 +51,8 @@ class Session:
 
         "plugins",      # 插件
         "py",           # 直接执行python语句
+
+        "all",          # 所有会话执行
     )
 
     _commands_alias = {
@@ -156,8 +158,6 @@ class Session:
         self._command_history = []
 
     def open(self):
-        # clean仅保留在断开和重新加载脚本时处理
-        #self.clean()
         asyncio.ensure_future(self.connect())
 
     async def connect(self):
@@ -387,8 +387,6 @@ class Session:
         self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
 
         # 此处修改，为了处理#replace和#gag命令
-        #self.writetobuffer(raw_line)
-        #self._line_buffer.clear()
         # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
         self.display_line = raw_line
 
@@ -495,21 +493,32 @@ class Session:
                     self.create_task(self.handle_num(times, code = cl, wildcards = wildcards))
                 else:
                     self.warning("#{num} {cmd}只能支持正整数!")
+            
+            elif cmd in self.application.sessions.keys():
+                name = cmd
+                sess_cmd  = " ".join(cl.code[2:])
+                session = self.application.sessions[name]
+                if len(sess_cmd) == 0:
+                    session.writeline("")
+                else:
+                    try:
+                        cb = CodeBlock(sess_cmd)
+                        cb.execute(session, wildcards = wildcards)
+                    except Exception as e:
+                        session.exec_command(sess_cmd)
+            
             else:
-                cmd_text, new_code = cl.expand(self, wildcards)
-                cmd_args = new_code[2:]
-
                 if cmd in self._commands_alias.keys():
                     cmd = self._commands_alias[cmd]
 
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
                     if asyncio.iscoroutinefunction(handler):
-                        self.create_task(handler(*cmd_args, code = cl, wildcards = wildcards))
+                        self.create_task(handler(code = cl, wildcards = wildcards))
                     else:
-                        handler(*cmd_args, code = cl, wildcards = wildcards)
+                        handler(code = cl, wildcards = wildcards)
                 else:
-                    self.warning(f"未识别的命令: {cmd_text}")
+                    self.warning(f"未识别的命令: {cl.commandText}")
 
         else:
             cmdtext, code = cl.expand(self, wildcards)
@@ -537,21 +546,32 @@ class Session:
                     await self.handle_num(times, code = cl, wildcards = wildcards)
                 else:
                     self.warning("#{num} {cmd}只能支持正整数!")
+            
+            elif cmd in self.application.sessions.keys():
+                name = cmd
+                sess_cmd  = " ".join(cl.code[2:])
+                session = self.application.sessions[name]
+                if len(sess_cmd) == 0:
+                    session.writeline("")
+                else:
+                    try:
+                        cb = CodeBlock(sess_cmd)
+                        await cb.async_execute(session, wildcards = wildcards)
+                    except Exception as e:
+                        await session.exec_command_async(sess_cmd)
+            
             else:
-                cmd_text, new_code = cl.expand(self, wildcards)
-                cmd_args = new_code[2:]
-
                 if cmd in self._commands_alias.keys():
                     cmd = self._commands_alias[cmd]
 
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
                     if asyncio.iscoroutinefunction(handler):
-                        await handler(*cmd_args, code = cl, wildcards = wildcards)
+                        await handler(code = cl, wildcards = wildcards)
                     else:
-                        handler(*cmd_args, code = cl, wildcards = wildcards)
+                        handler(code = cl, wildcards = wildcards)
                 else:
-                    self.warning(f"未识别的命令: {cmd_text}")
+                    self.warning(f"未识别的命令: {cl.commandText}")
 
         else:
             cmdtext, code = cl.expand(self, wildcards)
@@ -617,53 +637,10 @@ class Session:
         本函数和writeline的区别在于，本函数会先进行Command和Alias解析，若不是再使用writeline发送
         当line不包含Command和Alias时，等同于writeline
         """
-        def exec_one_command(cmd):
-            "执行分离后的单个MUD Command/Alias"
-            # 命令加入历史记录
-            self._command_history.append(cmd)
-            
-            #先判断是否带有#号（系统命令）
-            if (len(cmd) > 0) and (cmd[0] == "#"):
-                self.handle_input(cmd)
-            
-            # 否则为其他
-            else:
-                self.exec_text(cmd)
-                # # 先判断是否是命令
-                # isNotCmd = True
-                # for command in self._commands.values():
-                #     if isinstance(command, Command) and command.enabled:
-                #         state = command.match(cmd)
-                #         if state.result == Command.SUCCESS:
-                #             # 命令的任务名称采用命令id，以便于后续查错
-                #             self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                #             isNotCmd = False
-                #             break
 
-                # # 再判断是否是别名
-                # if isNotCmd:
-                #     notAlias = True
-                #     for alias in self._aliases.values():
-                #         if isinstance(alias, Alias) and alias.enabled: 
-                #             state = alias.match(cmd)
-                #             if state.result == Alias.SUCCESS:
-                #                 notAlias = False
-                #                 break
-
-                #     # 都不是则是普通命令，直接发送
-                #     if notAlias:
-                #         self.writeline(cmd)
-
-        
         ## 以下为函数执行本体
         self.clean_finished_tasks()
 
-        # if self.seperator in line:          # 多个命令集合
-        #     cmds = line.split(self.seperator)
-        #     for cmd in cmds:
-        #         exec_one_command(cmd)
-        # else:
-        #     exec_one_command(line)
         if not "#" in line:
             cmds = line.split(self.seperator)
             for cmd in cmds:
@@ -672,12 +649,6 @@ class Session:
         else:
             cb = CodeBlock(line)
             cb.execute(self)
-
-        # if (not ";" in line) and (line[0] != "#"):
-        #     self.exec_text(line)
-        # else:
-        #     cb = CodeBlock(line)
-        #     cb.execute(self)
 
     def exec_command_after(self, wait: float, line: str):
         "延时一段时间之后，执行命令(exec_command)"
@@ -690,54 +661,11 @@ class Session:
     async def exec_command_async(self, line: str, *args, **kwargs):
         """
         异步执行MUD命令，是exec_command的异步实现
+        异步时，多个命令是逐个发送到服务器的，每一命令都等待确认上一条命令执行完毕，且多命令之间会插入interval时间等待
         """
-        async def exec_one_command_async(cmd):
-            "执行分离后的单个MUD Command/Alias"
 
-            #先判断是否带有#号（系统命令）
-            if (len(cmd) > 0) and (cmd[0] == "#"):
-                await self.handle_input_async(cmd)
-
-            else:
-                await self.exec_text_async(cmd)
-                # # 先判断是否是命令
-                # isNotCmd = True
-                # for command in self._commands.values():
-                #     if isinstance(command, Command) and command.enabled:
-                #         state = command.match(cmd)
-                #         if state.result == Command.SUCCESS:
-                #             # 命令的任务名称采用命令id，以便于后续处理
-                #             # 这一句是单命令执行的异步唯一变化，即如果是Command，则需异步等待Command执行完毕
-                #             await self.create_task(command.execute(cmd), name = "task-{0}".format(command.id))
-                #             isNotCmd = False
-                #             break
-
-                # # 再判断是否是别名
-                # if isNotCmd:
-                #     notAlias = True
-                #     for alias in self._aliases.values():
-                #         if isinstance(alias, Alias) and alias.enabled: 
-                #             state = alias.match(cmd)
-                #             if state.result == Alias.SUCCESS:
-                #                 notAlias = False
-                #                 break
-
-                #     # 都不是则是普通命令，直接发送
-                #     if notAlias:
-                #         self.writeline(cmd)
-
-        
         ## 以下为函数执行本体
         self.clean_finished_tasks()
-
-        # if self.seperator in line:          # 多个命令集合
-        #     cmds = line.split(self.seperator)
-        #     for cmd in cmds:
-        #         await exec_one_command_async(cmd)           # 这一句是异步变化，修改为异步等待Command执行完毕
-        #         if Settings.client["interval"] > 0:
-        #             await asyncio.sleep(Settings.client["interval"] / 1000.0)
-        # else:
-        #     await exec_one_command_async(line)              # 这一句是异步变化，修改为异步等待Command执行完毕
 
         if not "#" in line:
             cmds = line.split(self.seperator)
@@ -748,14 +676,6 @@ class Session:
         else:
             cb = CodeBlock(line)
             await cb.async_execute(self)
-
-        # if (not ";" in line) and (line[0] != "#"):
-        #     await self.exec_text_async(line)
-        # else:
-        #     cb = CodeBlock(line)
-        #     await cb.async_execute(self)
-        # cb = CodeBlock(line)
-        # await cb.async_execute(self)
 
     def write_eof(self) -> None:
         self._transport.write_eof()
@@ -889,8 +809,10 @@ class Session:
     def delCommand(self, cmd):
         "从会话中移除命令，可接受Command对象或command的id"
         if isinstance(cmd, Command):
+            cmd.reset()
             self._delObject(cmd.id, Command)
         elif isinstance(cmd, str) and (cmd in self._commands.keys()):
+            self._commands[cmd].reset()
             self._delObject(cmd, Command)
 
     def delCommands(self, cmd_s: Iterable):
@@ -913,8 +835,10 @@ class Session:
     def delTimer(self, ti):
         "从会话中移除定时器，可接受Timer对象或者timer的id"
         if isinstance(ti, Timer):
+            ti.enabled = False
             self._delObject(ti.id, Timer)
         elif isinstance(ti, str) and (ti in self._timers.keys()):
+            self._timers[ti].enabled = False
             self._delObject(ti, Timer)
 
     def delTimers(self, ti_s: Iterable):
@@ -1031,36 +955,6 @@ class Session:
             else:
                 self.warning("未识别的命令: %s" % " ".join(args))
 
-    # async def handle_input_async(self, *args):
-    #     """异步处理命令行输入的#开头的命令"""
-    #     cmd = args[0]
-
-    #     if cmd.isnumeric():
-    #         times = 0
-    #         try:
-    #             times = int(cmd)
-    #         except ValueError:
-    #             pass
-
-    #         if times > 0:
-    #             self.handle_num(times, *args[1:])
-    #         else:
-    #             self.warning("#{num} {cmd}只能支持正整数!")
-    #     else:
-    #         cmd = cmd.lower()
-    #         if cmd in self._commands_alias.keys():
-    #             cmd = self._commands_alias[cmd]
-
-    #         handler = self._cmds_handler.get(cmd, None)
-    #         if handler and callable(handler):
-
-    #             if asyncio.iscoroutinefunction(handler):
-    #                 await handler(*args[1:])
-    #             else:
-    #                 handler(*args[1:])
-    #         else:
-    #             self.warning("未识别的命令: %s" % " ".join(args))
-
     async def handle_wait(self, msec: str, *args, **kwargs):
         "异步等待，毫秒后结束"
         cl = kwargs.get("code", None)
@@ -1075,7 +969,7 @@ class Session:
                 wait_time = float(msec) / 1000.0
                 await asyncio.sleep(wait_time)
 
-    def handle_connect(self, *args, **kwargs):
+    def handle_connect(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #connect|#con\n" \
         "      连接到远程服务器（仅当远程服务器未连接时有效）\n" \
         "\x1b[1m相关\x1b[0m: disconnect\n"
@@ -1097,16 +991,14 @@ class Session:
 
             self.info("已经与服务器连接了 {}".format(time_msg))
 
-    def handle_variable(self, *args, **kwargs):
+    def handle_variable(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #variable|#var\n" \
         "      不带参数时，列出当前会话中所有的变量清单\n" \
         "      带1个参数时，列出当前会话中名称为该参数的变量值\n" \
         "      带2个参数时，设置名称为该参数的变量值\n" \
         "\x1b[1m相关\x1b[0m: alias, trigger, command\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            args = cl.code[2:]
+        args = code.code[2:]
 
         if len(args) == 0:
             vars = self._variables
@@ -1166,16 +1058,14 @@ class Session:
         elif len(args) == 2:
             self.setVariable(args[0], args[1])
 
-    def handle_global(self, *args, **kwargs):
+    def handle_global(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #global\n" \
         "      不带参数时，列出程序当前所有全局变量清单\n" \
         "      带1个参数时，列出程序当前名称我为该参数的全局变量值\n" \
         "      带2个参数时，设置名称为该全局变量的变量值\n" \
         "\x1b[1m相关\x1b[0m: variable\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            args = cl.code[2:]
+        args = code.code[2:]
 
         if len(args) == 0:
             vars = self.application.globals
@@ -1293,7 +1183,7 @@ class Session:
                             self.addTimer(ti)
                             self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
 
-    def handle_alias(self, *args, **kwargs):
+    def handle_alias(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
         "      不指定参数时, 列出当前会话中所有的别名清单\n" \
         "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
@@ -1301,20 +1191,15 @@ class Session:
         "         1. 当第一个参数为一个已存在Alias的id, 第二个为on/off时, 可修改Alias的使能状态\n" \
         "         2. 当第一个参数为一个已存在Alias的id, 第二个为del时, 可从会话中删除该Alias\n" \
         "         3. 当第一个参数不存在于Alias的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleAlias \n" \
-        "      使用示例： \n "
-        "         1. #ali ali_001 off    -> 禁用id为ali_001的别名 \n"
-        "         2. #ali ali_001 del    -> 删除id为ali_001的别名 \n"
-        "         3. #ali {^gp\s(.+)$} {get %1 from corpse}   -> 创建一个SimpleAlias别名，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n"
+        "      使用示例： \n " \
+        "         1. #ali ali_001 off    -> 禁用id为ali_001的别名 \n" \
+        "         2. #ali ali_001 del    -> 删除id为ali_001的别名 \n" \
+        "         3. #ali {^gp\s(.+)$} {get %1 from corpse}   -> 创建一个SimpleAlias别名，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n" \
         "\x1b[1m相关\x1b[0m: variable, trigger, command, timer\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            cmd_args = cl.code[2:]
-            self._handle_objs("Alias", self._aliases, *cmd_args)
-        else:
-            self._handle_objs("Alias", self._aliases, *args)
+        self._handle_objs("Alias", self._aliases, *code.code[2:])
 
-    def handle_timer(self, *args, **kwargs):
+    def handle_timer(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #timer|#ti\n" \
         "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
         "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
@@ -1322,35 +1207,24 @@ class Session:
         "         1. 当第一个参数为一个已存在Timer的id, 第二个为on/off时, 可修改Timer的使能状态\n" \
         "         2. 当第一个参数为一个已存在Timer的id, 第二个为del时, 可从会话中删除该Timer\n" \
         "         3. 当第一个参数为数字时，第一个参数被识别为定时器时间，第二个参数识别为执行的代码, 此时创建一个SimpleTimer \n" \
-        "      使用示例： \n "
-        "         1. #ti ti_001 off    -> 禁用id为ti_001的定时器 \n"
-        "         2. #ti ti_001 del    -> 删除id为ti_001的定时器 \n"
-        "         3. #ti 100 {drink jiudai;#wa 200;eat liang}   -> 创建一个每隔100s执行一次的定时器，执行内容使用{}括起来 \n"
+        "      使用示例： \n " \
+        "         1. #ti ti_001 off    -> 禁用id为ti_001的定时器 \n" \
+        "         2. #ti ti_001 del    -> 删除id为ti_001的定时器 \n" \
+        "         3. #ti 100 {drink jiudai;#wa 200;eat liang}   -> 创建一个每隔100s执行一次的定时器，执行内容使用{}括起来 \n" \
         "\x1b[1m相关\x1b[0m: variable, alias, trigger, command\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            cmd_args = cl.code[2:]
-            self._handle_objs("Timer", self._timers, *cmd_args)
-        else:
-            self._handle_objs("Timer", self._timers, *args)
-
-        
-    def handle_command(self, *args, **kwargs):
+        self._handle_objs("Timer", self._timers, *code.code[2:])
+     
+    def handle_command(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
         "      不指定参数时, 列出当前会话中所有的命令清单\n" \
         "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
         "      为两个参数时, 第一个参数应为Command的id, 第二个应为on/off/del, 可修改Command的使能状态，或者从会话中移除该Command\n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer"
+        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            cmd_args = cl.code[2:]
-            self._handle_objs("Command", self._commands, *cmd_args)
-        else:
-            self._handle_objs("Command", self._commands, *args)
+        self._handle_objs("Command", self._commands, *code.code[2:])
 
-    def handle_trigger(self, *args, **kwargs):
+    def handle_trigger(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
         "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
         "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
@@ -1358,21 +1232,15 @@ class Session:
         "         1. 当第一个参数为一个已存在Trigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
         "         2. 当第一个参数为一个已存在Trigger的id, 第二个为del时, 可从会话中删除该\n" \
         "         3. 当第一个参数不存在于Trigger的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleTrigger \n" \
-        "      使用示例： \n "
-        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n"
-        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n"
-        "         3. #tri {^[> ]*你深深吸了口气，站了起来。} {dazuo 10}   -> 创建一个SimpleTrigger触发器，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n"
-        "\x1b[1m相关\x1b[0m: alias, variable, command, timer"
-        
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            cmd_args = cl.code[2:]      
-            self._handle_objs("Trigger", self._triggers, *cmd_args)
-        else:  
-            self._handle_objs("Trigger", self._triggers, *args)
+        "      使用示例： \n " \
+        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n" \
+        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n" \
+        "         3. #tri {^[> ]*你深深吸了口气，站了起来。} {dazuo 10}   -> 创建一个SimpleTrigger触发器，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n" \
+        "\x1b[1m相关\x1b[0m: alias, variable, command, timer\n"
+           
+        self._handle_objs("Trigger", self._triggers, *code.code[2:])
 
-
-    def handle_ignore(self, *args, **kwargs):
+    def handle_ignore(self, code: CodeLine = None, wildcards = None,  *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #ignore|#ig\n" \
         "      切换所有触发器是否被响应的状态。请注意：在触发器中使用#IG可能导致无法预料的影响。 \n" \
         "\x1b[1m相关\x1b[0m: T+, T-\n"
@@ -1382,7 +1250,7 @@ class Session:
         else:
             self.info("不再全局禁用所有触发器使能。")
 
-    def handle_repeat(self, *args, **kwargs):
+    def handle_repeat(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
         "      重复向session输出上一次人工输入的命令 \n" \
         "\x1b[1m相关\x1b[0m: num\n"
@@ -1392,74 +1260,51 @@ class Session:
         else:
             self.info("当前会话没有连接或没有键入过指令，repeat无效")
 
-    async def handle_num(self, times, *args, **kwargs):
+    async def handle_num(self, times, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
         "      向session中输出{num}次{cmd} \n" \
         "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
         "\x1b[1m相关\x1b[0m: repeat\n"
-        cl = kwargs.get("code", None)
-        wild = kwargs.get("wildcards", None)
-        if isinstance(cl, CodeLine):
-            #cmd = cl.code[2]
-            if cl.length == 3:
-                cmd = CodeBlock(cl.code[2])
-            else:
-                cmd = CodeBlock(" ".join(cl.code[2:]))
 
-            if self.connected:
-                for i in range(0, times):
-                    await cmd.async_execute(self, wild)
-        else:
-            if self.connected:
-                if len(args) > 0:
-                    cmd = " ".join(args)
-                    for i in range(0, times):
-                        self.exec_command(cmd)
-            else:
-                self.error("当前会话没有连接，指令无效")
+        # if code.length == 3:
+        #     cmd = CodeBlock(code.code[2])
+        # else:
+        cmd = CodeBlock(" ".join(code.code[2:]))
 
-    def handle_gmcp(self, *args, **kwargs):
+        if self.connected:
+            for i in range(0, times):
+                await cmd.async_execute(self, wildcards)
+
+    def handle_gmcp(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
         "      指定key时，显示由GMCP收到的key信息\n" \
         "      不指定key时，显示所有GMCP收到的信息\n" \
         "\x1b[1m相关\x1b[0m: Trigger\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            cmd_args = cl.code[2:]      
-            self._handle_objs("GMCPs", self._gmcp, *cmd_args)
-        else:
-            self._handle_objs("GMCPs", self._gmcp, *args)
+        self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
 
-    def handle_message(self, *args, **kwargs):
+    def handle_message(self, code: CodeLine = None, wildcards = None,  *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #message|#mess {msg}\n" \
         "      使用弹出窗体显示信息\n" \
         "\x1b[1m相关\x1b[0m: 暂无\n"
 
         title = "来自会话 {} 的消息".format(self.name)
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            new_cmd_text, new_code = cl.expand(self)  
-            index = new_cmd_text.find(" ")
-            self.application.show_message(title, new_cmd_text[index:], False)
+        new_cmd_text, new_code = code.expand(self, wildcards)  
+        index = new_cmd_text.find(" ")
+        self.application.show_message(title, new_cmd_text[index:], False)
+
+
+    def handle_all(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
+        "\x1b[1m命令\x1b[0m: #all xxx \n" \
+        "      向所有的活动的session发送同样的命令\n" \
+        "\x1b[1m相关\x1b[0m: session\n"
         
-        else:
-            new_args = []
-            for item in args:
-                if item[0] == "%":
-                    item_val = self.getVariable(item, "")
-                    new_args.append(item_val)
-                # 非系统变量，@开头，在变量明前加@引用
-                elif item[0] == "@":
-                    item_val = self.getVariable(item[1:], "")
-                    new_args.append(item_val)
-                else:
-                    new_args.append(item)
-
-            msg   = " ".join(new_args)
-            self.application.show_message(title, msg, False)
-
+        new_cmd  = " ".join(code.code[2:])
+        for ss in self.application.sessions.values():
+            if isinstance(ss, Session):
+                ss.exec_command(new_cmd)
+                
     def clean(self):
         "清除会话有关任务项和事件标识"
         try:
@@ -1598,43 +1443,32 @@ class Session:
                 self.warning(f"指定模块名称 {module_names} 并未加载，无法重新加载.")
         
 
-    def handle_load(self, *args, **kwargs):
+    def handle_load(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #load {config}\n" \
-        "      为当前session加载{config}指定的模块。当要加载多个模块时，使用空格隔开\n" \
+        "      为当前session加载{config}指定的模块。当要加载多个模块时，使用空格或英文逗号隔开\n" \
         "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n"
         "      例, 加载名为pkuxkx的模块: #load pkuxkx \n"
         "          加载名为pkuxkx和my的两个模块: #load pkuxkx my \n"
         "\x1b[1m相关\x1b[0m: unload, reload\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            modules = cl.code[2:]
-            self.load_module(modules)
+        modules = ",".join(code.code[2:]).split(",")
+        self.load_module(modules)
 
-        else:
-
-            if len(args) > 0:
-                modules = args[0].split(' ')
-                self.load_module(modules)
-
-
-    def handle_reload(self, *args, **kwargs):
+    def handle_reload(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #reload {mods/plugins}\n" \
         "      不带参数时(#reload)，为当前session重新加载所有配置模块（不是重新加载插件) \n" \
         "      带参数时(#reload {mods/plugins}, 若指定名称为模块，则重新加载模块；若指定名称为插件，则重新加载插件。\n" \
         "                                      若指定名称既有模块也有插件，则仅重新加载模块（建议不要重名）。\n" \
-        "      若要重新加载多个模块，可以在参数中使用逗号隔开多个模块名称 \n" \
+        "      若要重新加载多个模块，可以在参数中使用空格或英文逗号隔开多个模块名称 \n" \
         "\x1b[1m相关\x1b[0m: load, unload\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            args = cl.code[2:]
+        args = code.code[2:]
 
         if len(args) == 0:
             self.reload_module()
 
-        elif len(args) == 1:
-            modules = args[0].split(',')
+        elif len(args) >= 1:
+            modules = ",".join(args).split(",")
             for mod in modules:
                 mod = mod.strip()
                 if mod in self._modules.keys():
@@ -1646,31 +1480,28 @@ class Session:
                 else:
                     self.warning(f"指定名称 {mod} 既未找到模块，也未找到插件，重新加载失败..")
 
-    def handle_unload(self, *args, **kwargs):
+    def handle_unload(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #unload {config}\n" \
-        "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用英文逗号隔开\n" \
+        "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用空格或英文逗号隔开\n" \
         "      卸载模块时，将调用模块Configuration类的__del__方法，请将模块清理工作代码形式卸载此方法中 \n"
         "      当不指定模块名称时，将卸载所有模块，并执行reset \n"
         "      例, 卸载所有模块，并清除所有相关信息： #unload   \n"
         "          卸载名为pkuxkx的模块: #unload pkuxkx \n"
-        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx,my \n"
+        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx my \n"
         "\x1b[1m相关\x1b[0m: load, reload\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            args = cl.code[2:]
+        args = code.code[2:]
 
         if len(args) == 0:
-            #self.error("卸载模块时，必须指定模块名称")
             modules = self._modules.values()
             self.unload_module(modules)
             self.reset()
 
-        elif len(args) == 1:
-            modules = args[0].split(',')
+        elif len(args) >= 1:
+            modules = ",".join(args).split(",")
             self.unload_module(modules)
 
-    def handle_modules(self, *args, **kwargs):
+    def handle_modules(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #modules/mods\n" \
         "      模块命令，该命令不带参数。列出本程序当前已加载的所有模块信息. \n" \
         "\x1b[1m相关\x1b[0m: load, unload, reload, plugins\n"
@@ -1681,13 +1512,13 @@ class Session:
         else:
             self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
     
-    def handle_reset(self, *args, **kwargs):
+    def handle_reset(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #reset\n" \
         "      复位全部脚本。将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量等待. \n" \
         "\x1b[1m相关\x1b[0m: load, unload, reload, modules\n"
         self.reset()
 
-    def handle_save(self, *args, **kwargs):
+    def handle_save(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #save\n" \
         "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
         "      文件保存在当前目录下，文件名为 {会话名}.mud \n" \
@@ -1707,23 +1538,19 @@ class Session:
             pickle.dump(saved, fp)
             self.info(f"会话变量信息已保存到{file}")
 
-    def handle_clear(self, *args, **kwargs):
+    def handle_clear(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #clear #cls {msg}\n" \
         "      清屏命令，清除当前会话所有缓存显示内容\n" \
         "\x1b[1m相关\x1b[0m: connect, exit\n"
         self.buffer.text = ""
 
-    def handle_test(self, *args, **kwargs):
+    def handle_test(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #test {msg}\n" \
         "      用于测试脚本的命令，会将msg发送并显示在session中，同时触发触发器\n" \
         "\x1b[1m相关\x1b[0m: trigger\n"
 
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            new_cmd_text, new_code = cl.expand(self)
-            line = new_cmd_text[6:]       # 取出#test 之后的所有内容
-        else:
-            line = "".join(args)
+        new_cmd_text, new_code = code.expand(self, wildcards)
+        line = new_cmd_text[6:]       # 取出#test 之后的所有内容
 
         if "\n" in line:
             lines = line.split("\n")
@@ -1758,15 +1585,13 @@ class Session:
             if len(raw_line) > 0:
                 self.info(raw_line, "PYMUD TRIGGER TEST")
 
-    def handle_plugins(self, *args, **kwargs):
+    def handle_plugins(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
         "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
         "      当带参数时，列出指定名称插件的详细信息 \n"
         "\x1b[1m相关\x1b[0m: modules, reload\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            args = cl.code[2:]
+        args = code.code[2:]
 
         if len(args) == 0:
             count = len(self.plugins.keys())
@@ -1784,88 +1609,55 @@ class Session:
                 self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
                 self.writetobuffer(plugin.help)
 
-    def handle_replace(self, *args, **kwargs):
+    def handle_replace(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
         "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
         "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
         "\x1b[1m相关\x1b[0m: gag\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            self.display_line = cl.commandText[9:]
-
-        else:
-            new_msg = ""
-            if len(args) > 0:
-                new_msg = args[0]
-            
-            if len(new_msg) > 0:
-                new_msg += Settings.client["newline"]
-
-            self.display_line = new_msg
+        self.display_line = code.commandText[9:]
         
-    def handle_gag(self, *args, **kwargs):
+    def handle_gag(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gag\n" \
         "      在主窗口中不显示当前行\n" \
         "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效"
         "\x1b[1m相关\x1b[0m: replace\n"
         self.display_line = ""
 
-    def handle_py(self, *args, **kwargs):
+    def handle_py(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
         "      直接执行后面跟着的python语句\n" \
         "      执行语句时，环境为当前上下文环境，此时self代表当前会话。"
         "\x1b[1m相关\x1b[0m: 暂无\n"
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            try:
-                exec(cl.commandText[4:])
-            except Exception as e:
-                self.error(f"Python执行错误：{e}")
-        else:
-            sentence = " ".join(args)
-            try:
-                exec(sentence)
-            except Exception as e:
-                self.error(f"Python执行错误：{e}")
 
-    def handle_info(self, *args, **kwargs):
+        try:
+            exec(code.commandText[4:])
+        except Exception as e:
+            self.error(f"Python执行错误：{e}")
+
+    def handle_info(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #info {msg}\n" \
         "      使用info输出一行, 主要用于测试\n" \
         "\x1b[1m相关\x1b[0m: warning, error\n"
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            new_text, new_code = cl.expand(self)
-            self.info(new_text[6:])
-        else:
-            if len(args) > 0:
-                self.info(" ".join(args))
 
-    def handle_warning(self, *args, **kwargs):
+        new_text, new_code = code.expand(self, wildcards)
+        self.info(new_text[6:])
+
+    def handle_warning(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #warning {msg}\n" \
         "      使用warning输出一行, 主要用于测试\n" \
         "\x1b[1m相关\x1b[0m: info, error\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            new_text, new_code = cl.expand(self)
-            self.warning(new_text[6:])
-        else:
-            if len(args) > 0:
-                self.warning(" ".join(args))
+        new_text, new_code = code.expand(self, wildcards)
+        self.warning(new_text[6:])
 
-    def handle_error(self, *args, **kwargs):
+    def handle_error(self, code: CodeLine = None, wildcards = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #error {msg}\n" \
         "      使用error输出一行, 主要用于测试\n" \
         "\x1b[1m相关\x1b[0m: info, warning\n"
         
-        cl = kwargs.get("code", None)
-        if isinstance(cl, CodeLine):
-            new_text, new_code = cl.expand(self)
-            self.error(new_text[6:])
-        else:
-            if len(args) > 0:
-                self.error(" ".join(args))
+        new_text, new_code = code.expand(self, wildcards)
+        self.error(new_text[6:])
 
     def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
         self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)

@@ -86,7 +86,6 @@ class CodeLine:
         return self.__code
 
     def execute(self, session, wildcards = None):
-        #asyncio.ensure_future(self.async_execute(session, wildcards))
         session.exec_code(self, wildcards)
 
     def expand(self, session, wildcards = None):
@@ -123,44 +122,7 @@ class CodeLine:
         return new_code_str, new_code
 
     async def async_execute(self, session, wildcards = None):           
-        # new_code_str = self.__code
-        # new_code = []
-
-        # for item in self.code:
-        #     if len(item) == 0: continue
-        #     # %1~%9，特指捕获中的匹配内容
-        #     if item in (f"%{i}" for i in range(1, 10)):
-        #         idx = int(item[1:])
-        #         if idx <= len(wildcards):
-        #             item_val = wildcards[idx-1]
-        #         else:
-        #             item_val = None
-        #         new_code.append(item_val)
-        #         new_code_str = new_code_str.replace(item, item_val, 1)
-
-        #     # 系统变量，%开头，直接%引用，如%line
-        #     elif item[0] == "%":
-        #         item_val = session.getVariable(item, "")
-        #         new_code.append(item_val)
-        #         new_code_str = new_code_str.replace(item, item_val, 1)
-
-        #     # 非系统变量，@开头，在变量明前加@引用
-        #     elif item[0] == "@":
-        #         item_val = session.getVariable(item[1:], "")
-        #         new_code.append(item_val)
-        #         new_code_str = new_code_str.replace(item, item_val, 1)
-
-        #     else:
-        #         new_code.append(item)
-        # new_code_str, new_code = self.expand(session, wildcards)
-        # await session.exec_command_async(new_code_str)
-
         await session.exec_code_async(self, wildcards)
-        # if new_code[0] == "#":
-        #     await session.handle_input_async(new_code_str)
-        # else:
-        #     #await session.exec_command_async(" ".join(new_code))
-        #     await session.exec_command_async(new_code_str)
 
 class CodeBlock:
     """
@@ -213,7 +175,8 @@ class CodeBlock:
         self.codes = CodeBlock.create_block(code)
 
     def execute(self, session, wildcards = None):
-        asyncio.ensure_future(self.async_execute(session, wildcards))
+        session.create_task(self.async_execute(session, wildcards))
+        #asyncio.ensure_future(self.async_execute(session, wildcards))
         # for code in self.codes:
         #     if isinstance(code, CodeLine):
         #         code.execute(session, wildcards)

@@ -13,7 +13,7 @@ class Settings:
     "APP 简要描述"
     __version__   = "0.18.0"
     "APP 当前版本"
-    __release__   = "2024-01-17"
+    __release__   = "2024-01-21"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
