@@ -177,3 +177,4 @@
 + 功能新增：session类型新增exec方法，使用方法为：session.exec(cmd, session_name)。可以使名为session_name的会话执行cmd命令。当不指定session_name时，在当前会话执行。
 + 功能调整：定时器创建时若不指定id，其自动生成的id前缀由tmr调整为ti
 + 实现调整：将#all、#session_name cmd等命令的实现从pymud.py中移动到了session.py中，这样可以在脚本中使用session.exec_command("#all xixi")。
++ 当前已知问题：由于同步/异步执行问题，在SimpleTrigger中，#gag和#replace的执行结果会很奇怪，可能会隐藏和替换掉非触发行。可行的办法为在onSuccess里，调用session.replace进行处理。
