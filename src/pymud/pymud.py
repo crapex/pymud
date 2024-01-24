@@ -333,7 +333,7 @@ class PyMudApp:
                         elif isinstance(session_script, (list, tuple)):
                             sess_scripts.extend(session_script)
 
-                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, sess_scripts))
+                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, sess_scripts, info[0]))
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -449,12 +449,13 @@ class PyMudApp:
         else:
             self.set_status("未选中任何内容...")
 
-    def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None):
+    def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None, userid = None):
         result = False
         encoding = encoding or Settings.server["default_encoding"]
 
         if name not in self.sessions.keys():
             session = Session(self, name, host, port, encoding, after_connect, scripts = scripts)
+            session.setVariable("id", userid)
             self.sessions[name] = session
             self.activate_session(name)
 
@@ -764,19 +765,10 @@ class PyMudApp:
 
         self.current_session.writetobuffer("#"*width, newline = True)
 
-
     def handle_exit(self, *args):
         "\x1b[1m命令\x1b[0m: #exit \n" \
         "      退出PYMUD程序\n" \
         "\x1b[1m相关\x1b[0m: session\n"
-    
-    # def handle_all(self, cmd):
-    #     "\x1b[1m命令\x1b[0m: #all xxx \n" \
-    #     "      向所有的活动的session发送同样的命令\n" \
-    #     "\x1b[1m相关\x1b[0m: session\n"
-    #     for ss in self.sessions.values():
-    #         if isinstance(ss, Session) and ss.connected:
-    #             ss.exec_command(cmd)
 
     def enter_pressed(self, buffer: Buffer):
         cmd_line = buffer.text
@@ -805,26 +797,8 @@ class PyMudApp:
             cmd_tuple = cmd_line[1:].split()
             self.handle_help(*cmd_tuple[1:])
 
-        # elif cmd_line.startswith("#all "):
-        #     cmd = cmd_line[4:].strip()
-        #     self.handle_all(cmd)
-
         elif cmd_line[1:] in self.sessions.keys():
             self.activate_session(cmd_line[1:])
-
-        # 命令行增加#miui xxx可以直接向miui会话发送命令的输出
-        # elif (space_index >= 0) and (cmd_line[1:space_index] in self.sessions.keys()):
-        #     name = cmd_line[1:space_index]
-        #     cmd  = cmd_line[space_index+1:]
-        #     session = self.sessions[name]
-        #     if len(cmd) == 0:
-        #         session.writeline("")
-        #     else:
-        #         try:
-        #             cb = CodeBlock(cmd)
-        #             cb.execute(session)
-        #         except Exception as e:
-        #             session.exec_command(cmd)
 
         else:
             if self.current_session:

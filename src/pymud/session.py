@@ -1458,7 +1458,9 @@ class Session:
         "      若要重新加载多个模块，可以在参数中使用空格或英文逗号隔开多个模块名称 \n" \
         "\x1b[1m相关\x1b[0m: load, unload\n"
 
-        args = code.code[2:]
+        args = list()
+        if isinstance(code, CodeLine):
+            args = code.code[2:]
 
         if len(args) == 0:
             self.reload_module()

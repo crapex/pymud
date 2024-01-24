@@ -178,3 +178,7 @@
 + 功能调整：定时器创建时若不指定id，其自动生成的id前缀由tmr调整为ti
 + 实现调整：将#all、#session_name cmd等命令的实现从pymud.py中移动到了session.py中，这样可以在脚本中使用session.exec_command("#all xixi")。
 + 当前已知问题：由于同步/异步执行问题，在SimpleTrigger中，#gag和#replace的执行结果会很奇怪，可能会隐藏和替换掉非触发行。可行的办法为在onSuccess里，调用session.replace进行处理。
+
+### 0.18.0 (2024-01-24)
++ 问题修复：修复了点击菜单"重新加载脚本配置"报错的问题
++ 功能调整：从菜单里点击创建会话时，会自动以登录名为本会话创建id变量
