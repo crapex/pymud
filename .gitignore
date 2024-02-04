@@ -16,3 +16,7 @@ __pycache__/
 # debug is my debug-venv-dir
 debug
 debug/
+
+# docs build is build test directory
+docs/build
+docs/build/

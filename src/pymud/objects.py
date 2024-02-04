@@ -85,10 +85,10 @@ class CodeLine:
     def commandText(self):
         return self.__code
 
-    def execute(self, session, wildcards = None):
-        session.exec_code(self, wildcards)
+    def execute(self, session, wildcards = None, **kwargs):
+        session.exec_code(self, wildcards = wildcards, **kwargs)
 
-    def expand(self, session, wildcards = None):
+    def expand(self, session, wildcards = None, **kwargs):
         new_code_str = self.__code
         new_code = []
 
@@ -121,8 +121,8 @@ class CodeLine:
 
         return new_code_str, new_code
 
-    async def async_execute(self, session, wildcards = None):           
-        await session.exec_code_async(self, wildcards)
+    async def async_execute(self, session, wildcards = None, **kwargs):           
+        await session.exec_code_async(self, wildcards = wildcards, **kwargs)
 
 class CodeBlock:
     """
@@ -174,13 +174,14 @@ class CodeBlock:
         self.__code = code
         self.codes = CodeBlock.create_block(code)
 
-    def execute(self, session, wildcards = None):
-        session.create_task(self.async_execute(session, wildcards))
-        #asyncio.ensure_future(self.async_execute(session, wildcards))
-        # for code in self.codes:
-        #     if isinstance(code, CodeLine):
-        #         code.execute(session, wildcards)
-
+    def execute(self, session, wildcards = None, sync = False):
+        if sync:
+            for code in self.codes:
+                if isinstance(code, CodeLine):
+                    code.execute(session, wildcards)
+        else:
+            session.create_task(self.async_execute(session, wildcards))
+        
     async def async_execute(self, session, wildcards = None):
         for code in self.codes:
             if isinstance(code, CodeLine):
@@ -335,11 +336,11 @@ class MatchObject(BaseObject):
         self.keepEval      = kwargs.get("keepEval", False)            # 不中断，非默认
         self.raw           = kwargs.get("raw", False)                 # 原始数据匹配。当原始数据匹配时，不对VT100指令进行解析
         
-        self.patterns = patterns
-
         self.wildcards = []
         self.lines = []
         self.event = asyncio.Event()
+
+        self.patterns = patterns
 
         super().__init__(session, patterns = patterns, *args, **kwargs)
 
@@ -476,9 +477,10 @@ class SimpleAlias(Alias):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
+        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(self.session, wildcards)
+        self._codeblock.execute(self.session, wildcards, self.sync)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -508,9 +510,10 @@ class SimpleTrigger(Trigger):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
+        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(self.session, wildcards)
+        self._codeblock.execute(self.session, wildcards, self.sync)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -720,9 +723,10 @@ class SimpleTimer(Timer):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, *args, **kwargs)
+        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, *args, **kwargs):
-        self._codeblock.execute(self.session)
+        self._codeblock.execute(self.session, sync = self.sync)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'

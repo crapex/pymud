@@ -381,38 +381,39 @@ class Session:
                 #self.write(b"\x1b[0z")
                 self.warning("MXP支持尚未开发，请暂时不要打开MXP支持设置")
         
-        # 全局变量%line
-        self.setVariable("%line", tri_line)
-        # 全局变量%raw
-        self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
+        if len(raw_line) > 0:
+            # 全局变量%line
+            self.setVariable("%line", tri_line)
+            # 全局变量%raw
+            self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
 
-        # 此处修改，为了处理#replace和#gag命令
-        # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
-        self.display_line = raw_line
+            # 此处修改，为了处理#replace和#gag命令
+            # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
+            self.display_line = raw_line
 
-        if not self._ignore:
-            all_tris = list(self._triggers.values())
-            all_tris.sort(key = lambda tri: tri.priority)
+            if not self._ignore:
+                all_tris = list(self._triggers.values())
+                all_tris.sort(key = lambda tri: tri.priority)
 
-            for tri in all_tris:
-                if isinstance(tri, Trigger) and tri.enabled:
-                    if tri.raw:
-                        state = tri.match(raw_line, docallback = True)
-                    else:
-                        state = tri.match(tri_line, docallback = True)
-
-                    if state.result == Trigger.SUCCESS:
-                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                            self._triggers.pop(tri.id)
-
-                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            break
+                for tri in all_tris:
+                    if isinstance(tri, Trigger) and tri.enabled:
+                        if tri.raw:
+                            state = tri.match(raw_line, docallback = True)
                         else:
-                            pass
+                            state = tri.match(tri_line, docallback = True)
 
-        # 将数据写入缓存添加到此处
-        if len(self.display_line) > 0:
-            self.writetobuffer(self.display_line)
+                        if state.result == Trigger.SUCCESS:
+                            if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                                self._triggers.pop(tri.id)
+
+                            if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                                break
+                            else:
+                                pass
+
+            # 将数据写入缓存添加到此处
+            if len(self.display_line) > 0:
+                self.writetobuffer(self.display_line)
 
     def set_exception(self, exc: Exception):
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
@@ -490,7 +491,7 @@ class Session:
                     pass
 
                 if times > 0:
-                    self.create_task(self.handle_num(times, code = cl, wildcards = wildcards))
+                    self.create_task(self.handle_num(times, code = cl, wildcards = wildcards, **kwargs))
                 else:
                     self.warning("#{num} {cmd}只能支持正整数!")
             
@@ -503,7 +504,7 @@ class Session:
                 else:
                     try:
                         cb = CodeBlock(sess_cmd)
-                        cb.execute(session, wildcards = wildcards)
+                        cb.execute(session, wildcards = wildcards, **kwargs)
                     except Exception as e:
                         session.exec_command(sess_cmd)
             
@@ -514,9 +515,9 @@ class Session:
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
                     if asyncio.iscoroutinefunction(handler):
-                        self.create_task(handler(code = cl, wildcards = wildcards))
+                        self.create_task(handler(code = cl, wildcards = wildcards, **kwargs))
                     else:
-                        handler(code = cl, wildcards = wildcards)
+                        handler(code = cl, wildcards = wildcards, **kwargs)
                 else:
                     self.warning(f"未识别的命令: {cl.commandText}")
 
