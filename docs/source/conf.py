@@ -15,9 +15,9 @@ source_suffix = ['.rst', '.md']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'pymud-cookbook'
-copyright = '2024, crapex'
+copyright = '2024, crapex@crapex.cc'
 author = 'crapex'
-release = '0.18.0'
+release = '0.18.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
