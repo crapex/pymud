@@ -65,13 +65,21 @@ class CodeLine:
                 if arg[0] in ("@", "%"):
                     hasvar = True
 
-            return hasvar, tuple(code_params)
+            syncmode = "dontcare"
+            if len(code_params) >= 2:
+                if (code_params[0] == "#"):
+                    if code_params[1] in ("gag", "replace"):
+                        syncmode = "sync"
+                    elif code_params[1] in ("wa", "wait"):
+                        syncmode = "async"
+        
+            return syncmode, hasvar, tuple(code_params), 
         else:
-            return hasvar, tuple()
+            return syncmode, hasvar, tuple()
 
     def __init__(self, _code: str) -> None:
         self.__code = _code
-        self.__hasvar, self.code = CodeLine.create_line(_code)
+        self.__syncmode, self.__hasvar, self.code = CodeLine.create_line(_code)
 
     @property
     def length(self):
@@ -84,13 +92,21 @@ class CodeLine:
     @property
     def commandText(self):
         return self.__code
+    
+    @property
+    def syncMode(self):
+        return self.__syncmode
 
-    def execute(self, session, wildcards = None, **kwargs):
-        session.exec_code(self, wildcards = wildcards, **kwargs)
+    def execute(self, session, *args, **kwargs):
+        session.exec_code(self, *args, **kwargs)
 
-    def expand(self, session, wildcards = None, **kwargs):
+    def expand(self, session, *args, **kwargs):
         new_code_str = self.__code
         new_code = []
+
+        line = kwargs.get("line", None)
+        raw  = kwargs.get("raw", None)
+        wildcards = kwargs.get("wildcards", None)
 
         for item in self.code:
             if len(item) == 0: continue
@@ -104,7 +120,15 @@ class CodeLine:
                 new_code.append(item_val)
                 new_code_str = new_code_str.replace(item, item_val, 1)
 
-            # 系统变量，%开头，直接%引用，如%line
+            # 系统变量，%开头
+            elif item == "%line":
+                new_code.append(line)
+                new_code_str = new_code_str.replace(item, line, 1)
+
+            elif item == "%raw":
+                new_code.append(raw)
+                new_code_str = new_code_str.replace(item, raw, 1)
+
             elif item[0] == "%":
                 item_val = session.getVariable(item, "")
                 new_code.append(item_val)
@@ -121,8 +145,8 @@ class CodeLine:
 
         return new_code_str, new_code
 
-    async def async_execute(self, session, wildcards = None, **kwargs):           
-        await session.exec_code_async(self, wildcards = wildcards, **kwargs)
+    async def async_execute(self, session, *args, **kwargs):           
+        await session.exec_code_async(self, args, **kwargs)
 
 class CodeBlock:
     """
@@ -133,6 +157,7 @@ class CodeBlock:
     def create_block(cls, code: str) -> tuple:
         "创建代码块，并返回对象自身"
         #若block由{}包裹，则去掉大括号直接分解
+
         if (len(code) >= 2) and (code[0] == '{') and (code[-1] == '}'):
             code = code[1:-1]
 
@@ -174,18 +199,52 @@ class CodeBlock:
         self.__code = code
         self.codes = CodeBlock.create_block(code)
 
-    def execute(self, session, wildcards = None, sync = False):
+        self.__syncmode = "dontcare"
+
+        for code in self.codes:
+            if isinstance(code, CodeLine):
+                if code.syncMode == "dontcare":
+                    continue
+                elif code.syncMode == "sync":
+                    if self.__syncmode in ("dontcare", "sync"):
+                        self.__syncmode = "sync"
+                    elif self.__syncmode == "async":
+                        self.__syncmode = "conflict"
+                        break
+
+                elif code.syncMode == "async":
+                    if self.__syncmode in ("dontcare", "async"):
+                        self.__syncmode = "async"
+                    elif self.__syncmode == "sync":
+                        self.__syncmode = "conflict"
+                        break
+
+    @property
+    def syncmode(self):
+        return self.__syncmode
+
+    def execute(self, session, *args, **kwargs):
+        sync = kwargs.get("sync", None)
+        if sync == None:
+            if self.syncmode in ("dontcare", "async"):
+                sync = False
+            elif self.syncmode == "sync":
+                sync = True
+            elif self.syncmode == "conflict":
+                session.warning("该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将实效。")
+                sync = False
+
         if sync:
             for code in self.codes:
                 if isinstance(code, CodeLine):
-                    code.execute(session, wildcards)
+                    code.execute(session, *args, **kwargs)
         else:
-            session.create_task(self.async_execute(session, wildcards))
+            session.create_task(self.async_execute(session, *args, **kwargs))
         
-    async def async_execute(self, session, wildcards = None):
+    async def async_execute(self, session, *args, **kwargs):
         for code in self.codes:
             if isinstance(code, CodeLine):
-                await code.async_execute(session, wildcards)
+                await code.async_execute(session, *args, **kwargs)
 
             if Settings.client["interval"] > 0:
                 await asyncio.sleep(Settings.client["interval"] / 1000.0)
@@ -477,10 +536,9 @@ class SimpleAlias(Alias):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
-        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(self.session, wildcards, self.sync)
+        self._codeblock.execute(self.session, id = id, line = line, wildcards = wildcards)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -498,7 +556,7 @@ class Trigger(MatchObject):
 
     async def triggered(self):
         if isinstance(self._task, asyncio.Task) and (not self._task.done()):
-            self._task.cancel("a new task has been settled")
+            self._task.cancel()
 
         self._task = self.session.create_task(self.matched())
         return await self._task
@@ -510,10 +568,10 @@ class SimpleTrigger(Trigger):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, patterns, *args, **kwargs)
-        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, id, line, wildcards):
-        self._codeblock.execute(self.session, wildcards, self.sync)
+        raw = self.session.getVariable("%raw")
+        self._codeblock.execute(self.session, id = id, line = line, raw = raw, wildcards = wildcards)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
@@ -544,7 +602,7 @@ class Command(MatchObject):
 
         for task in self._tasks:
             if isinstance(task, asyncio.Task) and (not task.done()):
-                task.cancel("manual reset.")
+                task.cancel()
 
     async def execute(self, cmd, *args, **kwargs):
         self.reset()
@@ -694,7 +752,7 @@ class Timer(BaseObject):
         "复位定时器，清除所创建的定时任务"
         try:
             if isinstance(self._task, asyncio.Task) and (not self._task.done()):
-                self._task.cancel("Timer has been reset.")
+                self._task.cancel()
 
             self._task = None
         except asyncio.CancelledError:
@@ -726,7 +784,7 @@ class SimpleTimer(Timer):
         self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
     def onSuccess(self, *args, **kwargs):
-        self._codeblock.execute(self.session, sync = self.sync)
+        self._codeblock.execute(self.session, *args, **kwargs)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'

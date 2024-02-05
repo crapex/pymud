@@ -3,6 +3,8 @@
 
 ### 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ### 源代码地址: https://github.com/crapex/pymud
+### 帮助文档地址： https://pymud.readthedocs.org
+### PyPi项目地址： https://pypi.org/project/pymud
 ### 使用交流QQ群：554672580
 
 
@@ -182,3 +184,9 @@
 ### 0.18.0 (2024-01-24)
 + 问题修复：修复了点击菜单"重新加载脚本配置"报错的问题
 + 功能调整：从菜单里点击创建会话时，会自动以登录名为本会话创建id变量
+
+### 0.18.1 (2024-02-05)
++ 问题修复：统一处置了task.cancel的参数和create_task的name属性，以适应更低版本的python环境（低至3.7）
++ 实现调整：为解决同步/异步执行问题，在CodeLine和CodeBlock的实现中，会通过调用命令来判断是否使用同步模式（默认为异步）。#gag、#replace为强制同步，#wa为强制异步。当同时存在时，同步失效，异步执行。
++ 实现调整：将%line、%raw的访问传递到触发器内部的执行中，避免同步异步问题。
++ 新增文档：将帮助文档添加到本项目，帮助文档自动同步到 pymud.readthedocs.org
