@@ -381,40 +381,39 @@ class Session:
             else:
                 #self.write(b"\x1b[0z")
                 self.warning("MXP支持尚未开发，请暂时不要打开MXP支持设置")
-        
-        if len(raw_line) > 0:
-            # 全局变量%line
-            self.setVariable("%line", tri_line)
-            # 全局变量%raw
-            self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
+    
+        # 全局变量%line
+        self.setVariable("%line", tri_line)
+        # 全局变量%raw
+        self.setVariable("%raw", raw_line.rstrip("\n").rstrip("\r"))
 
-            # 此处修改，为了处理#replace和#gag命令
-            # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
-            self.display_line = raw_line
+        # 此处修改，为了处理#replace和#gag命令
+        # 将显示行数据暂存到session的display_line中，可以由trigger改变显示内容
+        self.display_line = raw_line
 
-            if not self._ignore:
-                all_tris = list(self._triggers.values())
-                all_tris.sort(key = lambda tri: tri.priority)
+        if not self._ignore:
+            all_tris = list(self._triggers.values())
+            all_tris.sort(key = lambda tri: tri.priority)
 
-                for tri in all_tris:
-                    if isinstance(tri, Trigger) and tri.enabled:
-                        if tri.raw:
-                            state = tri.match(raw_line, docallback = True)
+            for tri in all_tris:
+                if isinstance(tri, Trigger) and tri.enabled:
+                    if tri.raw:
+                        state = tri.match(raw_line, docallback = True)
+                    else:
+                        state = tri.match(tri_line, docallback = True)
+
+                    if state.result == Trigger.SUCCESS:
+                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                            self._triggers.pop(tri.id)
+
+                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                            break
                         else:
-                            state = tri.match(tri_line, docallback = True)
+                            pass
 
-                        if state.result == Trigger.SUCCESS:
-                            if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                                self._triggers.pop(tri.id)
-
-                            if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                                break
-                            else:
-                                pass
-
-            # 将数据写入缓存添加到此处
-            if len(self.display_line) > 0:
-                self.writetobuffer(self.display_line)
+        # 将数据写入缓存添加到此处
+        if len(self.display_line) > 0:
+            self.writetobuffer(self.display_line)
 
     def set_exception(self, exc: Exception):
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
@@ -1413,7 +1412,7 @@ class Session:
                     unload = getattr(config, "unload", None)
                     if callable(unload):
                         unload(config)
-                        
+
                 del config
             del mod
             self._modules.pop(module_name)

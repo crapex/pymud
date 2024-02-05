@@ -146,7 +146,7 @@ class CodeLine:
         return new_code_str, new_code
 
     async def async_execute(self, session, *args, **kwargs):           
-        await session.exec_code_async(self, args, **kwargs)
+        await session.exec_code_async(self, *args, **kwargs)
 
 class CodeBlock:
     """
