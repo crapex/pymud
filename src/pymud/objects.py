@@ -104,8 +104,8 @@ class CodeLine:
         new_code_str = self.__code
         new_code = []
 
-        line = kwargs.get("line", None)
-        raw  = kwargs.get("raw", None)
+        line = kwargs.get("line", None) or session.getVariable("%line", "None")
+        raw  = kwargs.get("raw", None) or session.getVariable("%raw", "None")
         wildcards = kwargs.get("wildcards", None)
 
         for item in self.code:
@@ -116,7 +116,7 @@ class CodeLine:
                 if idx <= len(wildcards):
                     item_val = wildcards[idx-1]
                 else:
-                    item_val = None
+                    item_val = "None"
                 new_code.append(item_val)
                 new_code_str = new_code_str.replace(item, item_val, 1)
 
@@ -726,6 +726,7 @@ class Timer(BaseObject):
 
     def __init__(self, session, *args, **kwargs):
         self._task = None
+        self._halt = False
         super().__init__(session, *args, **kwargs)
 
     def __del__(self):
@@ -733,24 +734,36 @@ class Timer(BaseObject):
 
     def startTimer(self):
         if not isinstance(self._task, asyncio.Task):
+            self._halt = False
             self._task = asyncio.create_task(self.onTimerTask())
 
         asyncio.ensure_future(self._task)
 
     async def onTimerTask(self):
-        if self.enabled:
+        # 定时任务，修改为一直循环
+        while self._enabled:
             await asyncio.sleep(self.timeout)
+
             if callable(self._onSuccess):
                 self._onSuccess(self.id)
 
-            if self.oneShot:
-                self.enabled = False
-            else:   
-                await asyncio.create_task(self.onTimerTask())
+            if self.oneShot or self._halt:
+                break
+
+        # if self.enabled:
+        #     await asyncio.sleep(self.timeout)
+        #     if callable(self._onSuccess):
+        #         self._onSuccess(self.id)
+
+        #     if self.oneShot:
+        #         self.enabled = False
+        #     else:   
+        #         await asyncio.create_task(self.onTimerTask())
 
     def reset(self):
         "复位定时器，清除所创建的定时任务"
         try:
+            self._halt = True
             if isinstance(self._task, asyncio.Task) and (not self._task.done()):
                 self._task.cancel()
 
@@ -781,10 +794,9 @@ class SimpleTimer(Timer):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, *args, **kwargs)
-        self.sync       = kwargs.get("sync", False)                 # 同步模式，默认异步
 
-    def onSuccess(self, *args, **kwargs):
-        self._codeblock.execute(self.session, *args, **kwargs)
+    def onSuccess(self, id):
+        self._codeblock.execute(self.session, id = id)
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'

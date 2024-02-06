@@ -11,15 +11,15 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.18.1"
+    __version__   = "0.18.2"
     "APP 当前版本"
-    __release__   = "2024-02-05"
+    __release__   = "2024-02-06"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
     __email__     = "crapex@crapex.cc"
     "APP 作者邮箱"
-    __website__     = "https://github.com/crapex/pymud"
+    __website__     = "https://pypi.org/project/pymud"
     "APP 发布网址"
 
     server = {
