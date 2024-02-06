@@ -1620,7 +1620,9 @@ class Session:
         "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
         "\x1b[1m相关\x1b[0m: gag\n"
         
-        self.replace(code.commandText[9:])
+        new_text, new_code = code.expand(self, *args, **kwargs)
+        self.replace(new_text[9:])
+        #self.replace(code.commandText[9:])
         #self.display_line = code.commandText[9:]
         
     def handle_gag(self, code: CodeLine = None, *args, **kwargs):
