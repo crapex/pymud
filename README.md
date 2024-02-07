@@ -194,3 +194,7 @@
 ### 0.18.2 (2024-02-06)
 + 问题修复：修改了定时器实现，以避免出现递归调用超限异常
 + 问题修复：修改了参数替代时的默认值，从None改为字符串"None"，以避免替代时报None异常
+
+### 0.18.3 (2024-02-07)
++ 功能调整：原#unload时通过调用__del__来实现卸载的时间不可控，现将模块卸载改为调用unload函数。若需卸载时人工清除有关定时器、触发器等，请在Configuration类下新增unload函数（参数仅self），并在其中进行实现
++ 功能新增：新增会话Variable和全局Global的删除接口。可以通过session.delVariable(name)删除一个变量，可以通过session.delGlobal(name)来删除一个全局Global变量

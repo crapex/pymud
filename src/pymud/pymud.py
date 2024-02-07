@@ -841,6 +841,11 @@ class PyMudApp:
         "设置PYMUD全局变量"
         self._globals[name] = value
 
+    def del_globals(self, name):
+        "移除一个PYMUD全局变量"
+        if name in self._globals.keys():
+            self._globals.pop(name)
+
     @property
     def plugins(self):
         return self._plugins

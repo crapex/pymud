@@ -872,6 +872,12 @@ class Session:
     ## ###################
     ## 变量 Variables 处理
     ## ###################
+    def delVariable(self, name):
+        """删除一个变量"""
+        assert isinstance(name, str), "name必须是一个字符串"
+        if name in self._variables.keys():
+            self._variables.pop(name)
+
     def setVariable(self, name, value):
         """设置一个变量的值"""
         assert isinstance(name, str), "name必须是一个字符串"
@@ -910,6 +916,11 @@ class Session:
     ## ###################
     ## 全局变量 Globals 处理
     ## ###################
+    def delGlobal(self, name):
+        "删除一个全局变量"
+        assert isinstance(name, str), "name必须是一个字符串"
+        self.application.del_globals(name)
+
     def setGlobal(self, name, value):
         """设置一个全局变量的值"""
         assert isinstance(name, str), "name必须是一个字符串"
