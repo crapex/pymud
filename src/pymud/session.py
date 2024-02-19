@@ -336,6 +336,12 @@ class Session:
         if newline:
             self.buffer.insert_text(self.newline_cli)
 
+    def clear_buffer(self):
+        "清除过多缓冲"
+        if self.buffer.document.is_cursor_at_the_end and (self.buffer.document.line_count >= 2 * Settings.client["buffer_lines"]):
+            startindex = self.buffer.document.translate_row_col_to_index(-1 * Settings.client["buffer_lines"], 0)
+            self.buffer.text = self.buffer.document.text[startindex:] 
+
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
         self._line_buffer.extend(data)
@@ -369,6 +375,8 @@ class Session:
 
     def go_ahead(self) -> None:
         "把当前接收缓冲内容放到显示缓冲中"
+        self.clear_buffer()
+
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
         self._line_buffer.clear()

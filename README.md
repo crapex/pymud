@@ -198,3 +198,7 @@
 ### 0.18.3 (2024-02-07)
 + 功能调整：原#unload时通过调用__del__来实现卸载的时间不可控，现将模块卸载改为调用unload函数。若需卸载时人工清除有关定时器、触发器等，请在Configuration类下新增unload函数（参数仅self），并在其中进行实现
 + 功能新增：新增会话Variable和全局Global的删除接口。可以通过session.delVariable(name)删除一个变量，可以通过session.delGlobal(name)来删除一个全局Global变量
+
+### 0.18.4 (2024-02-19)
++ 功能新增：新增Settings.client["buffer_lines"]，表示保留的缓冲行数（默认5000）。当Session内容缓冲行数达到该值2倍时（10000行），将截取一半（5000行），后一半内容进行保留，前一半丢弃。此功能是为了减少长时挂机的内存消耗和响应时间。
++ 功能修复：解决在显示美化（Settings.client["beautify"]）打开之后，复制部分文字不能正确判断起始终止的问题。

@@ -11,9 +11,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.18.3"
+    __version__   = "0.18.4"
     "APP 当前版本"
-    __release__   = "2024-02-07"
+    __release__   = "2024-02-19"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -49,6 +49,7 @@ class Settings:
     "MUD协议所需的的默认MNES(Mud New-Environment Standard)配置信息"
 
     client = {
+        "buffer_lines"      : 5000,                 # 保留缓冲行数
         "status_width"      : 30,                   # 右侧状态栏的宽度
         "status_height"     : 6,                    # 下侧状态栏的高度
         "naws_width"        : 150,                  # 客户端NAWS宽度

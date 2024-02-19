@@ -155,10 +155,12 @@ class PyMudApp:
             show_cursor=False
         )
 
+        self.mudFormatProc = MudFormatProcessor()
+
         self.consoleView = SessionBufferControl(
             buffer = None,
             input_processors=[
-                MudFormatProcessor(),
+                self.mudFormatProc,
                 HighlightSearchProcessor(),
                 HighlightSelectionProcessor(),
                 DisplayMultipleCursors(),
@@ -416,7 +418,8 @@ class PyMudApp:
 
                 if srow == erow:
                     # 单行情况
-                    line = b.document.current_line
+                    #line = b.document.current_line
+                    line = self.mudFormatProc.line_correction(b.document.current_line)
                     start = max(0, scol)
                     end = min(ecol, len(line))
                     line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")

@@ -128,9 +128,7 @@ class MudFormatProcessor(Processor):
     def tab_correction(self, line: str):
         return line.replace("\t", " " * Settings.client["tabstop"])
 
-    def apply_transformation(self, transformation_input):
-        # 准备（先还原为str）
-        line = fragment_list_to_text(transformation_input.fragments)
+    def line_correction(self, line: str):
         # 处理\r符号（^M）
         line = self.return_correction(line)
         # 处理Tab(\r)符号（^I）
@@ -138,6 +136,13 @@ class MudFormatProcessor(Processor):
         # 美化（解决中文英文在Console中不对齐的问题）
         if Settings.client["beautify"]:
             line = self.width_correction(line)
+
+        return line
+
+    def apply_transformation(self, transformation_input):
+        # 准备（先还原为str）
+        line = fragment_list_to_text(transformation_input.fragments)
+        line = self.line_correction(line)
         # 处理ANSI标记（生成FormmatedText）
         fragments = to_formatted_text(ANSI(line))
         return Transformation(fragments)
