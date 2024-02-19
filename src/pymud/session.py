@@ -105,7 +105,7 @@ class Session:
         self.buffer_pos_view  = 0                           # 标注查看位置光标指针
         self.buffer_pos_view_line = -1
         self.showHistory      = False                       # 是否显示历史
-
+        self._line_count      = 0                           # 快速访问行数
         self._status_maker = None                           # 创建状态窗口的函数（属性）
         self.display_line  = ""
 
@@ -333,14 +333,19 @@ class Session:
         "将数据写入到用于本地显示的缓冲中"
         self.buffer.insert_text(data)
 
+        if data[-1] == "\n":
+            self._line_count += 1
+
         if newline:
             self.buffer.insert_text(self.newline_cli)
+            self._line_count += 1
 
     def clear_buffer(self):
         "清除过多缓冲"
-        if self.buffer.document.is_cursor_at_the_end and (self.buffer.document.line_count >= 2 * Settings.client["buffer_lines"]):
+        if (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
             startindex = self.buffer.document.translate_row_col_to_index(-1 * Settings.client["buffer_lines"], 0)
-            self.buffer.text = self.buffer.document.text[startindex:] 
+            self.buffer.text = self.buffer.document.text[startindex:]
+            self._line_count = self.buffer.document.line_count
 
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
@@ -376,7 +381,7 @@ class Session:
     def go_ahead(self) -> None:
         "把当前接收缓冲内容放到显示缓冲中"
         self.clear_buffer()
-
+        
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
         self._line_buffer.clear()
