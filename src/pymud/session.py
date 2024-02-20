@@ -333,7 +333,7 @@ class Session:
         "将数据写入到用于本地显示的缓冲中"
         self.buffer.insert_text(data)
 
-        if data[-1] == "\n":
+        if len(data) > 0 and (data[-1] == "\n"):
             self._line_count += 1
 
         if newline:
@@ -344,8 +344,11 @@ class Session:
         "清除过多缓冲"
         if (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
             startindex = self.buffer.document.translate_row_col_to_index(-1 * Settings.client["buffer_lines"], 0)
-            self.buffer.text = self.buffer.document.text[startindex:]
-            self._line_count = self.buffer.document.line_count
+            new_text = self.buffer.document.text[startindex:]
+            self.buffer.text = ""
+            self.buffer.text = new_text
+            #self._line_count = self.buffer.document.line_count
+            self._line_count = len(new_text.split("\n"))
 
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
@@ -380,8 +383,6 @@ class Session:
 
     def go_ahead(self) -> None:
         "把当前接收缓冲内容放到显示缓冲中"
-        self.clear_buffer()
-        
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
         self._line_buffer.clear()
@@ -426,6 +427,7 @@ class Session:
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
+            self.clear_buffer()
             self.writetobuffer(self.display_line)
 
     def set_exception(self, exc: Exception):
