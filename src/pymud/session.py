@@ -427,8 +427,8 @@ class Session:
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
-            self.clear_buffer()
             self.writetobuffer(self.display_line)
+            self.clear_buffer()
 
     def set_exception(self, exc: Exception):
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
