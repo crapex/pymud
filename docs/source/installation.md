@@ -42,3 +42,23 @@ pip install --upgrade pymud
 ```
 python -m pymud
 ```
+
+## 基于windows下的安装与启动步骤
+
+- 建议使用Windows Terminal作为shell，并使用PowerShell 7作为启动终端
+- 使用pip安装pymud，shell中执行: pip install pymud
+- 创建自己的脚本目录，如d:\pkuxkx： mkdir pkuxkx
+- 进入自己的脚本目录，cd pkuxkx
+- 启动运行pymud: python -m pymud
+
+### 安装步骤
+![install and run](_static/install_and_run.png)
+
+### 启动后的界面
+![pymud-ui](_static/ui_empty.png)
+
+### 美化对齐的字符画
+![ui-show-1](_static/ui_show_01.png)
+
+### 滚动时自动分屏
+![ui-show-2](_static/ui_show_02.png)
