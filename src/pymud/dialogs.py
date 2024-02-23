@@ -64,8 +64,8 @@ class WelcomeDialog(BasicDialog):
         self.website = FormattedText(
             [('', '访问 '),
              #('class:b', 'GitHub:'), 
-             ('', 'https://github.com/crapex/pymud', self.open_url),
-             ('', ' 以获取最新信息')]
+             ('', 'https://pymud.readthedocs.org/', self.open_url),
+             ('', ' 以查看最新帮助文档')]
              )
         super().__init__("PYMUD", modal)
         

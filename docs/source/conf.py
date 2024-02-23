@@ -14,8 +14,8 @@ source_suffix = ['.rst', '.md']
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'pymud-cookbook'
-copyright = '2024, crapex@crapex.cc'
+project = 'PYMUD 帮助文档'
+copyright = '2023-2024, crapex@crapex.cc'
 author = 'crapex'
 release = '0.18.4post2'
 
@@ -34,10 +34,3 @@ language = 'zh_CN'
 
 html_theme = 'sphinx_rtd_theme'
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-
-# def setup(app):
-#     app.add_config_value('recommonmark_config', {
-#         'url_resolver': lambda url: github_doc_root + url,
-#         'auto_toc_tree_section': 'Contents',
-#         }, True)
-#     app.add_transform(AutoStructify)

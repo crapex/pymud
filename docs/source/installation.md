@@ -1,42 +1,61 @@
-# 需求、安装与运行
+# 1 需求、安装与运行
 
-## 环境需求
+## 1.1 环境需求
 
-PYMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境是Python环境而非操作系统环境。理论上，只要你的操作系统下可以运行Python，就可以运行PyMUD。另外，本客户端的UI设计是基于控制台的，因此也不需要有图形环境的支持。
+PYMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境是Python环境而非操作系统环境。理论上，只要你的操作系统下可以运行Python，就可以运行PYMUD。另外，本客户端的UI设计是基于控制台的，因此也不需要有图形环境的支持，可以方便的部署在云端和docker中。
 
-- 操作系统需求：不限，能运行Python是必要条件。
-- 版本需求：要求 >=3.7(已测试3.7.9,更旧的版本不确定能否使用，请自行尝试），32位/64位随意，但建议用64位版，可以支持4G以上的内存访问
-- 支持库需求：prompt-toolkit 3.0（代码在 https://github.com/prompt-toolkit/python-prompt-toolkit ), 以及由prompt-toolkit所依赖的wcwidth、pygment、pyperclip
-- prompt-toolkit 帮助页面： https://python-prompt-toolkit.readthedocs.io/en/master/
+- 操作系统需求：不限，能运行Python是必要条件。可以windows（推荐使用Windows Terminal作为终端）、linux（不需要X支持）、macOS、Android（使用termux）、iOS（使用iSH）。
+- 版本需求：要求 >=3.7(已测试3.7.9,更旧的版本不确定能否使用，请自行尝试），32位/64位随意，建议用64位版，可以支持4G以上的内存访问。
+- 支持库需求：prompt-toolkit 3.0（代码在 <https://github.com/prompt-toolkit/python-prompt-toolkit> ), 以及由prompt-toolkit所依赖的wcwidth、pygment、pyperclip。
+- prompt-toolkit 帮助页面： <https://python-prompt-toolkit.readthedocs.io/en/master/>
 
-## 安装
+## 1.2 安装
 
-- 安装Python，这个就不讲了。如果不会python语言可以学，如果不会任何编程语言，用这个客户端可能还是有点难度。所以假设用户是会python的。
-- 安装PyMUD程序本体：可以直接使用pip安装或更新。所需的支持库会自动安装。
+- 安装Python、pip（linux下pip是一个单独的包，debian/ubuntu可以使用apt-get分别安装）。
+- 使用pip安装（或更新）PYMUD程序本体：可以直接使用pip安装或更新。所需的支持库会自动安装。
 
 ```
-pip install pymud
-pip install --upgrade pymud
+# 安装
+pip install pymud      
+# 更新
+pip install --upgrade pymud        
+# 指定版本                     
+pip install --upgrade pymud==0.18.4post2        
+# 指定pypi官方源。由于镜像同步需要时间，所以有时候刚发布更新时，需指定到pypi官方源     
+pip install --upgrade pymud -i https://pypi.org/simple  
 ```
 
-## 运行
+## 1.3 运行
 
-使用pip安装的pymud，可以通过标准模块调用语法：python -m pymud调用模块执行。
+使用pip安装之后，可以通过Python的标准模块调用语法：python -m pymud调用模块执行。建议建立自己的脚本目录，并在该目录下执行。
+
 ```
-python -m pymud
+mkdir d:\pkuxkx     # 建立自己的脚本目录
+cd d:\pkuxkx        # 进入自己的脚本目录
+python -m pymud     # 运行PYMUD
 ```
 
-## windows下的安装与启动步骤示例
+## 1.4 Windows下安装与启动示例
 
-- 建议使用Windows Terminal作为shell，并使用PowerShell 7作为启动终端
+- 建议使用Windows Terminal作为shell([参考地址](https://learn.microsoft.com/zh-cn/windows/terminal/))，并使用PowerShell 7([参考地址](https://learn.microsoft.com/zh-cn/powershell/))作为启动终端
 - 使用pip安装pymud，shell中执行: pip install pymud
 - 创建自己的脚本目录，如d:\pkuxkx： mkdir pkuxkx
 - 进入自己的脚本目录，cd pkuxkx
 - 启动运行pymud: python -m pymud
 
-### 安装步骤
+### 1.4.1 安装步骤
 ![install and run](_static/install_and_run.png)
 
-### 启动后的界面
+### 1.4.2 启动后的界面
 ![pymud-ui](_static/ui_empty.png)
+
+### 1.4.3 在Windows Terminal中增加快捷菜单
+
+- 创建一个配置文件（比如从PowerShell 7复制一个）
+- 将名称改为你喜欢的名称，如PYMUD
+- 将命令行改为： python -m pymud
+- 将启动目录改为你的脚本目录，比如 d:\pkuxkx
+- 可以自己设置一个喜欢的图标:)
+
+![pymud-menu](_static/create_menu_win.png)
 

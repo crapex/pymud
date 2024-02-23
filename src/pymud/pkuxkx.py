@@ -3,10 +3,10 @@
 import webbrowser
 from pymud import Alias, Trigger, SimpleCommand, Timer, SimpleTrigger, SimpleAlias
 
-# 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑
+# 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑。支持多脚本加载
 # 本示例脚本对PyMud支持的变量(Variable)、触发器(Trigger，包含单行与多行触发)、别名(Alias)、定时器(Timer)、命令(Command，本示例中使用了SimpleCommand子类)都进行了代码示例
-# 使用#load {filename}加载的配置文件中，必须有一个类型，名为Coniguration，在#load操作时，会自动创建此类型
-# 例如，加载本文件指定的配置，则使用 #load pkuxkx即可
+# 使用#load {filename}加载的配置文件中，若有一个类型名为Coniguration，则在#load操作时，会自动创建此类型；若没有Configuration类，则仅将文件引入
+# 例如，加载本文件指定的配置，则使用 #load pymud.pkuxkx即可
 
 # PyMud中，触发器Trigger、别名Alias、命令Command，都是匹配对象(MatchObject)的子类，使用同一种处理逻辑
 # 匹配对象，意味着有匹配的pattern。在匹配对象成功后，会调用对象的onSuccess方法
@@ -109,11 +109,11 @@ class Configuration:
 
         #  get xxx from corpse的别名操作，匹配成功后会自动调用getfromcorpse函数
         #  例如， gp silver 相当于 get silver from corpse
-        self._aliases['ali_get'] = Alias(self.session, "^gp\s(.+)$", id = "ali_get", onSuccess = self.getfromcorpse)
+        self._aliases['ali_get'] = Alias(self.session, r"^gp\s(.+)$", id = "ali_get", onSuccess = self.getfromcorpse)
 
         # 3. 现在支持简单Alias了，在其中也可以支持#wait（缩写为#wa操作）等待，当然，Trigger也支持
         # 从扬州中心广场到西门的行走，每步中间插入100ms等待
-        self._triggers["ali_yz_xm"] = SimpleAlias(self.session ,'^yz_xm$', "w;#wa 100;w;#wa 100;w;#wa 100;w", group = "sys")
+        self._aliases["ali_yz_xm"] = SimpleAlias(self.session ,'^yz_xm$', "w;#wa 100;w;#wa 100;w;#wa 100;w", group = "sys")
 
         self.session.addAliases(self._aliases)
 

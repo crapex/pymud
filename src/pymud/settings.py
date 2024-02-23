@@ -19,8 +19,8 @@ class Settings:
     "APP 作者"
     __email__     = "crapex@crapex.cc"
     "APP 作者邮箱"
-    __website__     = "https://pypi.org/project/pymud"
-    "APP 发布网址"
+    __website__     = "https://pymud.readthedocs.org/"
+    "帮助文档发布网址"
 
     server = {
         "default_encoding"  : "utf-8",              # 服务器默认编码
