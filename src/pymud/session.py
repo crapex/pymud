@@ -1694,6 +1694,14 @@ class Session:
         self.error(new_text[6:])
 
     def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+        if Settings.client["newline"] in msg:
+            new_lines = list()
+            msg_lines = msg.split(Settings.client["newline"])
+            for line in msg_lines:
+                new_lines.append("{}{}".format(style, line))
+
+            msg = Settings.client["newline"].join(new_lines)
+                
         self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):

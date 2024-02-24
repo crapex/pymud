@@ -39,6 +39,7 @@ PYMUD 帮助文档
 - 支持NWAS、MTTS协商，支持GMCP、MSDP、MSSP协议。暂不支持MXP
 - 一次脚本开发，多平台运行。Windows, Linux, MacOS, Android（基于termux）, iOS（基于iSH）。可部署在docker和云端，只要能在该平台上运行Python，就可以运行PYMUD客户端
 - 脚本所有语法均采用Python原生语法，因此你只要会用Python，就可以自己写脚本，免去了再去学习lua、熟悉各类APP的使用的难处
+- 全开源代码，因此脚本也可以很方便的使用visual studio code等工具进行调试，可以设置断点、查看变量等
 - Python拥有极为强大的文字处理能力，用于处理文本的MUD最为合适
 - Python拥有极为丰富的第三方库，能支持的第三方库，就能在PYMUD中支持
 - 我自己还在玩，所以本客户端会持续进行更新:)
@@ -56,7 +57,7 @@ PYMUD 帮助文档
    :alt: 滚动时自动分屏
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: 目录
 
    installation
