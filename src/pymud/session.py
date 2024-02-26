@@ -1,4 +1,4 @@
-import asyncio, logging, re, functools, math, os, pickle, datetime, importlib, importlib.util, sysconfig
+import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig
 from collections.abc import Iterable
 from collections import OrderedDict
 
@@ -691,6 +691,8 @@ class Session:
             cb = CodeBlock(line)
             await cb.async_execute(self)
 
+        self.clean_finished_tasks()
+
     def write_eof(self) -> None:
         self._transport.write_eof()
     
@@ -952,45 +954,7 @@ class Session:
     ## ###################
     ## 各类命令处理函数
     ## ###################
-    def handle_input(self, *args):
-        """处理命令行输入的#开头的命令"""
-        #asyncio.ensure_future(self.handle_input_async(*args))
-        self.create_task(self.handle_input_async(*args))
-
-    async def handle_input_async(self, code):
-        """异步处理命令行输入的#开头的命令"""
-        args = code[1:].split()        # 去除#号并分隔
-        cmd = args[0]
-
-        if cmd.isnumeric():
-            times = 0
-            try:
-                times = int(cmd)
-            except ValueError:
-                pass
-
-            if times > 0:
-                await self.handle_num(times, *args[1:])
-            else:
-                self.warning("#{num} {cmd}只能支持正整数!")
-        
-        else:
-            cmd = cmd.lower()
-            if cmd in self._commands_alias.keys():
-                cmd = self._commands_alias[cmd]
-
-            handler = self._cmds_handler.get(cmd, None)
-            if handler and callable(handler):
-                if cmd == "test":                       # 脚本测试时，要原样发送
-                    self.handle_test(code[6:])          # 去除前面的#code 加空格共6个字符
-
-                elif asyncio.iscoroutinefunction(handler):
-                    await handler(*args[1:])
-                else:
-                    handler(*args[1:])
-            else:
-                self.warning("未识别的命令: %s" % " ".join(args))
-
+ 
     async def handle_wait(self, code: CodeLine = None, *args, **kwargs):
         "异步等待，毫秒后结束"
         wait_time = code.code[2]

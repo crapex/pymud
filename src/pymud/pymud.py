@@ -1,53 +1,36 @@
 import asyncio, functools, re, logging, math, json, os
-import importlib, importlib.util
+import importlib.util
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
-from prompt_toolkit import ANSI, HTML, print_formatted_text
+from prompt_toolkit import HTML
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.application import Application
-from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
+from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.layout.controls import FormattedTextControl, BufferControl
-from prompt_toolkit.layout.dimension import Dimension, D
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.dimension import D
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
-from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame
-from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
+from prompt_toolkit.widgets import Label, MenuItem, TextArea
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
+from prompt_toolkit.cursor_shapes import CursorShape
 from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.filters import (
     Condition,
-    FilterOrBool,
-    has_focus,
-    is_done,
     is_true,
     to_filter,
 )
 from prompt_toolkit.formatted_text import (
-    AnyFormattedText,
-    StyleAndTextTuples,
     Template,
-    to_formatted_text,
 )
 from prompt_toolkit.layout.processors import (
     DisplayMultipleCursors,
-    HighlightIncrementalSearchProcessor,
     HighlightSearchProcessor,
     HighlightSelectionProcessor,
-    Processor,
-    TransformationInput,
-    merge_processors,
-)
-from prompt_toolkit.layout.margins import (
-    ConditionalMargin,
-    NumberedMargin,
-    ScrollbarMargin,
 )
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 
@@ -410,13 +393,11 @@ class PyMudApp:
     def copy(self, raw = False):
         b = self.consoleView.buffer
         if b.selection_state:
+            srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
+            erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
+
             if not raw:
                 # Control-C 复制纯文本
-                # 这里有BUG，多行的时候，复制不行，要改
-
-                srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
-                erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
-
                 if srow == erow:
                     # 单行情况
                     #line = b.document.current_line
@@ -444,12 +425,26 @@ class PyMudApp:
                     self.current_session.setVariable("%copy", "\n".join(lines))
                     
             else:
-                # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此需要整行复制-双击时才使用）
-                data = self.consoleView.buffer.copy_selection()
-                self.app.clipboard.set_data(data)
-                self.set_status("已复制：{}".format(data.text))
+                # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此RAW复制时自动整行复制）
+                if srow == erow:
+                    line = b.document.current_line
+                    self.app.clipboard.set_text(line)
+                    self.set_status("已复制：{}".format(line))
 
-                self.current_session.setVariable("%copy", data.text)
+                    self.current_session.setVariable("%copy", line)
+
+                else:
+                    lines = b.document.lines[srow:erow+1]
+                    copy_raw_text = "".join(lines)
+                    self.app.clipboard.set_text(copy_raw_text)
+                    self.set_status("已复制：行数{}".format(1 + erow - srow))
+                    self.current_session.setVariable("%copy", copy_raw_text)
+
+                # data = self.consoleView.buffer.copy_selection()
+                # self.app.clipboard.set_data(data)
+                # self.set_status("已复制：{}".format(data.text))
+
+                # self.current_session.setVariable("%copy", data.text)
         else:
             self.set_status("未选中任何内容...")
 
