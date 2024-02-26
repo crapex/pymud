@@ -123,6 +123,10 @@ class Settings:
         "value"     : "fg:green",
     }
 
+    keys = {
+        
+    }
+
     sessions = {
         "pkuxkx" : {
             "host" : "mud.pkuxkx.net",

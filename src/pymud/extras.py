@@ -39,7 +39,7 @@ from prompt_toolkit.formatted_text import (
     to_formatted_text,
 )
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text
-from prompt_toolkit.history import History
+from prompt_toolkit.history import History, InMemoryHistory
 from prompt_toolkit.key_binding.key_bindings import KeyBindings, KeyBindingsBase
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
@@ -268,6 +268,25 @@ class SessionBuffer(Buffer):
         else:
             pass
         
+
+    def clear_half(self):
+        "将Buffer前半段内容清除，并清除缓存"
+        remain_lines = len(self.document.lines) // 2
+        start = self.document.translate_row_col_to_index(remain_lines, 0)
+        new_text = self.text[start:]
+
+        del self.history
+        self.history = InMemoryHistory()
+        
+        self.text = ""
+        self._set_text(new_text)
+
+        self._document_cache.clear()
+        new_doc  = Document(text = new_text, cursor_position = len(new_text))
+        self.reset(new_doc, False)
+        self.__split = False
+
+        return new_doc.line_count
 
     def undo(self) -> None:
         pass

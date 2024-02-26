@@ -249,6 +249,8 @@ class CodeBlock:
             if Settings.client["interval"] > 0:
                 await asyncio.sleep(Settings.client["interval"] / 1000.0)
 
+        session.clean_finished_tasks()
+
 class BaseObject:
     """MUD会话支持的对象基类"""
 

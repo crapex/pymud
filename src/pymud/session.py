@@ -30,6 +30,8 @@ class Session:
         "global",       # PyMUD跨session全局变量
 
         "command",      # 命令
+
+        "task",         # 任务
         
         "modules",      # 模块清单
         "load",         # 加载模块
@@ -69,6 +71,8 @@ class Session:
         "cls" : "clear",
         "mods": "modules",
         "ig"  : "ignore",
+        "t+"  : "ignore",
+        "t-"  : "ignore",
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, **kwargs):
@@ -340,15 +344,10 @@ class Session:
             self.buffer.insert_text(self.newline_cli)
             self._line_count += 1
 
-    def clear_buffer(self):
+    def clear_half(self):
         "清除过多缓冲"
         if (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
-            startindex = self.buffer.document.translate_row_col_to_index(-1 * Settings.client["buffer_lines"], 0)
-            new_text = self.buffer.document.text[startindex:]
-            self.buffer.text = ""
-            self.buffer.text = new_text
-            #self._line_count = self.buffer.document.line_count
-            self._line_count = len(new_text.split("\n"))
+            self._line_count = self.buffer.clear_half()
 
     def feed_data(self, data) -> None:
         "永远只会传递1个字节的数据，以bytes形式"
@@ -427,8 +426,8 @@ class Session:
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
+            self.clear_half()
             self.writetobuffer(self.display_line)
-            self.clear_buffer()
 
     def set_exception(self, exc: Exception):
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
@@ -658,8 +657,6 @@ class Session:
         """
 
         ## 以下为函数执行本体
-        self.clean_finished_tasks()
-
         if not "#" in line:
             cmds = line.split(self.seperator)
             for cmd in cmds:
@@ -684,8 +681,6 @@ class Session:
         """
 
         ## 以下为函数执行本体
-        self.clean_finished_tasks()
-
         if not "#" in line:
             cmds = line.split(self.seperator)
             for cmd in cmds:
@@ -709,26 +704,34 @@ class Session:
         return "{0}_{1}".format(prefix, self.getUniqueNumber())
 
     def enableGroup(self, group: str, enabled = True):
-        "使能或禁用Group中所有对象"
+        "使能或禁用Group中所有对象, 返回组内对象个数。顺序为：别名，触发器，命令，定时器，GMCP"
+        counts = [0, 0, 0, 0, 0]
         for ali in self._aliases.values():
-            if isinstance(ali, Alias) and ali.group == group:
+            if isinstance(ali, Alias) and (ali.group == group):
                 ali.enabled = enabled
+                counts[0] += 1
 
         for tri in self._triggers.values():
-            if isinstance(tri, Trigger) and tri.group == group:
+            if isinstance(tri, Trigger) and (tri.group == group):
                 tri.enabled = enabled
+                counts[1] += 1
 
         for cmd in self._commands.values():
-            if isinstance(cmd, Command) and cmd.group == group:
+            if isinstance(cmd, Command) and (cmd.group == group):
                 cmd.enabled = enabled
+                counts[2] += 1
 
         for tmr in self._timers.values():
-            if isinstance(tmr, Timer) and tmr.group == group:
+            if isinstance(tmr, Timer) and (tmr.group == group):
                 tmr.enabled = enabled
+                counts[3] += 1
 
         for gmcp in self._gmcp.values():
-            if isinstance(gmcp, GMCPTrigger) and gmcp.group == group:
-                gmcp.enabled = enabled        
+            if isinstance(gmcp, GMCPTrigger) and (gmcp.group == group):
+                gmcp.enabled = enabled       
+                counts[4] += 1 
+
+        return counts
 
     def _addObjects(self, objs: dict, cls: type):
         if cls == Alias:
@@ -1266,15 +1269,53 @@ class Session:
            
         self._handle_objs("Trigger", self._triggers, *code.code[2:])
 
+    def handle_task(self, code: CodeLine = None, *args, **kwargs):
+        "\x1b[1m命令\x1b[0m: #task\n" \
+        "      不指定参数, 列出当前会话中所有受管理的任务清单\n" \
+        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer\n"
+
+        width = self.application.get_width()
+        title = f"  Tasks LIST IN SESSION {self.name}  "
+        left = (width - len(title)) // 2
+        right = width - len(title) - left
+        self.writetobuffer("="*left + title + "="*right, newline = True)
+
+        for task in self._tasks:
+            self.writetobuffer("  %r" % task, newline = True)
+
+        self.writetobuffer("="*width, newline = True)
+
+
     def handle_ignore(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #ignore|#ig\n" \
-        "      切换所有触发器是否被响应的状态。请注意：在触发器中使用#IG可能导致无法预料的影响。 \n" \
-        "\x1b[1m相关\x1b[0m: T+, T-\n"
-        self._ignore = not self._ignore
-        if self._ignore:
-            self.info("所有触发器使能已全局禁用。")
-        else:
-            self.info("不再全局禁用所有触发器使能。")
+        "\x1b[1m命令\x1b[0m: #ignore|#ig, #T+, #T-\n" \
+        "      #ignore/#ig: 切换所有触发器是否被响应的状态。请注意：在触发器中使用#ig可能导致无法预料的影响。 \n" \
+        "      #T+/#T-: 使能/禁用指定名称组的所有对象，包括触发器、别名、GMCP触发、命令、定时器等。如： #t+ mygroup  \n"
+        "\x1b[1m相关\x1b[0m: Alias, Trigger, Timer\n"
+
+        cmd = code.code[1].lower()
+        if cmd in ("ig", "ignore"):
+            self._ignore = not self._ignore
+            if self._ignore:
+                self.info("所有触发器使能已全局禁用。")
+            else:
+                self.info("不再全局禁用所有触发器使能。")
+        elif cmd == "t+":
+            if code.length <= 2:
+                self.warning("#T+使能组使用不正确，正确使用示例: #t+ mygroup \n请使用#help ignore进行查询。")
+                return
+            
+            groupname = code.code[2]
+            cnts = self.enableGroup(groupname)
+            self.info(f"组 {groupname} 中的 {cnts[0]} 个别名，{cnts[1]} 个触发器，{cnts[2]} 个命令，{cnts[3]} 个定时器，{cnts[4]} 个GMCP触发器均已使能。")
+
+        elif cmd == "t-":
+            if code.length <= 2:
+                self.warning("#T-禁用组使用不正确，正确使用示例: #t+ mygroup \n请使用#help ignore进行查询。")
+                return
+            
+            groupname = code.code[2]
+            cnts = self.enableGroup(groupname, False)
+            self.info(f"组 {groupname} 中的 {cnts[0]} 个别名，{cnts[1]} 个触发器，{cnts[2]} 个命令，{cnts[3]} 个定时器，{cnts[4]} 个GMCP触发器均已禁用。")
 
     def handle_repeat(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \

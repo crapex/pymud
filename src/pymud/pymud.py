@@ -373,6 +373,7 @@ class PyMudApp:
             self.copy(raw = True)
 
     def delete_selection(self, event: KeyPressEvent):
+        event.key_sequence
         b = event.current_buffer
         if b.selection_state:
             event.key_processor.feed(KeyPress(Keys.Delete), first=True)
