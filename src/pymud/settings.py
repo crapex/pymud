@@ -50,26 +50,27 @@ class Settings:
 
     client = {
         "buffer_lines"      : 5000,                 # 保留缓冲行数
-        "status_width"      : 30,                   # 右侧状态栏的宽度
-        "status_height"     : 6,                    # 下侧状态栏的高度
+        
         "naws_width"        : 150,                  # 客户端NAWS宽度
         "naws_height"       : 40,                   # 客户端NAWS高度
         "newline"           : "\n",                 # 客户端换行符
         "tabstop"           : 4,                    # 制表符改成空格
+        "seperator"         : ";",                  # 多个命令分隔符（默认;）
+        "appcmdflag"        : "#",                  # app命令标记（默认#）
+        
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
         "auto_reconnect"    : False,                # 在会话异常断开之后，是否自动重连
         "var_autosave"      : True,                 # 断开时自动保存会话变量
         "var_autoload"      : True,                 # 初始化时自动加载会话变量
 
-        "seperator"         : ";",                  # 多个命令分隔符（默认;）
-        "appcmdflag"        : "#",                  # app命令标记（默认#）
         "remain_last_input" : False,
         "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
-        "auto_copy"         : False,                # 选中的内容自动复制到剪贴板
-        "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         
+        "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
+        "status_width"      : 30,                   # 右侧状态栏的宽度
+        "status_height"     : 6,                    # 下侧状态栏的高度
     }
     "客户端的默认配置信息"
 
@@ -102,26 +103,6 @@ class Settings:
         "input_prompt"      : '<prompt><b>命令:</b></prompt>',           # HTML格式，输入命令行的提示信息
     }
 
-    styles = {
-        "status"    : "reverse",
-        "shadow"    : "bg:#440044",
-
-        "prompt"    : "",
-
-        "selected"  : "bg:#555555 fg:#eeeeee bold",
-        "selected.connected"  : "bg:#555555 fg:#33ff33 bold",
-        "normal"    : "fg:#aaaaaa",
-        "normal.connected"    : "fg:#33aa33",
-
-        "skyblue"   : "fg:skyblue",
-        "yellow"    : "fg:yellow",
-        "red"       : "fg:red",
-        "green"     : "fg:green",
-        "blue"      : "fg:blue",
-        "link"      : "fg:green underline",
-        "title"     : "bold",
-        "value"     : "fg:green",
-    }
 
     keys = {
         
@@ -148,6 +129,27 @@ class Settings:
                 "evennia"   : ["name", "pass"],
             }
         }
+    }
+
+    styles = {
+        "status"    : "reverse",
+        "shadow"    : "bg:#440044",
+
+        "prompt"    : "",
+
+        "selected"  : "bg:#555555 fg:#eeeeee bold",
+        "selected.connected"  : "bg:#555555 fg:#33ff33 bold",
+        "normal"    : "fg:#aaaaaa",
+        "normal.connected"    : "fg:#33aa33",
+
+        "skyblue"   : "fg:skyblue",
+        "yellow"    : "fg:yellow",
+        "red"       : "fg:red",
+        "green"     : "fg:green",
+        "blue"      : "fg:blue",
+        "link"      : "fg:green underline",
+        "title"     : "bold",
+        "value"     : "fg:green",
     }
 
     INFO_STYLE     = "\x1b[32m"     #"\x1b[38;2;0;128;255m"

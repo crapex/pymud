@@ -474,10 +474,6 @@ class SessionBufferControl(BufferControl):
                         buffer.cursor_position = start
                         buffer.start_selection(selection_type=SelectionType.CHARACTERS)
                         buffer.cursor_position = end
-
-                    if Settings.client["auto_copy"]:
-                        data = buffer.copy_selection()
-                        get_app().clipboard.set_data(data)
                 else:
                     # Don't handle scroll events here.
                     return NotImplemented
