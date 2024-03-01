@@ -62,6 +62,8 @@ class PyMudApp:
                     Settings.server.update(cfg_data[key])
                 elif key == "styles":
                     Settings.styles.update(cfg_data[key])
+                elif key == "keys":
+                    Settings.keys.update(cfg_data[key])
 
         self._plugins  = DotDict()              # 增加 插件 字典
         self._globals  = DotDict()              # 增加所有session使用的全局变量
@@ -79,6 +81,12 @@ class PyMudApp:
         self.keybindings.add(Keys.Backspace)(self.delete_selection)
         self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
         self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
+
+        used_keys = [Keys.PageUp, Keys.PageDown, Keys.ControlZ, Keys.ControlC, Keys.ControlR, Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.ControlLeft, Keys.ControlRight, Keys.Backspace, Keys.Delete]
+
+        for key, binding in Settings.keys.items():
+            if (key not in used_keys) and binding and isinstance(binding, str):
+                self.keybindings.add(key, is_global = True)(self.custom_key_press)
 
         self.initUI()
 
@@ -344,6 +352,12 @@ class PyMudApp:
     def page_down(self, event: KeyPressEvent) -> None:
         lines = (self.app.output.get_size().rows - 5) // 2 - 1
         self.scroll(lines)
+
+    def custom_key_press(self, event: KeyPressEvent):
+        if (len(event.key_sequence) == 1) and (event.key_sequence[-1].key in Settings.keys.keys()):
+            cmd = Settings.keys[event.key_sequence[-1].key]
+            if self.current_session:
+                self.current_session.exec_command(cmd)
 
     def hide_history(self, event: KeyPressEvent) -> None:
         """关闭历史行显示"""

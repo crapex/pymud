@@ -623,6 +623,8 @@ class Session:
             if notAlias:
                 self.writeline(cmdtext)
 
+        self.clean_finished_tasks()
+
     async def exec_text_async(self, cmdtext: str):
         isNotCmd = True
         for command in self._commands.values():
@@ -690,8 +692,6 @@ class Session:
         else:
             cb = CodeBlock(line)
             await cb.async_execute(self)
-
-        self.clean_finished_tasks()
 
     def write_eof(self) -> None:
         self._transport.write_eof()

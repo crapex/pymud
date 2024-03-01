@@ -62,6 +62,7 @@ PYMUD 帮助文档
 
    installation
    ui
+   syscommand
    scripts
    advanced
    files/index
