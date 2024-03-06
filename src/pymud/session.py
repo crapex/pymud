@@ -1390,11 +1390,11 @@ class Session:
         "      不指定参数时, 列出当前会话中所有的GMCP触发器清单\n" \
         "      为一个参数时, 该参数应为某个GMCPTrigger的id, 可列出GMCPTrigger的详细信息\n" \
         "      为两个参数时, 可以进行如下操作\n" \
-        "         1. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
-        "         2. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为del时, 可从会话中删除该\n" \
+        "         1. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为on/off时, 可修改GMCPTrigger的使能状态\n" \
+        "         2. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为del时, 可从会话中删除该GMCPTrigger\n" \
         "      使用示例： \n " \
-        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n" \
-        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n" \
+        "         1. #gmcp GMCP.Move off    -> 禁用id为GMCP.Move的GMCP触发器 \n" \
+        "         2. #gmcp GMCP.Move del    -> 删除id为GMCP.Move的触发器 \n" \
         "\x1b[1m相关\x1b[0m: trigger, alias, variable, command, timer\n"
 
         self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
@@ -1568,9 +1568,9 @@ class Session:
     def handle_load(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #load {config}\n" \
         "      为当前session加载{config}指定的模块。当要加载多个模块时，使用空格或英文逗号隔开\n" \
-        "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n"
-        "      例, 加载名为pkuxkx的模块: #load pkuxkx \n"
-        "          加载名为pkuxkx和my的两个模块: #load pkuxkx my \n"
+        "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n" \
+        "      例, 加载名为pkuxkx的模块: #load pkuxkx \n" \
+        "          加载名为pkuxkx和my的两个模块: #load pkuxkx my \n" \
         "\x1b[1m相关\x1b[0m: unload, reload\n"
 
         modules = ",".join(code.code[2:]).split(",")
@@ -1607,11 +1607,11 @@ class Session:
     def handle_unload(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #unload {config}\n" \
         "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用空格或英文逗号隔开\n" \
-        "      卸载模块时，将调用模块Configuration类的__del__方法，请将模块清理工作代码形式卸载此方法中 \n"
-        "      当不指定模块名称时，将卸载所有模块，并执行reset \n"
-        "      例, 卸载所有模块，并清除所有相关信息： #unload   \n"
-        "          卸载名为pkuxkx的模块: #unload pkuxkx \n"
-        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx my \n"
+        "      卸载模块时，将调用模块Configuration类的unload方法，请将模块清理工作代码形式卸载此方法中 \n" \
+        "      当不指定模块名称时，将卸载所有模块，并执行reset \n" \
+        "      例, 卸载所有模块，并清除所有相关信息： #unload   \n" \
+        "          卸载名为pkuxkx的模块: #unload pkuxkx \n" \
+        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx my \n" \
         "\x1b[1m相关\x1b[0m: load, reload\n"
 
         args = code.code[2:]
@@ -1639,7 +1639,7 @@ class Session:
     def handle_reset(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #reset\n" \
         "      复位全部脚本。将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量等待. \n" \
-        "\x1b[1m相关\x1b[0m: load, unload, reload, modules\n"
+        "\x1b[1m相关\x1b[0m: load, unload, reload, modules\n" 
         self.reset()
 
     def handle_save(self, code: CodeLine = None, *args, **kwargs):
@@ -1712,7 +1712,7 @@ class Session:
     def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
         "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
-        "      当带参数时，列出指定名称插件的详细信息 \n"
+        "      当带参数时，列出指定名称插件的详细信息 \n" \
         "\x1b[1m相关\x1b[0m: modules, reload\n"
         
         args = code.code[2:]
@@ -1736,7 +1736,7 @@ class Session:
     def handle_replace(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
         "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
-        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行 \n"
+        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行 \n" \
         "\x1b[1m相关\x1b[0m: gag\n"
         
         new_text, new_code = code.expand(self, *args, **kwargs)
@@ -1747,14 +1747,14 @@ class Session:
     def handle_gag(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gag\n" \
         "      在主窗口中不显示当前行\n" \
-        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效 \n"
+        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效 \n" \
         "\x1b[1m相关\x1b[0m: replace\n"
         self.display_line = ""
 
     def handle_py(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
         "      直接执行后面跟着的python语句\n" \
-        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。\n"
+        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。\n" \
         "\x1b[1m相关\x1b[0m: 暂无\n"
 
         try:

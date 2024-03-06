@@ -63,6 +63,7 @@ PYMUD 帮助文档
    installation
    ui
    syscommand
+   hotkeys
    scripts
    advanced
    files/index

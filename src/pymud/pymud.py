@@ -350,11 +350,13 @@ class PyMudApp:
                 b.cursor_down(lines)
 
     def page_up(self, event: KeyPressEvent) -> None:
-        lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        #lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        lines = self.get_height() // 2 - 1
         self.scroll(-1 * lines)
 
     def page_down(self, event: KeyPressEvent) -> None:
-        lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        #lines = (self.app.output.get_size().rows - 5) // 2 - 1
+        lines = self.get_height() // 2 - 1
         self.scroll(lines)
 
     def custom_key_press(self, event: KeyPressEvent):
