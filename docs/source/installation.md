@@ -25,17 +25,25 @@ pip install --upgrade pymud==0.18.4post2
 pip install --upgrade pymud -i https://pypi.org/simple  
 ```
 
-## 1.3 运行
+## 1.3 初始化环境
 
-使用pip安装之后，可以通过Python的标准模块调用语法：python -m pymud调用模块执行。建议建立自己的脚本目录，并在该目录下执行。
+安装后，可以在命令行任意目录下使用python -m pymud init初始化默认环境（0.19.0版新增功能）。
+根据该初始化指引，会创建一个脚本目录，在该目录下生成包含主要配置的pymud.cfg配置文件，以及一个示例的examples.py脚本文件。
+初始化示例见下图：
+![init](_static/init.png)
+
+
+## 1.4 运行
+
+pymud 通过Python的标准模块调用语法：python -m pymud执行。建议建立自己的脚本目录，并在该目录下执行。
 
 ```
-mkdir d:\pkuxkx     # 建立自己的脚本目录
-cd d:\pkuxkx        # 进入自己的脚本目录
+cd d:\pkuxkx        # 进入自己的脚本目录(可由python -m pymud init创建)
 python -m pymud     # 运行PYMUD
 ```
 
-## 1.4 Windows下安装与启动示例
+
+## 1.5 Windows下安装与启动示例
 
 - 建议使用Windows Terminal作为shell([参考地址](https://learn.microsoft.com/zh-cn/windows/terminal/))，并使用PowerShell 7([参考地址](https://learn.microsoft.com/zh-cn/powershell/))作为启动终端
 - 使用pip安装pymud，shell中执行: pip install pymud
@@ -43,13 +51,13 @@ python -m pymud     # 运行PYMUD
 - 进入自己的脚本目录，cd pkuxkx
 - 启动运行pymud: python -m pymud
 
-### 1.4.1 安装步骤
+### 1.5.1 安装步骤
 ![install and run](_static/install_and_run.png)
 
-### 1.4.2 启动后的界面
+### 1.5.2 启动后的界面
 ![pymud-ui](_static/ui_empty.png)
 
-### 1.4.3 在Windows Terminal中增加快捷菜单
+### 1.5.3 在Windows Terminal中增加快捷菜单
 
 - 创建一个配置文件（比如从PowerShell 7复制一个）
 - 将名称改为你喜欢的名称，如PYMUD

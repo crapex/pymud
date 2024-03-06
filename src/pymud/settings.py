@@ -11,9 +11,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.19.0"
+    __version__   = "0.19.1"
     "APP 当前版本"
-    __release__   = "2024-02-25"
+    __release__   = "2024-03-06"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -105,18 +105,16 @@ class Settings:
 
 
     keys = {
-        "f1"    : "",
-        "f2"    : "",
-        "f3"    : "",
-        "f4"    : "",
+        "f3"    : "#ig",
+        "f4"    : "#clear",
         "f5"    : "",
         "f6"    : "",
         "f7"    : "",
         "f8"    : "",
         "f9"    : "",
         "f10"   : "",
-        "f11"   : "",
-        "f12"   : "",
+        "f11"   : "#close",
+        "f12"   : "#exit",
 
         "c-1"   : "",
         "c-2"   : "",

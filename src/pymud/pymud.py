@@ -1,4 +1,4 @@
-import asyncio, functools, re, logging, math, json, os
+import asyncio, functools, re, logging, math, json, os, webbrowser
 import importlib.util
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
@@ -65,6 +65,7 @@ class PyMudApp:
                 elif key == "keys":
                     Settings.keys.update(cfg_data[key])
 
+        self._mouse_support = True
         self._plugins  = DotDict()              # 增加 插件 字典
         self._globals  = DotDict()              # 增加所有session使用的全局变量
         self.sessions = {}
@@ -81,8 +82,10 @@ class PyMudApp:
         self.keybindings.add(Keys.Backspace)(self.delete_selection)
         self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
         self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
+        self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
+        self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
 
-        used_keys = [Keys.PageUp, Keys.PageDown, Keys.ControlZ, Keys.ControlC, Keys.ControlR, Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.ControlLeft, Keys.ControlRight, Keys.Backspace, Keys.Delete]
+        used_keys = [Keys.PageUp, Keys.PageDown, Keys.ControlZ, Keys.ControlC, Keys.ControlR, Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.ControlLeft, Keys.ControlRight, Keys.Backspace, Keys.Delete, Keys.F1, Keys.F2]
 
         for key, binding in Settings.keys.items():
             if (key not in used_keys) and binding and isinstance(binding, str):
@@ -95,6 +98,7 @@ class PyMudApp:
         try:
             clipboard = PyperclipClipboard()
             clipboard.set_text("test pyperclip")
+            clipboard.set_text("")
         except:
             clipboard = None
 
@@ -102,7 +106,7 @@ class PyMudApp:
             layout = Layout(self.root_container, focused_element=self.commandLine),
             enable_page_navigation_bindings=True,
             style=self.style,
-            mouse_support=True,
+            mouse_support=to_filter(self._mouse_support),
             full_screen=True,
             color_depth=ColorDepth.TRUE_COLOR,
             clipboard=clipboard,
@@ -404,6 +408,13 @@ class PyMudApp:
                     new_key = keys[idx-1]
                     self.activate_session(new_key)
 
+    def toggle_mousesupport(self, event: KeyPressEvent):
+        self._mouse_support = not self._mouse_support
+        if self._mouse_support:
+            self.app.renderer.output.enable_mouse_support()
+        else:
+            self.app.renderer.output.disable_mouse_support()
+
     def copy(self, raw = False):
         b = self.consoleView.buffer
         if b.selection_state:
@@ -651,10 +662,13 @@ class PyMudApp:
         ]
     
     def get_statusbar_right_text(self):
-        con_str, tri_status = "", ""
+        con_str, mouse_support, tri_status = "", "", ""
+        if not self._mouse_support:
+            mouse_support = "鼠标已禁用 "
+
         if self.current_session:
             if self.current_session._ignore:
-                tri_status = "全局禁用"
+                tri_status = "全局禁用 "
 
             if not self.current_session.connected:
                 con_str = "未连接"
@@ -678,7 +692,7 @@ class PyMudApp:
                 else:
                     con_str = "已连接：{:.0f}秒".format(sec)
 
-        return "{} {} {} {} ".format(tri_status, con_str, Settings.__appname__, Settings.__version__)
+        return "{}{}{} {} {} ".format(mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
     def get_statuswindow_text(self):
         text = ""
@@ -717,72 +731,6 @@ class PyMudApp:
         if nothandle:
             self.set_status("错误的#session命令")
 
-    def handle_help(self, *args):
-        "\x1b[1m命令\x1b[0m: #help {主题}\n" \
-        "      当不带参数时, #help会列出所有可用的帮助主题\n" \
-        "\x1b[1m相关\x1b[0m: session, exit\n"
-
-        if self.current_session:
-            if len(args) == 0:      # 不带参数，打印所有支持的help主题
-                self._print_all_help()
-            
-            elif len(args) >= 1:    # 大于1个参数，第1个为 topic， 其余参数丢弃
-                topic = args[0]
-
-                if topic in ("exit", "close", "session", "help"):
-                    command = getattr(self, f"handle_{topic}", None)
-                    docstring = command.__doc__
-                elif topic in self.current_session._commands_alias.keys():
-                    command = self.current_session._commands_alias[topic]
-                    docstring = self.current_session._cmds_handler[command].__doc__
-                elif topic in self.current_session._sys_commands:
-                    docstring = self.current_session._cmds_handler[topic].__doc__
-                else:
-                    docstring = f"未找到主题{topic}, 请确认输入是否正确."
-                
-                self.current_session.writetobuffer(docstring)
-
-        else:
-            self.act_about()
-    
-    def _print_all_help(self):
-        """打印所有可用的help主题, 并根据终端尺寸进行排版"""
-        width = self.get_width()
-
-        cmds = ["exit", "close", "session", "all", "help"]
-        cmds.extend(Session._commands_alias.keys())
-        cmds.extend(Session._sys_commands)
-        cmds.sort()
-
-        cmd_count = len(cmds)
-        left = (width - 8) // 2
-        right = width - 8 - left
-        self.current_session.writetobuffer("#"*left + "  HELP  " + "#"*right, newline = True)
-        cmd_per_line = (width - 2) // 20
-        lines = math.ceil(cmd_count / cmd_per_line)
-        left_space = (width - cmd_per_line * 20) // 2
-
-        for idx in range(0, lines):
-            start = idx * cmd_per_line
-            end   = (idx + 1) * cmd_per_line
-            if end > cmd_count: end = cmd_count
-            line_cmds = cmds[start:end]
-            self.current_session.writetobuffer(" " * left_space)
-            for cmd in line_cmds:
-                if cmd in Session._sys_commands:
-                    self.current_session.writetobuffer(f"{cmd.upper():<20}")
-                else:
-                    self.current_session.writetobuffer(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
-
-            self.current_session.writetobuffer("", newline = True)
-
-        self.current_session.writetobuffer("#"*width, newline = True)
-
-    def handle_exit(self, *args):
-        "\x1b[1m命令\x1b[0m: #exit \n" \
-        "      退出PYMUD程序\n" \
-        "\x1b[1m相关\x1b[0m: session\n"
-
     def enter_pressed(self, buffer: Buffer):
         cmd_line = buffer.text
         space_index = cmd_line.find(" ")
@@ -795,31 +743,15 @@ class PyMudApp:
             if self.current_session:
                 self.current_session.last_command = cmd_line
 
-        if cmd_line == "#exit":
-            self.act_exit()
-
-        elif cmd_line == "#close":
-            self.close_session()
-
-        elif cmd_line.startswith("#session"):
+        if cmd_line.startswith("#session"):
             cmd_tuple = cmd_line[1:].split()
             self.handle_session(*cmd_tuple[1:])
-
-        elif cmd_line.startswith("#help"):
-            #self.act_about()
-            cmd_tuple = cmd_line[1:].split()
-            self.handle_help(*cmd_tuple[1:])
-
-        elif cmd_line[1:] in self.sessions.keys():
-            self.activate_session(cmd_line[1:])
 
         else:
             if self.current_session:
                 if len(cmd_line) == 0:
                     self.current_session.writeline("")
                 else:
-                    # 增加额外处置：当创建代码块出现异常时，直接执行本行内容
-                    # 是为了解决find-draw里面原图的有关内容，会出现引号、括号不匹配情况
                     try:
                         cb = CodeBlock(cmd_line)
                         cb.execute(self.current_session)

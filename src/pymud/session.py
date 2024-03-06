@@ -13,6 +13,9 @@ class Session:
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
     _sys_commands = (
+        "help",
+        "exit",
+        "close",
         "connect",      # 连接到服务器
 
         "info",         # 输出蓝色info
@@ -75,8 +78,9 @@ class Session:
         "t-"  : "ignore",
     }
 
-    def __init__(self, app, name, host, port, encoding = None, after_connect = None, **kwargs):
-        self.pyversion = sysconfig.get_python_version()       
+    def __init__(self, app, name, host, port, encoding = None, after_connect = None, loop = None, **kwargs):
+        self.pyversion = sysconfig.get_python_version()   
+        self.loop = loop or asyncio.get_running_loop()    
         self.log = logging.getLogger("pymud.Session")
         self.application = app
         self.name = name
@@ -163,7 +167,7 @@ class Session:
         self._command_history = []
 
     def open(self):
-        asyncio.ensure_future(self.connect())
+        asyncio.ensure_future(self.connect(), loop = self.loop)
 
     async def connect(self):
         "异步非阻塞方式创建远程连接"
@@ -171,7 +175,7 @@ class Session:
             return MudClientProtocol(self, onDisconnected = self.onDisconnected)
         
         try:
-            self.loop = asyncio.get_running_loop()
+            #self.loop = asyncio.get_running_loop()
             transport, protocol = await self.loop.create_connection(_protocol_factory, self.host, self.port)
             
             self._transport = transport
@@ -187,12 +191,12 @@ class Session:
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
-                asyncio.ensure_future(self.reconnect())
+                asyncio.ensure_future(self.reconnect(), loop = self.loop)
 
     async def reconnect(self, timeout = 15):
         self.info(f"{timeout}秒之后将自动重新连接...")
         await asyncio.sleep(timeout)
-        await asyncio.create_task(self.connect())
+        await self.create_task(self.connect())
 
     def onConnected(self):
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -227,7 +231,7 @@ class Session:
             event_disconnected(self)
 
         if Settings.client["auto_reconnect"]:
-            asyncio.ensure_future(self.reconnect())
+            asyncio.ensure_future(self.reconnect(), loop = self.loop)
 
     @property
     def connected(self):
@@ -435,9 +439,11 @@ class Session:
 
     def create_task(self, coro, *args, name: str = None) -> asyncio.Task:
         if self.pyversion in ["3.7", "3.8", "3.9"]:
-            task = asyncio.create_task(coro)
+            task = self.loop.create_task(coro)
+            #task = asyncio.create_task(coro)
         else:
-            task = asyncio.create_task(coro, name = name)
+            task = self.loop.create_task(coro, name = name)
+            #task = asyncio.create_task(coro, name = name)
         self._tasks.append(task)
         return task
 
@@ -514,16 +520,19 @@ class Session:
             
             elif cmd in self.application.sessions.keys():
                 name = cmd
-                sess_cmd  = " ".join(cl.code[2:])
-                session = self.application.sessions[name]
-                if len(sess_cmd) == 0:
-                    session.writeline("")
-                else:
-                    try:
-                        cb = CodeBlock(sess_cmd)
-                        cb.execute(session, *args, **kwargs)
-                    except Exception as e:
-                        session.exec_command(sess_cmd)
+                if cl.length == 2:
+                    self.application.activate_session(name)
+                elif cl.length > 2:
+                    sess_cmd  = " ".join(cl.code[2:])
+                    session = self.application.sessions[name]
+                    if len(sess_cmd) == 0:
+                        session.writeline("")
+                    else:
+                        try:
+                            cb = CodeBlock(sess_cmd)
+                            cb.execute(session, *args, **kwargs)
+                        except Exception as e:
+                            session.exec_command(sess_cmd)
             
             else:
                 if cmd in self._commands_alias.keys():
@@ -954,9 +963,82 @@ class Session:
     ## ###################
     ## 各类命令处理函数
     ## ###################
- 
+    def _print_all_help(self):
+        """打印所有可用的help主题, 并根据终端尺寸进行排版"""
+        width = self.application.get_width()
+
+        #cmds = ["exit", "close", "session", "all", "help"]
+        cmds = ["session"]
+        cmds.extend(Session._commands_alias.keys())
+        cmds.extend(Session._sys_commands)
+        cmds = list(set(cmds))
+        cmds.sort()
+
+        cmd_count = len(cmds)
+        left = (width - 8) // 2
+        right = width - 8 - left
+        self.writetobuffer("#"*left + "  HELP  " + "#"*right, newline = True)
+        cmd_per_line = (width - 2) // 20
+        lines = math.ceil(cmd_count / cmd_per_line)
+        left_space = (width - cmd_per_line * 20) // 2
+
+        for idx in range(0, lines):
+            start = idx * cmd_per_line
+            end   = (idx + 1) * cmd_per_line
+            if end > cmd_count: end = cmd_count
+            line_cmds = cmds[start:end]
+            self.writetobuffer(" " * left_space)
+            for cmd in line_cmds:
+                if cmd in Session._commands_alias.keys():
+                    self.writetobuffer(f"\x1b[32m{cmd.upper():<20}\x1b[0m")
+                else:
+                    self.writetobuffer(f"{cmd.upper():<20}")
+
+            self.writetobuffer("", newline = True)
+
+        self.writetobuffer("#"*width, newline = True)
+
+    def handle_help(self, code: CodeLine = None, *args, **kwargs):
+        "\x1b[1m命令\x1b[0m: #help {主题}\n" \
+        "      当不带参数时, #help会列出所有可用的帮助主题\n" \
+        "\x1b[1m相关\x1b[0m: session, exit\n"
+
+        if code.length == 2:
+            self._print_all_help()
+
+        elif code.length == 3:
+            #topic = args[0]
+            topic = code.code[-1].lower()
+
+            if topic in ("session", ):
+                command = getattr(self.application, f"handle_{topic}", None)
+                docstring = command.__doc__
+            elif topic in self._commands_alias.keys():
+                command = self._commands_alias[topic]
+                docstring = self._cmds_handler[command].__doc__
+            elif topic in self._sys_commands:
+                docstring = self._cmds_handler[topic].__doc__
+            else:
+                docstring = f"未找到主题{topic}, 请确认输入是否正确.\n"
+            
+            self.writetobuffer(docstring)
+
+    def handle_exit(self, code: CodeLine = None, *args, **kwargs):
+        "\x1b[1m命令\x1b[0m: #exit \n" \
+        "      退出PYMUD程序\n" \
+        "\x1b[1m相关\x1b[0m: close\n"
+        self.application.act_exit()
+
+    def handle_close(self, code: CodeLine = None, *args, **kwargs):
+        "\x1b[1m命令\x1b[0m: #close \n" \
+        "      关闭当前会话。若当前会话处于连接状态，则会弹出对话框确认。\n" \
+        "\x1b[1m相关\x1b[0m: exit\n"
+        self.application.close_session()
+
     async def handle_wait(self, code: CodeLine = None, *args, **kwargs):
-        "异步等待，毫秒后结束"
+        "\x1b[1m命令\x1b[0m: #wait|#wa {ms} \n" \
+        "      异步延时等待ms时间，用于多个命令间的延时等待。\n" \
+        "\x1b[1m相关\x1b[0m: gag\n"
         wait_time = code.code[2]
         if wait_time.isnumeric():
             msec = float(wait_time) / 1000.0
@@ -1054,7 +1136,7 @@ class Session:
     def handle_global(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #global\n" \
         "      不带参数时，列出程序当前所有全局变量清单\n" \
-        "      带1个参数时，列出程序当前名称我为该参数的全局变量值\n" \
+        "      带1个参数时，列出程序当前名称为该参数的全局变量值\n" \
         "      带2个参数时，设置名称为该全局变量的变量值\n" \
         "\x1b[1m相关\x1b[0m: variable\n"
         
@@ -1305,9 +1387,15 @@ class Session:
 
     def handle_gmcp(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
-        "      指定key时，显示由GMCP收到的key信息\n" \
-        "      不指定key时，显示所有GMCP收到的信息\n" \
-        "\x1b[1m相关\x1b[0m: Trigger\n"
+        "      不指定参数时, 列出当前会话中所有的GMCP触发器清单\n" \
+        "      为一个参数时, 该参数应为某个GMCPTrigger的id, 可列出GMCPTrigger的详细信息\n" \
+        "      为两个参数时, 可以进行如下操作\n" \
+        "         1. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
+        "         2. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为del时, 可从会话中删除该\n" \
+        "      使用示例： \n " \
+        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n" \
+        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n" \
+        "\x1b[1m相关\x1b[0m: trigger, alias, variable, command, timer\n"
 
         self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
 
@@ -1648,7 +1736,7 @@ class Session:
     def handle_replace(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
         "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
-        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行"
+        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行 \n"
         "\x1b[1m相关\x1b[0m: gag\n"
         
         new_text, new_code = code.expand(self, *args, **kwargs)
@@ -1659,14 +1747,14 @@ class Session:
     def handle_gag(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #gag\n" \
         "      在主窗口中不显示当前行\n" \
-        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效"
+        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效 \n"
         "\x1b[1m相关\x1b[0m: replace\n"
         self.display_line = ""
 
     def handle_py(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
         "      直接执行后面跟着的python语句\n" \
-        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。"
+        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。\n"
         "\x1b[1m相关\x1b[0m: 暂无\n"
 
         try:

@@ -31,6 +31,12 @@ CFG_TEMPLATE = {
                 "display_title" : ["yourid", "yourpassword", ""],
             }
         }
+    },
+    "keys" : {
+        "f3"    : "#ig",
+        "f4"    : "#clear",
+        "f11"   : "#close",
+        "f12"   : "#exit",
     }
 }
 
