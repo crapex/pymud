@@ -44,7 +44,7 @@
 
 ### F1
 
-帮助命令。将浏览器导航到PyMUD的帮助文档站点: https://pymud.readthedocs.io/
+帮助命令。将浏览器导航到PyMUD的帮助文档站点: <https://pymud.readthedocs.io/>
 
 ### F2
 
@@ -61,21 +61,21 @@
 
 ### F3
 
-相当于命令[#ignore](syscommand#ignore)
+相当于命令[#ignore](syscommand.html#ignore)
 
 ### F4
 
-相当于命令[#clear](syscommand#clear)
+相当于命令[#clear](syscommand.html#clear)
 
 ### F11
 
-相当于命令[#close](syscommand#close)
+相当于命令[#close](syscommand.html#close)
 
 **注意**： Windows Terminal下，F11键是切换全屏/窗口状态，因此PyMUD快捷键不生效。
 
 ### F12
 
-相当于命令[#exit](syscommand#exit)
+相当于命令[#exit](syscommand.html#exit)
 
 
 

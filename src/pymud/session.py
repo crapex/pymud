@@ -9,6 +9,9 @@ from .settings import Settings
 
 
 class Session:
+    """
+    会话管理主对象，每一个角色的所有处理实现均在该类中实现。
+    """
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 

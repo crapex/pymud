@@ -2,9 +2,12 @@
 #
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
-import recommonmark, sphinx_rtd_theme
+import recommonmark, sphinx_rtd_theme, os, sys
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
+
+HERE = os.path.dirname(__file__)
+sys.path.insert(0, os.path.abspath(r'..\..\src'))
 
 source_parsers = {
     '.md': CommonMarkParser,
@@ -22,7 +25,7 @@ release = '0.19.0'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['recommonmark', 'sphinx_markdown_tables']
+extensions = ['recommonmark', 'sphinx_markdown_tables', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'sphinx.ext.viewcode']
 
 templates_path = ['_templates']
 exclude_patterns = []

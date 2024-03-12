@@ -5,12 +5,13 @@
 .. toctree::
    :maxdepth: 2
 
+   objects
+   session
+   pymud
+   extras
+   dialogs
+   protocol
    settings.py
-   pymud.py
-   extras.py
-   dialogs.py
-   protocol.py
-   session.py
-   objects.py
+
 
    

@@ -49,6 +49,9 @@ class STATUS_DISPLAY(Enum):
     FLOAT = 3
 
 class PyMudApp:
+    """
+    PYMUD程序管理主对象，对窗体、操作及所有会话进行管理。
+    """
     def __init__(self, cfg_data = None) -> None:
         if cfg_data and isinstance(cfg_data, dict):
             for key in cfg_data.keys():
