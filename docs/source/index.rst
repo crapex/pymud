@@ -10,7 +10,7 @@ PYMUD 帮助文档
 有关链接
 ^^^^^^^^^
 
-- QQ交流群: 554672580
+- QQ交流群: `554672580 <http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=xRiuBmhdZ5EpYd6djSY4xTdi6fdo2PDk&authKey=Rv0zHUgcMoMJ7TT%2F4Uj%2BYpohBawOk%2BsZstZkWzyo8kKCwXuRYgSyyAUoMzTPlGS7&noverify=0&group_code=554672580>`_
 - GitHub地址: https://github.com/crapex/pymud
 - PyPi地址: https://pypi.org/project/pymud
 - 北侠wiki地址: https://www.pkuxkx.net/wiki/tools/pymud
