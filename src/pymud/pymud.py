@@ -711,13 +711,44 @@ class PyMudApp:
         self.app.invalidate()
 
     def handle_session(self, *args):
-        "\x1b[1m命令\x1b[0m: #session {名称} {宿主机} {端口} {编码}\n" \
-        "      创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} \n" \
-        "      如， #session newstart mud.pkuxkx.net 8080 GBK \n" \
-        "      当不指定编码格式时, 默认使用utf-8编码 \n" \
-        "      如， #session newstart mud.pkuxkx.net 8081 \n" \
-        "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
-        "\x1b[1m相关\x1b[0m: help, exit\n"
+        '''
+        嵌入命令 `#session` 的执行函数，创建一个远程连接会话
+
+        使用:
+        
+        - `#session {Name} {Host} {Port} {Encoding}`
+        - 当不指定 `Encoding`: 时, 默认使用utf-8编码
+        - 可以直接使用#{名称}将指定会话切换为当前会话
+
+        参数:
+        
+        :name: 会话名称
+        :host: 服务器域名或IP地址
+        :port: 端口号
+        :encoding: 编码格式，不指定时默认为 utf8
+    
+        示例:
+        
+        - 以GBK编码连接到mud.pkuxkx.net的8080端口，会话名为newstart
+            ``#session newstart mud.pkuxkx.net 8080 GBK``
+
+        - `#session newstart mud.pkuxkx.net 8081`: 以UTF8编码连接到mud.pkuxkx.net的8081端口，会话名为newstart
+        - `#newstart`: 将当前会话切换到会话 newstart
+
+        相关命令:
+        
+        - #help
+        - #exit
+
+        '''
+
+        # "\x1b[1m命令\x1b[0m: #session {名称} {宿主机} {端口} {编码}\n" \
+        # "      创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} \n" \
+        # "      如， #session newstart mud.pkuxkx.net 8080 GBK \n" \
+        # "      当不指定编码格式时, 默认使用utf-8编码 \n" \
+        # "      如， #session newstart mud.pkuxkx.net 8081 \n" \
+        # "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
+        # "\x1b[1m相关\x1b[0m: help, exit\n"
 
         nothandle = True
 
