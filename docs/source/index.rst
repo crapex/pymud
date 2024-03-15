@@ -66,11 +66,12 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.19.1
 
    installation
    ui
+   settings
    syscommand
    hotkeys
    scripts
    advanced
-   files/index
+   references
    updatehistory
    
 

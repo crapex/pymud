@@ -1002,9 +1002,30 @@ class Session:
         self.writetobuffer("#"*width, newline = True)
 
     def handle_help(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #help {主题}\n" \
-        "      当不带参数时, #help会列出所有可用的帮助主题\n" \
-        "\x1b[1m相关\x1b[0m: session, exit\n"
+        '''
+        嵌入命令 #help 的执行函数，在当前会话中现实帮助信息。
+        当不带参数时, #help会列出所有可用的帮助主题。
+        带参数显示该系统命令的帮助。参数中不需要#号。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #help {topic}
+            - 当不指定 topic: 列出所有可用的帮助主题。
+            - 当指定 topic: 列出指定topic的帮助内容。该帮助类容由调用的函数的docstring确定。
+
+        参数:
+            :topic: 主题，支持所有的系统命令。在键入主题时，请忽略命令中的#号
+    
+        示例:
+            ``#help`` 
+                在当前会话中显示所有帮助主题。其中，绿色显示的命令为其他命令的别名。
+                注意，在没有当前会话时，命令不生效。
+            ``#help help`` 
+                显示 #help 有关的帮助（即本帮助）
+            ``#help session`` 
+                显示 #session 命令有关的帮助
+
+        '''
 
         if code.length == 2:
             self._print_all_help()
@@ -1022,9 +1043,9 @@ class Session:
             elif topic in self._sys_commands:
                 docstring = self._cmds_handler[topic].__doc__
             else:
-                docstring = f"未找到主题{topic}, 请确认输入是否正确.\n"
+                docstring = f"未找到主题{topic}, 请确认输入是否正确."
             
-            self.writetobuffer(docstring)
+            self.writetobuffer(docstring, True)
 
     def handle_exit(self, code: CodeLine = None, *args, **kwargs):
         "\x1b[1m命令\x1b[0m: #exit \n" \

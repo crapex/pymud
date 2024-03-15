@@ -2,7 +2,7 @@
 #
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
-import sphinx_rtd_theme, sphinx_sizzle_theme
+import sphinx_rtd_theme
 import recommonmark, os, sys
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
@@ -38,4 +38,4 @@ language = 'zh_CN'
 # sphinx_bootstrap_theme  sphinx_rtd_theme sphinx_nefertiti
 
 html_theme = 'sphinx_rtd_theme'
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path(), sphinx_sizzle_theme.HERE]
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]

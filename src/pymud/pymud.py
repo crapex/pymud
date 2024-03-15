@@ -712,43 +712,37 @@ class PyMudApp:
 
     def handle_session(self, *args):
         '''
-        嵌入命令 `#session` 的执行函数，创建一个远程连接会话
+        嵌入命令 #session 的执行函数，创建一个远程连接会话。
+        该函数不应该在代码中直接调用。
 
         使用:
-        
-        - `#session {Name} {Host} {Port} {Encoding}`
-        - 当不指定 `Encoding`: 时, 默认使用utf-8编码
-        - 可以直接使用#{名称}将指定会话切换为当前会话
+            - #session {Name} {Host} {Port} {Encoding}
+            - 当不指定 Encoding: 时, 默认使用utf-8编码
+            - 可以直接使用 #{名称} 切换会话和操作会话命令
 
         参数:
-        
-        :name: 会话名称
-        :host: 服务器域名或IP地址
-        :port: 端口号
-        :encoding: 编码格式，不指定时默认为 utf8
+            :Name: 会话名称
+            :Host: 服务器域名或IP地址
+            :Port: 端口号
+            :Encoding: 编码格式，不指定时默认为 utf8
     
         示例:
-        
-        - 以GBK编码连接到mud.pkuxkx.net的8080端口，会话名为newstart
-            ``#session newstart mud.pkuxkx.net 8080 GBK``
-
-        - `#session newstart mud.pkuxkx.net 8081`: 以UTF8编码连接到mud.pkuxkx.net的8081端口，会话名为newstart
-        - `#newstart`: 将当前会话切换到会话 newstart
+            ``#session {名称} {宿主机} {端口} {编码}`` 
+                创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} 。其中，编码可以省略，此时使用Settings.server["default_encoding"]的值，默认为utf8
+            ``#session newstart mud.pkuxkx.net 8080 GBK`` 
+                使用GBK编码连接到mud.pkuxkx.net的8080端口，并将该会话命名为newstart
+            ``#session newstart mud.pkuxkx.net 8081`` 
+                使用UTF8编码连接到mud.pkuxkx.net的8081端口，并将该会话命名为newstart
+            ``#newstart`` 
+                将名称为newstart的会话切换为当前会话
+            ``#newstart give miui gold`` 
+                使名称为newstart的会话执行give miui gold指令，但不切换到该会话
 
         相关命令:
-        
-        - #help
-        - #exit
+            - #close
+            - #exit
 
         '''
-
-        # "\x1b[1m命令\x1b[0m: #session {名称} {宿主机} {端口} {编码}\n" \
-        # "      创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} \n" \
-        # "      如， #session newstart mud.pkuxkx.net 8080 GBK \n" \
-        # "      当不指定编码格式时, 默认使用utf-8编码 \n" \
-        # "      如， #session newstart mud.pkuxkx.net 8081 \n" \
-        # "      可以直接使用#{名称}将指定会话切换为当前会话，如#newstart \n" \
-        # "\x1b[1m相关\x1b[0m: help, exit\n"
 
         nothandle = True
 
