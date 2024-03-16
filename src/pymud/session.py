@@ -671,7 +671,7 @@ class Session:
         """
 
         ## 以下为函数执行本体
-        if not "#" in line:
+        if (not "#" in line) and (not "@" in line) and (not "%" in line):
             cmds = line.split(self.seperator)
             for cmd in cmds:
                 self.exec_text(cmd)
@@ -695,7 +695,7 @@ class Session:
         """
 
         ## 以下为函数执行本体
-        if not "#" in line:
+        if (not "#" in line) and (not "@" in line) and (not "%" in line):
             cmds = line.split(self.seperator)
             for cmd in cmds:
                 await self.exec_text_async(cmd)

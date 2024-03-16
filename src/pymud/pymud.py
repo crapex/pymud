@@ -924,7 +924,6 @@ class PyMudApp:
         
 
 def main(cfg_data = None):
-    logging.disable()
     app = PyMudApp(cfg_data)
     app.run()
 

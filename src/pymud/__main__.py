@@ -88,18 +88,7 @@ if __name__ == "__main__":
                             format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                             datefmt='%m-%d %H:%M',
                             filename='myapp.log',
-                            filemode='a+')
-        # # define a Handler which writes INFO messages or higher to the sys.stderr
-        # # 高于loglevel的在控制台打印
-        # console = logging.StreamHandler()
-        # console.setLevel(logging.INFO)
-        # # set a format which is simpler for console use
-        # formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-        # # tell the handler to use this format
-        # console.setFormatter(formatter)
-        # # add the handler to the root logger
-        # logging.getLogger('').addHandler(console)
-        print("将以带log方式启动.")
+                            filemode='a')
 
     cfg = "pymud.cfg"
     if os.path.exists(cfg):
