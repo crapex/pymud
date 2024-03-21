@@ -51,8 +51,28 @@ class STATUS_DISPLAY(Enum):
 class PyMudApp:
     """
     PYMUD程序管理主对象，对窗体、操作及所有会话进行管理。
+
+    PyMudApp对象不需要手动创建，在命令行中执行 ``python -m pymud`` 时会自动创建对象实例。
+
+    构造函数参数： 
+        - ``cfg_data``: 替代配置数据，由本地pymud.cfg文件读取，用于覆盖settings.py中的默认Settings数据
+
+    可替代字典: 含义请查阅 `应用配置及本地化 <settings.html>`_
+        - sessions: 用于创建菜单栏会话的字典
+        - client: 用于配置客户端属性的字典
+        - text: 用于各默认显示文字内容的字典
+        - server: 用于服务器选项的配置字典
+        - styles: 用于显示样式的定义字典
+        - keys: 用于快捷键定义的字典
+
+    *替代配置按不同的dict使用dict.update进行更新覆盖，因此可以仅指定需替代的部分。*
     """
+
     def __init__(self, cfg_data = None) -> None:
+        """
+        构造PyMudApp对象实例，并加载替代配置。
+        """
+
         if cfg_data and isinstance(cfg_data, dict):
             for key in cfg_data.keys():
                 if key == "sessions":
@@ -286,6 +306,11 @@ class PyMudApp:
                     children=[
                         MenuItem(Settings.text["about"], handler = self.act_about)
                     ]
+                ),
+
+                MenuItem(
+                    "",    # 增加一个空名称MenuItem，阻止右侧空白栏点击响应
+                    children=[]
                 )
             ],
             floats=[

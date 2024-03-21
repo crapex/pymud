@@ -61,6 +61,7 @@ class Settings:
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
         "auto_reconnect"    : False,                # 在会话异常断开之后，是否自动重连
+        "reconnect_wait"    : 15,                   # 自动重连等待的时间（秒数）
         "var_autosave"      : True,                 # 断开时自动保存会话变量
         "var_autoload"      : True,                 # 初始化时自动加载会话变量
 

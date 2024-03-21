@@ -21,11 +21,11 @@
     #alias命令用于操作别名。#ali是该命令的简写方式。该命令可以不带参数、带一个参数或者两个参数。用法与示例如下。
 
     - ``#ali``               : 无参数, 打印列出当前会话中所有的别名清单
-    - ``#ali my_ali``        : 一个参数, 列出id为my_ali的Alias对象的详细信息
-    - ``#ali my_ali on``     : 两个参数，启用id为my_ali的Alias对象（enabled = True）
-    - ``#ali my_ali off``    : 两个参数， 禁用id为my_ali的Alias对象（enabled = False）
-    - ``#ali my_ali del``    : 两个参数，删除id为my_ali的Alias对象
-    - ``#ali {^gp\s(.+)$} {get %1 from corpse}``   : 两个参数，新增创建一个Alias对象。使用时， ``gp gold = get gold from corpse``
+    - ``#ali my_ali``        : 一个参数, 列出id为my_ali的 :class:`pymud.Alias` 对象的详细信息
+    - ``#ali my_ali on``     : 两个参数，启用id为my_ali的 :class:`pymud.Alias` 对象（enabled = True）
+    - ``#ali my_ali off``    : 两个参数， 禁用id为my_ali的 :class:`pymud.Alias` 对象（enabled = False）
+    - ``#ali my_ali del``    : 两个参数，删除id为my_ali的 :class:`pymud.Alias` 对象
+    - ``#ali {^gp\s(.+)$} {get %1 from corpse}``   : 两个参数，新增创建一个 :class:`pymud.Alias` 对象。使用时， ``gp gold = get gold from corpse``
 
 ``#all``
 ----------------
@@ -58,10 +58,10 @@
     #command命令用于操作命令。#cmd是该命令的简写方式。该命令可以不带参数、带一个参数或者两个参数。用法与示例如下。
 
     - ``#cmd`` : 无参数, 打印列出当前会话中所有的命令清单
-    - ``#cmd my_cmd`` : 一个参数, 列出id为my_cmd的Command对象的详细信息
-    - ``#cmd my_cmd on`` : 两个参数，启用id为my_cmd的Command对象（enabled = True）
-    - ``#cmd my_cmd off`` : 两个参数， 禁用id为my_cmd的Command对象（enabled = False）
-    - ``#cmd my_cmd del`` : 两个参数，删除id为my_cmd的Command对象
+    - ``#cmd my_cmd`` : 一个参数, 列出id为my_cmd的 :class:`pymud.Command` 对象的详细信息
+    - ``#cmd my_cmd on`` : 两个参数，启用id为my_cmd的 :class:`pymud.Command` 对象（enabled = True）
+    - ``#cmd my_cmd off`` : 两个参数， 禁用id为my_cmd的 :class:`pymud.Command` 对象（enabled = False）
+    - ``#cmd my_cmd del`` : 两个参数，删除id为my_cmd的 :class:`pymud.Command` 对象
 
 ``#con``
 ----------------
@@ -226,7 +226,7 @@
 
     修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符。
 
-    *注意：应在触发器的同步处理中中使用。多行触发器时，替代只替代最后一行。*
+    *注意：应在触发器的同步处理中使用。多行触发器时，替代只替代最后一行。*
 
     - ``#replace %raw - 捕获到此行`` : 将捕获的当前行信息后面增加标注
 

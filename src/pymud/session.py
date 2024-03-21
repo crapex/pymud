@@ -194,7 +194,8 @@ class Session:
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
-                asyncio.ensure_future(self.reconnect(), loop = self.loop)
+                wait = Settings.client.get("reconnect_wait", 15)
+                asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
 
     async def reconnect(self, timeout = 15):
         self.info(f"{timeout}秒之后将自动重新连接...")
@@ -234,7 +235,8 @@ class Session:
             event_disconnected(self)
 
         if Settings.client["auto_reconnect"]:
-            asyncio.ensure_future(self.reconnect(), loop = self.loop)
+            wait = Settings.client.get("reconnect_wait", 15)
+            asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
 
     @property
     def connected(self):
@@ -1017,14 +1019,13 @@ class Session:
             :topic: 主题，支持所有的系统命令。在键入主题时，请忽略命令中的#号
     
         示例:
-            ``#help`` 
+            - ``#help`` 
                 在当前会话中显示所有帮助主题。其中，绿色显示的命令为其他命令的别名。
                 注意，在没有当前会话时，命令不生效。
-            ``#help help`` 
+            - ``#help help`` 
                 显示 #help 有关的帮助（即本帮助）
-            ``#help session`` 
+            - ``#help session`` 
                 显示 #session 命令有关的帮助
-
         '''
 
         if code.length == 2:
@@ -1048,30 +1049,67 @@ class Session:
             self.writetobuffer(docstring, True)
 
     def handle_exit(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #exit \n" \
-        "      退出PYMUD程序\n" \
-        "\x1b[1m相关\x1b[0m: close\n"
+        '''
+        嵌入命令 #exit 的执行函数，退出 `PyMudApp` 应用。
+        该函数不应该在代码中直接调用。
+
+        *注：当应用中存在还处于连接状态的会话时，#exit退出应用会逐个弹出对话框确认这些会话是否关闭*
+
+        相关命令:
+            - #close
+            - #session
+        '''
+
         self.application.act_exit()
 
     def handle_close(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #close \n" \
-        "      关闭当前会话。若当前会话处于连接状态，则会弹出对话框确认。\n" \
-        "\x1b[1m相关\x1b[0m: exit\n"
+        '''
+        嵌入命令 #close 的执行函数，关闭当前会话，并将当前会话从 `PyMudApp` 的会话列表中移除。
+        该函数不应该在代码中直接调用。
+
+        *注：当前会话处于连接状态时，#close关闭会话会弹出对话框确认是否关闭*
+        
+        相关命令:
+            - #exit
+            - #session
+        '''
+
         self.application.close_session()
 
     async def handle_wait(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #wait|#wa {ms} \n" \
-        "      异步延时等待ms时间，用于多个命令间的延时等待。\n" \
-        "\x1b[1m相关\x1b[0m: gag\n"
+        '''
+        嵌入命令 #wait / #wa 的执行函数，异步延时等待指定时间，用于多个命令间的延时等待。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #wa {ms}
+        
+        参数:
+            - ms: 等待时间（毫秒）
+
+        示例:
+            - ``eat liang;#wa 300;drink jiudai``
+                吃干粮，延时300毫秒后，执行喝酒袋
+        
+        相关命令:
+            - #gag
+            - #replace
+        '''
+        
         wait_time = code.code[2]
         if wait_time.isnumeric():
             msec = float(wait_time) / 1000.0
             await asyncio.sleep(msec)
 
     def handle_connect(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #connect|#con\n" \
-        "      连接到远程服务器（仅当远程服务器未连接时有效）\n" \
-        "\x1b[1m相关\x1b[0m: disconnect\n"
+        '''
+        嵌入命令 #connect / #con 的执行函数，连接到远程服务器（仅当远程服务器未连接时有效）。
+        该函数不应该在代码中直接调用。
+        
+        相关命令:
+            - #close
+            - #exit
+        '''
 
         if not self.connected:
             self.open()
@@ -1091,12 +1129,24 @@ class Session:
             self.info("已经与服务器连接了 {}".format(time_msg))
 
     def handle_variable(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #variable|#var\n" \
-        "      不带参数时，列出当前会话中所有的变量清单\n" \
-        "      带1个参数时，列出当前会话中名称为该参数的变量值\n" \
-        "      带2个参数时，设置名称为该参数的变量值\n" \
-        "\x1b[1m相关\x1b[0m: alias, trigger, command\n"
-        
+        '''
+        嵌入命令 #variable / #var 的执行函数，操作会话变量。
+        该命令可以不带参数、带一个参数、两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #var: 列出本会话所有变量
+            - #var {name}: 列出本会话中名称为{name}的变量的值
+            - #var {name} {value}: 将本会话中名称为{name}的变量设置值为{value}，若不存在则创建
+
+        参数:
+            :name: 变量名称
+            :value: 变量值。注意: 该值赋值后为str类型!
+
+        相关命令:
+            - #global
+        '''
+
         args = code.code[2:]
 
         if len(args) == 0:
@@ -1158,12 +1208,24 @@ class Session:
             self.setVariable(args[0], args[1])
 
     def handle_global(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #global\n" \
-        "      不带参数时，列出程序当前所有全局变量清单\n" \
-        "      带1个参数时，列出程序当前名称为该参数的全局变量值\n" \
-        "      带2个参数时，设置名称为该全局变量的变量值\n" \
-        "\x1b[1m相关\x1b[0m: variable\n"
-        
+        '''
+        嵌入命令 #global 的执行函数，操作全局变量（跨会话共享）。
+        该命令可以不带参数、带一个参数、两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #global: 列出所有全局变量
+            - #global {name}: 列出中名称为{name}的全局变量的值
+            - #global {name} {value}: 将名称为{name}的全局变量设置值为{value}，若不存在则创建
+
+        参数:
+            :name: 变量名称
+            :value: 变量值。注意: 该值赋值后为str类型! 
+
+        相关命令:
+            - #variable
+        '''
+
         args = code.code[2:]
 
         if len(args) == 0:
@@ -1283,66 +1345,153 @@ class Session:
                             self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
 
     def handle_alias(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #alias|#ali\n" \
-        "      不指定参数时, 列出当前会话中所有的别名清单\n" \
-        "      为一个参数时, 该参数应为某个Alias的id, 可列出Alias的详细信息\n" \
-        "      为两个参数时, 可以进行如下操作\n" \
-        "         1. 当第一个参数为一个已存在Alias的id, 第二个为on/off时, 可修改Alias的使能状态\n" \
-        "         2. 当第一个参数为一个已存在Alias的id, 第二个为del时, 可从会话中删除该Alias\n" \
-        "         3. 当第一个参数不存在于Alias的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleAlias \n" \
-        "      使用示例： \n " \
-        "         1. #ali ali_001 off    -> 禁用id为ali_001的别名 \n" \
-        "         2. #ali ali_001 del    -> 删除id为ali_001的别名 \n" \
-        "         3. #ali {^gp\s(.+)$} {get %1 from corpse}   -> 创建一个SimpleAlias别名，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n" \
-        "\x1b[1m相关\x1b[0m: variable, trigger, command, timer\n"
-        
+        '''
+        嵌入命令 #alias / #ali 的执行函数，操作别名。该命令可以不带参数、带一个参数或者两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #ali: 显示本会话所有别名
+            - #ali {ali_id}: 显示本会话中id为{ali_id}的别名信息
+            - #ali {ali_id} {on/off/del}: 使能/禁用/删除本会话中id为{ali_id}的别名
+            - #ali {pattern} {code}: 创建一个新别名，匹配为{pattern}，匹配时执行{code}
+            - 别名的code中，可以使用%line代表行，%1~%9代表捕获信息
+
+        参数:
+            :ali_id:  别名Alias的id
+            :on:      使能
+            :off:     禁用
+            :del:     删除
+            :pattern: 新别名的匹配模式，应为合法的Python 正则表达式
+            :code:    别名匹配成功后执行的内容
+    
+        示例:
+            - ``#ali``               : 无参数, 打印列出当前会话中所有的别名清单
+            - ``#ali my_ali``        : 一个参数, 列出id为my_ali的Alias对象的详细信息
+            - ``#ali my_ali on``     : 两个参数，启用id为my_ali的Alias对象（enabled = True）
+            - ``#ali my_ali off``    : 两个参数， 禁用id为my_ali的Alias对象（enabled = False）
+            - ``#ali my_ali del``    : 两个参数，删除id为my_ali的Alias对象
+            - ``#ali {^gp\s(.+)$} {get %1 from corpse}``   : 两个参数，新增创建一个Alias对象。使用时， ``gp gold = get gold from corpse``
+
+        相关命令:
+            - #trigger
+            - #timer
+            - #command
+        '''
+
         self._handle_objs("Alias", self._aliases, *code.code[2:])
 
     def handle_timer(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #timer|#ti\n" \
-        "      不指定参数时, 列出当前会话中所有的定时器清单\n" \
-        "      为一个参数时, 该参数应为某个Timer的id, 可列出Timer的详细信息\n" \
-        "      为两个参数时, 可以进行如下操作\n" \
-        "         1. 当第一个参数为一个已存在Timer的id, 第二个为on/off时, 可修改Timer的使能状态\n" \
-        "         2. 当第一个参数为一个已存在Timer的id, 第二个为del时, 可从会话中删除该Timer\n" \
-        "         3. 当第一个参数为数字时，第一个参数被识别为定时器时间，第二个参数识别为执行的代码, 此时创建一个SimpleTimer \n" \
-        "      使用示例： \n " \
-        "         1. #ti ti_001 off    -> 禁用id为ti_001的定时器 \n" \
-        "         2. #ti ti_001 del    -> 删除id为ti_001的定时器 \n" \
-        "         3. #ti 100 {drink jiudai;#wa 200;eat liang}   -> 创建一个每隔100s执行一次的定时器，执行内容使用{}括起来 \n" \
-        "\x1b[1m相关\x1b[0m: variable, alias, trigger, command\n"
+        '''
+        嵌入命令 #timer / #ti 的执行函数，操作定时器。该命令可以不带参数、带一个参数或者两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #ti: 显示本会话所有定时器
+            - #ti {ti_id}: 显示本会话中id为{ti_id}的定时器信息
+            - #ti {ti_id} {on/off/del}: 使能/禁用/删除本会话中id为{ti_id}的定时器
+            - #ti {second} {code}: 创建一个新定时器，定时间隔为{second}秒，定时器到时间执行{code}
+            - PyMUD支持同时任意多个定时器。
+
+        参数:
+            :ti_id:   定时器Timer的id
+            :on:      使能
+            :off:     禁用
+            :del:     删除
+            :second:  新定时器的定时时间，单位为秒
+            :code:    定时器到时间后执行的内容
+    
+        示例:
+            - ``#ti``: 无参数, 打印列出当前会话中所有的定时器清单
+            - ``#ti my_timer``: 一个参数, 列出id为my_timer的Timer对象的详细信息
+            - ``#ti my_timer on``: 两个参数，启用id为my_timer的Timer对象（enabled = True）
+            - ``#ti my_timer off``: 两个参数， 禁用id为my_timer的Timer对象（enabled = False）
+            - ``#ti my_timer del``: 两个参数，删除id为my_timer的Timer对象
+            - ``#ti 100 {drink jiudai;#wa 200;eat liang}``: 两个参数，新增创建一个Timer对象。每隔100s，自动执行一次喝酒袋吃干粮。
+
+        相关命令:
+            - #alias
+            - #trigger
+            - #command
+        '''
 
         self._handle_objs("Timer", self._timers, *code.code[2:])
      
     def handle_command(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #command|#cmd\n" \
-        "      不指定参数时, 列出当前会话中所有的命令清单\n" \
-        "      为一个参数时, 该参数应为某个Command的id, 可列出Command的详细信息\n" \
-        "      为两个参数时, 第一个参数应为Command的id, 第二个应为on/off/del, 可修改Command的使能状态，或者从会话中移除该Command\n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer\n"
+        '''
+        嵌入命令 #command / #cmd 的执行函数，操作命令。该命令可以不带参数、带一个参数或者两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #cmd: 显示本会话所有命令（Command及其子类）
+            - #cmd {cmd_id}: 显示本会话中id为{cmd_id}的命令信息
+            - #cmd {cmd_id} {on/off/del}: 使能/禁用/删除本会话中id为{cmd_id}的命令
+            - 由于命令的特殊性，其只能使用脚本代码创建
+
+        参数:
+            :cmd_id:  命令Command的id
+            :on:      使能
+            :off:     禁用
+            :del:     删除
+    
+        示例:
+            - ``#cmd`` : 无参数, 打印列出当前会话中所有的命令清单
+            - ``#cmd my_cmd`` : 一个参数, 列出id为my_cmd的Command对象的详细信息
+            - ``#cmd my_cmd on`` : 两个参数，启用id为my_cmd的Command对象（enabled = True）
+            - ``#cmd my_cmd off`` : 两个参数， 禁用id为my_cmd的Command对象（enabled = False）
+            - ``#cmd my_cmd del`` : 两个参数，删除id为my_cmd的Command对象
+        
+        相关命令:
+            - #alias
+            - #trigger
+            - #timer
+        '''
 
         self._handle_objs("Command", self._commands, *code.code[2:])
 
     def handle_trigger(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #trigger|#tri\n" \
-        "      不指定参数时, 列出当前会话中所有的触发器清单\n" \
-        "      为一个参数时, 该参数应为某个Trigger的id, 可列出Trigger的详细信息\n" \
-        "      为两个参数时, 可以进行如下操作\n" \
-        "         1. 当第一个参数为一个已存在Trigger的id, 第二个为on/off时, 可修改Trigger的使能状态\n" \
-        "         2. 当第一个参数为一个已存在Trigger的id, 第二个为del时, 可从会话中删除该\n" \
-        "         3. 当第一个参数不存在于Trigger的id中时, 第一个参数被识别为pattern，第二个参数识别为执行的代码, 此时创建一个SimpleTrigger \n" \
-        "      使用示例： \n " \
-        "         1. #tri tri_001 off    -> 禁用id为tri_001的触发器 \n" \
-        "         2. #tri tri_001 del    -> 删除id为tri_001的触发器 \n" \
-        "         3. #tri {^[> ]*你深深吸了口气，站了起来。} {dazuo 10}   -> 创建一个SimpleTrigger触发器，模式和执行命令分别在两个参数中指定。两个参数均使用{}括起来 \n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, command, timer\n"
-           
+        '''
+        嵌入命令 #trigger / #tri / #action 的执行函数，操作触发器。该命令可以不带参数、带一个参数或者两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #tri: 显示本会话所有触发器
+            - #tri {tri_id}: 显示本会话中id为{tri_id}的触发器信息
+            - #tri {tri_id} {on/off/del}: 使能/禁用/删除本会话中id为{tri_id}的触发器
+            - #tri {pattern} {code}: 创建一个新触发器，匹配为{pattern}，匹配时执行{code}
+            - 触发器的code中，可以使用%line代表行，%1~%9代表捕获信息
+
+        参数:
+            :tri_id:  触发器Trigger的id
+            :on:      使能
+            :off:     禁用
+            :del:     删除
+            :pattern: 触发器的匹配模式，应为合法的Python正则表达式
+            :code:    触发成功时执行的内容
+    
+        示例:
+            - ``#tri``: 无参数, 打印列出当前会话中所有的触发器清单
+            - ``#tri my_tri``: 一个参数, 列出id为my_tri的Trigger对象的详细信息
+            - ``#tri my_tri on``: 两个参数，启用id为my_tri的Trigger对象（enabled = True）
+            - ``#tri my_tri off``: 两个参数， 禁用id为my_tri的Trigger对象（enabled = False）
+            - ``#tri my_tri del``: 两个参数，删除id为my_tri的Trigger对象
+            - ``#tri {^[> ]*段誉脚下一个不稳.+} {get duan}``: 两个参数，新增创建一个Trigger对象。当段誉被打倒的时刻把他背起来。
+
+        相关命令:
+            - #alias
+            - #timer
+            - #command
+        '''
+   
         self._handle_objs("Trigger", self._triggers, *code.code[2:])
 
     def handle_task(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #task\n" \
-        "      不指定参数, 列出当前会话中所有受管理的任务清单\n" \
-        "\x1b[1m相关\x1b[0m: alias, variable, trigger, timer\n"
+        '''
+        嵌入命令 #task 的执行函数，显示当前管理的所有任务清单（仅用于调试）。
+        该函数不应该在代码中直接调用。
+
+        注意：
+            当管理任务很多时，该指令会影响系统响应。
+        '''
 
         width = self.application.get_width()
         title = f"  Tasks LIST IN SESSION {self.name}  "
@@ -1357,11 +1506,29 @@ class Session:
 
 
     def handle_ignore(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #ignore|#ig, #T+, #T-\n" \
-        "      #ignore/#ig: 切换所有触发器是否被响应的状态。请注意：在触发器中使用#ig可能导致无法预料的影响。 \n" \
-        "      #T+/#T-: 使能/禁用指定名称组的所有对象，包括触发器、别名、GMCP触发、命令、定时器等。如： #t+ mygroup  \n"
-        "\x1b[1m相关\x1b[0m: Alias, Trigger, Timer\n"
+        '''
+        嵌入命令 #ignore / #ig, #t+ / #t- 的执行函数，处理使能/禁用状态。
+        该函数不应该在代码中直接调用。
 
+        使用:
+            - #ig: 切换触发器全局使能/禁用状态
+            - #t+ {group}: 使能{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+            - #t- {group}: 禁用{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+
+        参数:
+            :group:  组名
+    
+        示例:
+            - ``#ig``: 切换全局触发器的使能/禁用状态。为禁用时，状态栏右下角会显示“全局已禁用”
+            - ``#t+ mygroup``: 使能名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+            - ``#t- mygroup``: 禁用名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+
+        相关命令:
+            - #trigger
+            - #alias
+            - #timer
+        '''
+        
         cmd = code.code[1].lower()
         if cmd in ("ig", "ignore"):
             self._ignore = not self._ignore
@@ -1388,9 +1555,16 @@ class Session:
             self.info(f"组 {groupname} 中的 {cnts[0]} 个别名，{cnts[1]} 个触发器，{cnts[2]} 个命令，{cnts[3]} 个定时器，{cnts[4]} 个GMCP触发器均已禁用。")
 
     def handle_repeat(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #repeat|#rep\n" \
-        "      重复向session输出上一次人工输入的命令 \n" \
-        "\x1b[1m相关\x1b[0m: num\n"
+        '''
+        嵌入命令 #repeat / #rep 的执行函数，重复向session输出上一次人工输入的命令。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #repeat
+
+        注:
+            这条命令并没有啥实质性应用场景
+        '''
 
         if self.connected and self.last_command:
             self.exec_command(self.last_command)
@@ -1398,10 +1572,27 @@ class Session:
             self.info("当前会话没有连接或没有键入过指令，repeat无效")
 
     async def handle_num(self, times, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #{num} {cmd}\n" \
-        "      向session中输出{num}次{cmd} \n" \
-        "      如: #3 drink jiudai, 表示连喝3次酒袋 \n" \
-        "\x1b[1m相关\x1b[0m: repeat\n"
+        '''
+        嵌入命令 #{num} 的执行函数，重复执行多次命令。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #{num} {code}: 执行code代码num次
+            - {num}必须大于等于1
+            - 该命令可以嵌套使用
+        
+        参数:
+            :num:  重复执行的次数
+            :code: 重复执行的代码
+    
+        示例:
+            - ``#3 get m1b from nang`` : 从锦囊中取出3次地*木灵
+            - ``#3 {#3 get m1b from nang;#wa 500;combine gem;#wa 4000};xixi`` : 执行三次合并地*木灵宝石的操作，中间留够延时等待时间，全部结束后发出xixi。
+
+        相关命令:
+            - #all
+            - #session
+        '''
 
         cmd = CodeBlock(" ".join(code.code[2:]))
 
@@ -1410,23 +1601,52 @@ class Session:
                 await cmd.async_execute(self, *args, **kwargs)
 
     def handle_gmcp(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #gmcp {key}\n" \
-        "      不指定参数时, 列出当前会话中所有的GMCP触发器清单\n" \
-        "      为一个参数时, 该参数应为某个GMCPTrigger的id, 可列出GMCPTrigger的详细信息\n" \
-        "      为两个参数时, 可以进行如下操作\n" \
-        "         1. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为on/off时, 可修改GMCPTrigger的使能状态\n" \
-        "         2. 当第一个参数为一个已存在GMCPTrigger的id, 第二个为del时, 可从会话中删除该GMCPTrigger\n" \
-        "      使用示例： \n " \
-        "         1. #gmcp GMCP.Move off    -> 禁用id为GMCP.Move的GMCP触发器 \n" \
-        "         2. #gmcp GMCP.Move del    -> 删除id为GMCP.Move的触发器 \n" \
-        "\x1b[1m相关\x1b[0m: trigger, alias, variable, command, timer\n"
+        '''
+        嵌入命令 #gmcp 的执行函数，操作GMCPTrigger。该命令可以不带参数、带一个参数或者两个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #gmcp: 显示本会话所有GMCPTrigger
+            - #gmcp {gmcp_key}: 显示本会话中name为{gmcp_key}的GMCPTrigger信息
+            - #gmcp {gmcp_key} {on/off/del}: 使能/禁用/删除本会话中name为{gmcp_key}的GMCPTrigger
+            - 由于GMCPTrigger的特殊性，其只能使用脚本代码创建
+
+        参数:
+            :gmcp_key:  GMCPTrigger的关键字name
+            :on:      使能
+            :off:     禁用
+            :del:     删除
+    
+        示例:
+            - ``#gmcp`` : 无参数, 打印列出当前会话中所有的命令清单
+            - ``#gmcp GMCP.Move`` : 一个参数, 列出名称为 GMCP.Move 的 GMCPTrigger 对象的详细信息
+            - ``#gmcp GMCP.Move on`` : 两个参数，启用名称为 GMCP.Move 的 GMCPTrigger 对象（enabled = True）
+            - ``#gmcp GMCP.Move off`` : 两个参数， 禁用名称为 GMCP.Move 的 GMCPTrigger 对象（enabled = False）
+            - ``#gmcp GMCP.Move del`` : 两个参数，删除名称为 GMCP.Move 的 GMCPTrigger 对象
+        
+        相关命令:
+            - #alias
+            - #trigger
+            - #timer
+        '''
 
         self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
 
     def handle_message(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #message|#mess {msg}\n" \
-        "      使用弹出窗体显示信息\n" \
-        "\x1b[1m相关\x1b[0m: 暂无\n"
+        '''
+        嵌入命令 #message / #mess 的执行函数，弹出对话框显示给定信息。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #mess {msg}: 以弹出对话框显示{msg}指定的信息
+
+        参数:
+            :msg:  需弹出的显示信息
+
+        示例:
+            - ``#mess 这是一行测试`` : 使用弹出窗口显示“这是一行测试”
+            - ``#mess %line`` : 使用弹出窗口显示系统变量%line的值
+        '''
 
         title = "来自会话 {} 的消息".format(self.name)
 
@@ -1436,9 +1656,24 @@ class Session:
 
 
     def handle_all(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #all xxx \n" \
-        "      向所有的活动的session发送同样的命令\n" \
-        "\x1b[1m相关\x1b[0m: session\n"
+        '''
+        嵌入命令 #all 的执行函数，向所有会话发送统一命令。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #all {code}: 向所有会话发送code命令
+        
+        参数:
+            :code: 重复执行的代码
+    
+        示例:
+            - ``#all #cls`` : 所有会话统一执行#cls命令
+            - ``#all quit`` : 所有会话的角色统一执行quit退出
+
+        相关命令:
+            - #num
+            - #session
+        '''
         
         new_cmd  = " ".join(code.code[2:])
         for ss in self.application.sessions.values():
@@ -1590,23 +1825,67 @@ class Session:
         
 
     def handle_load(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #load {config}\n" \
-        "      为当前session加载{config}指定的模块。当要加载多个模块时，使用空格或英文逗号隔开\n" \
-        "      多个模块加载时，按指定名称的先后顺序逐个加载（影响依赖关系） \n" \
-        "      例, 加载名为pkuxkx的模块: #load pkuxkx \n" \
-        "          加载名为pkuxkx和my的两个模块: #load pkuxkx my \n" \
-        "\x1b[1m相关\x1b[0m: unload, reload\n"
+        '''
+        嵌入命令 #load 的执行函数，为当前会话执行模块加载操作。当要加载多个模块时，使用空格或英文逗号隔开。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #load {mod1}: 加载指定名称的模块
+            - #load {mod1} {mod2} ... {modn}: 加载指定名称的多个模块
+            - #load {mod1},{mod2},...{modn}: 加载指定名称的多个模块
+            - 注: 多个模块加载时，将依次逐个加载。因此若模块之间有依赖关系请注意先后顺序
+        
+        参数:
+            :modx: 模块名称
+    
+        示例:
+            - ``#load myscript`` : 加载myscript模块，首先会从执行PyMUD应用的当前目录下查找myscript.py文件并进行加载
+            - ``#load pymud.pkuxkx`` : 加载pymud.pkuxkx模块。相当于脚本中的 import pymud.pkuxkx 命令
+            - ``#load myscript1 myscript2`` : 依次加载myscript1和myscript2模块
+            - ``#load myscript1,myscript2`` : 多个脚本之间也可以用逗号分隔
+
+        相关命令:
+            - #unload
+            - #reload
+            - #module
+        '''
 
         modules = ",".join(code.code[2:]).split(",")
         self.load_module(modules)
 
     def handle_reload(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #reload {mods/plugins}\n" \
-        "      不带参数时(#reload)，为当前session重新加载所有配置模块（不是重新加载插件) \n" \
-        "      带参数时(#reload {mods/plugins}, 若指定名称为模块，则重新加载模块；若指定名称为插件，则重新加载插件。\n" \
-        "                                      若指定名称既有模块也有插件，则仅重新加载模块（建议不要重名）。\n" \
-        "      若要重新加载多个模块，可以在参数中使用空格或英文逗号隔开多个模块名称 \n" \
-        "\x1b[1m相关\x1b[0m: load, unload\n"
+        '''
+        嵌入命令 #reload 的执行函数，重新加载模块/插件。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #reload: 重新加载所有已加载模块
+            - #reload {modname}: 重新加载名称为modname的模块
+            - #reload {plugins}: 重新加载名称为plugins的插件
+            - #reload {mod1} {mod2} ... {modn}: 重新加载指定名称的多个模块/插件
+            - #reload {mod1},{mod2},...{modn}: 重新加载指定名称的多个模块/插件
+        
+        参数:
+            :modname: 模块名称
+            :plugins: 插件名称
+            :modn:    模块名称
+    
+        注意:
+            1. #reload只能重新加载#load方式加载的模块（包括在pymud.cfg中指定的），但不能重新加载import xxx导入的模块。
+            2. 若加载的模块脚本中有语法错误，#reload可能无法生效。此时需要退出PyMUD重新打开
+            3. 若加载时依次加载了不同模块，且模块之间存在依赖关系，那么重新加载时，应按原依赖关系顺序逐个重新加载，否则容易找不到依赖或依赖出错
+
+        示例:
+            - ``#reload`` : 重新加载所有已加载模块
+            - ``#reload mymodule`` : 重新加载名为mymodule的模块
+            - ``#reload myplugins`` : 重新加载名为myplugins的插件
+            - ``#reload mymodule myplugins`` : 重新加载名为mymodule的模块和名为myplugins的插件。
+
+        相关命令:
+            - #load
+            - #unload
+            - #module
+        '''
 
         args = list()
         if isinstance(code, CodeLine):
@@ -1629,14 +1908,29 @@ class Session:
                     self.warning(f"指定名称 {mod} 既未找到模块，也未找到插件，重新加载失败..")
 
     def handle_unload(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #unload {config}\n" \
-        "      为当前session卸载{config}指定的模块。当要卸载多个模块时，使用空格或英文逗号隔开\n" \
-        "      卸载模块时，将调用模块Configuration类的unload方法，请将模块清理工作代码形式卸载此方法中 \n" \
-        "      当不指定模块名称时，将卸载所有模块，并执行reset \n" \
-        "      例, 卸载所有模块，并清除所有相关信息： #unload   \n" \
-        "          卸载名为pkuxkx的模块: #unload pkuxkx \n" \
-        "          卸载名为pkuxkx和my的两个模块: #unload pkuxkx my \n" \
-        "\x1b[1m相关\x1b[0m: load, reload\n"
+        '''
+        嵌入命令 #unload 的执行函数，卸载模块。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #unload {modname}: 卸载指定名称的已加载模块
+            - #unload {mod1} {mod2} ... {modn}: 卸载指定名称的多个模块/插件
+            - #unload {mod1},{mod2},...{modn}: 卸载加载指定名称的多个模块/插件
+            - 注意: 卸载模块时并不会自动清理模块所创建的对象，而是调用模块Configuration类的unload方法，
+              若需要清理模块创建的对象，请将清理工作代码显式放在此方法中 。
+        
+        参数:
+            :modname: 模块名称
+            :modn:    模块名称
+    
+        示例:
+            - ``#unload mymodule``: 卸载名为mymodule的模块（并调用其中Configuration类的unload方法【若有】）
+        
+        相关命令:
+            - #load
+            - #reload
+            - #module
+        '''
 
         args = code.code[2:]
 
@@ -1650,10 +1944,19 @@ class Session:
             self.unload_module(modules)
 
     def handle_modules(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #modules/mods\n" \
-        "      模块命令，该命令不带参数。列出本程序当前已加载的所有模块信息. \n" \
-        "\x1b[1m相关\x1b[0m: load, unload, reload, plugins\n"
-        
+        '''
+        嵌入命令 #modules / #mods 的执行函数，显示加载模块清单。该命令不带参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #mods: 显示当前会话所加载的所有模块清单
+
+        相关命令:
+            - #load
+            - #unload
+            - #reload
+        '''
+
         count = len(self._modules.keys())
         if count == 0:
             self.info("当前会话并未加载任何模块。", "MODULES")
@@ -1661,16 +1964,40 @@ class Session:
             self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
     
     def handle_reset(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #reset\n" \
-        "      复位全部脚本。将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量等待. \n" \
-        "\x1b[1m相关\x1b[0m: load, unload, reload, modules\n" 
+        '''
+        嵌入命令 #reset 的执行函数，复位全部脚本。该命令不带参数。
+        复位操作将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #reset: 复位全部脚本
+
+        相关命令:
+            - #load
+            - #unload
+            - #reload
+        '''
+        
         self.reset()
 
     def handle_save(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #save\n" \
-        "      将当前会话中的变量保存到文件，系统变量（即%开头的）除外 \n" \
-        "      文件保存在当前目录下，文件名为 {会话名}.mud \n" \
-        "\x1b[1m相关\x1b[0m: variable\n"
+        '''
+        嵌入命令 #save 的执行函数，保存当前会话变量（系统变量除外）至文件。该命令不带参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #save: 保存当前会话变量
+
+        注意:
+            1. 文件保存在当前目录下，文件名为 {会话名}.mud
+            2. 变量保存使用了python的pickle模块，因此所有变量都应是类型自省的
+            3. 虽然变量支持所有的Python类型，但是仍然建议仅在变量中使用可以序列化的类型。
+            4. namedtuple不建议使用，因为加载后在类型匹配比较时会失败，不认为两个相同定义的namedtuple是同一种类型。
+        
+        相关命令:
+            - #variable
+        '''
+
         file = f"{self.name}.mud"
 
         with open(file, "wb") as fp:
@@ -1687,15 +2014,31 @@ class Session:
             self.info(f"会话变量信息已保存到{file}")
 
     def handle_clear(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #clear #cls {msg}\n" \
-        "      清屏命令，清除当前会话所有缓存显示内容\n" \
-        "\x1b[1m相关\x1b[0m: connect, exit\n"
+        '''
+        嵌入命令 #clear / #cls 的执行函数，清空当前会话缓冲与显示。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #cls: 清空当前会话缓冲及显示
+        '''
+
         self.buffer.text = ""
 
     def handle_test(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #test {msg}\n" \
-        "      用于测试脚本的命令，会将msg发送并显示在session中，同时触发触发器\n" \
-        "\x1b[1m相关\x1b[0m: trigger\n"
+        '''
+        嵌入命令 #test 的执行函数，触发器测试命令。类似于zmud的#show命令。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #test {some_text}: 测试服务器收到{some_text}时的触发器响应情况
+
+        示例:
+            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试
+            - ``#test %copy``: 复制一句话，模拟服务器再次收到复制的这句内容时的情况进行触发器测试
+
+        注意:
+            - #test命令测试触发器时，enabled为False的触发器不会响应。
+        '''
 
         new_cmd_text, new_code = code.expand(self, *args, **kwargs)
         line = new_cmd_text[6:]       # 取出#test 之后的所有内容
@@ -1734,10 +2077,17 @@ class Session:
                 self.info(raw_line, "PYMUD TRIGGER TEST")
 
     def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #plugins {plugin_name}\n" \
-        "      插件命令。当不带参数时，列出本程序当前已加载的所有插件信息 \n" \
-        "      当带参数时，列出指定名称插件的详细信息 \n" \
-        "\x1b[1m相关\x1b[0m: modules, reload\n"
+        '''
+        嵌入命令 #plugins 的执行函数，显示插件信息。该命令可以不带参数、带一个参数。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #plugins: 显示当前会话所加载的所有插件清单
+            - #plugins {myplug}: 显示名称为myplug的插件的详细信息
+
+        相关命令:
+            - #modules
+        '''
         
         args = code.code[2:]
 
@@ -1758,28 +2108,59 @@ class Session:
                 self.writetobuffer(plugin.help)
 
     def handle_replace(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #replace {msg}\n" \
-        "      修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符\n" \
-        "      注意：在触发器中使用。多行触发器时，替代只替代最后一行 \n" \
-        "\x1b[1m相关\x1b[0m: gag\n"
+        '''
+        嵌入命令 #replace 的执行函数，修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #replace {new_display}: 将当前行显示替换为{new_display}
+
+        参数:
+            - :new_display: 替换后的显示，可支持ANSI颜色代码
+
+        示例:
+            - ``#replace %raw - 捕获到此行`` : 将捕获的当前行信息后面增加标注
+
+        注意:
+            - 应在触发器的同步处理中使用。多行触发器时，替代只替代最后一行。
+
+        相关命令:
+            - #gag
+        '''
         
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.replace(new_text[9:])
-        #self.replace(code.commandText[9:])
-        #self.display_line = code.commandText[9:]
         
     def handle_gag(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #gag\n" \
-        "      在主窗口中不显示当前行\n" \
-        "      注意：一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器不会不生效 \n" \
-        "\x1b[1m相关\x1b[0m: replace\n"
+        '''
+        嵌入命令 #gag 的执行函数，在主窗口中不显示当前行内容，一般用于触发器中。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #gag
+
+        注意:
+            - 一旦当前行被gag之后，无论如何都不会再显示此行内容，但对应的触发器仍会生效
+
+        相关命令:
+            - #replace
+        '''
+
         self.display_line = ""
 
     def handle_py(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #py python-sentence\n" \
-        "      直接执行后面跟着的python语句\n" \
-        "      执行语句时，环境为当前上下文环境，此时self代表当前会话。\n" \
-        "\x1b[1m相关\x1b[0m: 暂无\n"
+        '''
+        嵌入命令 #py 的执行函数，执行 Python 语句。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #py {py_code}: 在当前上下文中执行py_code
+            - 环境为当前上下文环境，此时self代表当前会话
+
+        示例:
+            - ``#py self.info("hello")`` : 相当于在当前会话中调用 ``session.info("hello")``
+            - ``#py self.enableGroup("group1", False)`` : 相当于调用 ``session.enableGroup("group1", False)``
+        '''
 
         try:
             exec(code.commandText[4:])
@@ -1787,25 +2168,49 @@ class Session:
             self.error(f"Python执行错误：{e}")
 
     def handle_info(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #info {msg}\n" \
-        "      使用info输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: warning, error\n"
+        '''
+        嵌入命令 #info 的执行函数，使用 session.info 输出一行，主要用于测试。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #info {msg}
+
+        相关命令:
+            - #warning
+            - #error
+        '''
 
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.info(new_text[6:])
 
     def handle_warning(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #warning {msg}\n" \
-        "      使用warning输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, error\n"
+        '''
+        嵌入命令 #warning 的执行函数，使用 session.warning 输出一行，主要用于测试。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #warning {msg}
+
+        相关命令:
+            - #info
+            - #error
+        '''
         
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.warning(new_text[6:])
 
     def handle_error(self, code: CodeLine = None, *args, **kwargs):
-        "\x1b[1m命令\x1b[0m: #error {msg}\n" \
-        "      使用error输出一行, 主要用于测试\n" \
-        "\x1b[1m相关\x1b[0m: info, warning\n"
+        '''
+        嵌入命令 #error 的执行函数，使用 session.error 输出一行，主要用于测试。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #error {msg}
+
+        相关命令:
+            - #info
+            - #warning
+        '''
         
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.error(new_text[6:])
