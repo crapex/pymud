@@ -513,6 +513,10 @@ class PyMudApp:
             self.sessions[name] = session
             self.activate_session(name)
 
+            for plugin in self._plugins.values():
+                if isinstance(plugin, Plugin):
+                    plugin.onSessionCreate(session)
+
             result = True
         else:
             self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
@@ -538,12 +542,17 @@ class PyMudApp:
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         self.current_session.disconnect()
+
+                        # 增加延时等待确保会话关闭
+                        while self.current_session.connected:
+                            await asyncio.sleep(0.1)
+                            
                     else:
                         return
 
                 for plugin in self._plugins.values():
                     if isinstance(plugin, Plugin):
-                        plugin.onSessionCreate(self.current_session)
+                        plugin.onSessionDestroy(self.current_session)
 
                 name = self.current_session.name
                 self.current_session.clean()
@@ -641,6 +650,11 @@ class PyMudApp:
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         session.disconnect()
+
+                        # 增加延时等待确保会话关闭
+                        while session.connected:
+                            await asyncio.sleep(0.1)
+
                     else:
                         return
                 

@@ -127,9 +127,10 @@ class Session:
         self.encoding = encoding or self.encoding
         self.after_connect = after_connect
 
-        for plugin in app.plugins.values():
-            if isinstance(plugin, Plugin):
-                plugin.onSessionCreate(self)
+        # 插件处置移动到 pymud.py 2024-3-22
+        # for plugin in app.plugins.values():
+        #     if isinstance(plugin, Plugin):
+        #         plugin.onSessionCreate(self)
 
         self._modules = OrderedDict()
 
@@ -460,9 +461,11 @@ class Session:
 
     def clean_finished_tasks(self):
         "清理已经完成的任务"
-        for task in self._tasks:
-            if isinstance(task, asyncio.Task) and task.done():
-                self._tasks.remove(task)
+        # for task in self._tasks:
+        #     if isinstance(task, asyncio.Task) and task.done():
+        #         self._tasks.remove(task)
+
+        self._tasks = list((t for t in self._tasks if isinstance(t, asyncio.Task) and not t.done()))
 
     def write(self, data) -> None:
         "向服务器写入数据（RAW格式字节数组/字节串）"

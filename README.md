@@ -230,9 +230,11 @@
 + 功能调整: 将除#session之外的所有其他#命令实现统一到Session类中实现，这些命令均支持通过Session.exec_command运行
 + 功能调整: python -m pymud init时，创建的pymud.cfg文件增加了keys字典
 
-### xxxx
+### 0.19.2 （2024-03-22）
 + 错误修复：订正部分错别字、错误帮助、错别格式
-+ 系统完善：完善整个帮助体系，按reST格式重写所有有关的docstring
++ 系统完善：完善帮助体系，按reST格式重写所有有关的docstring
 + 功能调整：session.exec_command / exec_command_async / exec 系列命令调整，现在可以在exec时带变量参数了。例如 session.exec("dazuo @dzpt")，直接调用 dzpt的变量值
 + 功能调整: settings.py中，client字典增加配置reconnect_wait，为自动重连的等待时间，默认15s，可本地覆盖
 + 功能调整: 变通解决了菜单栏右边单击 帮助 菜单会响应问题
++ 错误修复: 修复了会话关闭时插件卸载的代码错误
++ 功能调整: 在会话关闭、程序退出时增加等待，确保收到服务器断开命令之后才关闭和退出
