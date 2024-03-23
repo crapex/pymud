@@ -655,6 +655,10 @@ class PyMudApp:
                         while session.connected:
                             await asyncio.sleep(0.1)
 
+                        for plugin in self._plugins.values():
+                            if isinstance(plugin, Plugin):
+                                plugin.onSessionDestroy(self.current_session)
+
                     else:
                         return
                 
