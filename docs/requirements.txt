@@ -2,4 +2,4 @@ sphinx
 recommonmark
 sphinx-markdown-tables
 sphinx-rtd-theme
-pymud==0.19.2.post1
+pymud
