@@ -166,7 +166,8 @@ class Session:
 
         self._variables = DotDict()
 
-        self._tasks    = []
+        #self._tasks    = []
+        self._tasks    = set()
 
         self._command_history = []
 
@@ -450,18 +451,21 @@ class Session:
         else:
             task = self.loop.create_task(coro, name = name)
             #task = asyncio.create_task(coro, name = name)
-        self._tasks.append(task)
+        task.add_done_callback(self._tasks.discard)
+        self._tasks.add(task)
+        #self._tasks.append(task)
         return task
 
     def remove_task(self, task: asyncio.Task, msg = None):
         result = task.cancel()
-        if task in self._tasks:
-            self._tasks.remove(task)
+        self._tasks.discard(task)
+        # if task in self._tasks:
+        #     self._tasks.remove(task)
         return result
 
     def clean_finished_tasks(self):
         "清理已经完成的任务"
-        self._tasks = [t for t in self._tasks if not t.done()]
+        self._tasks = set([t for t in self._tasks if not t.done()])
 
         # for task in self._tasks:
         #     if isinstance(task, asyncio.Task) and task.done():
@@ -640,7 +644,7 @@ class Session:
             if notAlias:
                 self.writeline(cmdtext)
 
-        self.clean_finished_tasks()
+        # self.clean_finished_tasks()
 
     async def exec_text_async(self, cmdtext: str):
         isNotCmd = True

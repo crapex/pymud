@@ -586,17 +586,19 @@ class Command(MatchObject):
     __abbr__ = "cmd"
     def __init__(self, session, patterns, *args, **kwargs):
         super().__init__(session, patterns, sync = False, *args, **kwargs)
-        self._tasks = []
+        self._tasks = set()
 
     def create_task(self, coro, *args, name = None):
         task = self.session.create_task(coro, *args, name)
-        self._tasks.append(task)
+        task.add_done_callback(self._tasks.discard)
+        self._tasks.add(task)
         return task
 
     def remove_task(self, task: asyncio.Task, msg = None):
         result = self.session.remove_task(task, msg)
-        if task in self._tasks:
-            self._tasks.remove(task)
+        self._tasks.discard(task)
+        # if task in self._tasks:
+        #     self._tasks.remove(task)
         return result
     
     def reset(self):
