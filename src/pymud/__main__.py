@@ -89,6 +89,9 @@ if __name__ == "__main__":
                             datefmt='%m-%d %H:%M',
                             filename='myapp.log',
                             filemode='a')
+        
+    else:
+        logging.disable()
 
     cfg = "pymud.cfg"
     if os.path.exists(cfg):
