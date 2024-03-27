@@ -614,7 +614,7 @@ class Session:
 
         else:
             cmdtext, code = cl.expand(self, *args, **kwargs)
-            self.exec_text(cmdtext)
+            await self.exec_text_async(cmdtext)
             
     def exec_text(self, cmdtext: str):
         """
