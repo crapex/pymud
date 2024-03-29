@@ -143,6 +143,7 @@ class PyMudApp:
         self.load_plugins()
 
     def initUI(self):
+        """初始化UI界面"""
         self.style = Style.from_dict(Settings.styles)
         self.status_message = ""
         self.showHistory = False
@@ -323,7 +324,7 @@ class PyMudApp:
         )
 
     def create_world_menus(self):
-        "创建世界子菜单"
+        "创建世界子菜单，其中根据本地pymud.cfg中的有关配置创建会话有关子菜单"
         menus = []
         menus.append(MenuItem(Settings.text["new_session"], handler = self.act_new))
         menus.append(MenuItem("-", disabled=True))
@@ -378,26 +379,30 @@ class PyMudApp:
                 b.cursor_down(lines)
 
     def page_up(self, event: KeyPressEvent) -> None:
+        "快捷键PageUp: 用于向上翻页。翻页页数为显示窗口行数的一半减去一行。"
         #lines = (self.app.output.get_size().rows - 5) // 2 - 1
         lines = self.get_height() // 2 - 1
         self.scroll(-1 * lines)
 
     def page_down(self, event: KeyPressEvent) -> None:
+        "快捷键PageDown: 用于向下翻页。翻页页数为显示窗口行数的一半减去一行。"
         #lines = (self.app.output.get_size().rows - 5) // 2 - 1
         lines = self.get_height() // 2 - 1
         self.scroll(lines)
 
     def custom_key_press(self, event: KeyPressEvent):
+        "自定义快捷键功能实现，根据keys字典配置在当前会话执行指定指令"
         if (len(event.key_sequence) == 1) and (event.key_sequence[-1].key in Settings.keys.keys()):
             cmd = Settings.keys[event.key_sequence[-1].key]
             if self.current_session:
                 self.current_session.exec_command(cmd)
 
     def hide_history(self, event: KeyPressEvent) -> None:
-        """关闭历史行显示"""
+        """快捷键Ctrl+Z: 关闭历史行显示"""
         self.act_nosplit()
 
     def copy_selection(self, event: KeyPressEvent)-> None:
+        """快捷键Ctrl+C/Ctrl+R: 复制选择内容。根据按键不同选择文本复制方式和RAW复制方式"""
         if event.key_sequence[-1].key == Keys.ControlC:
             self.copy()
         elif event.key_sequence[-1].key == Keys.ControlR:
@@ -412,7 +417,7 @@ class PyMudApp:
             b.delete_before_cursor(1)
 
     def complete_autosuggest(self, event: KeyPressEvent):
-        """自动完成建议"""
+        """快捷键右箭头→: 自动完成建议"""
         b = event.current_buffer
         if b.cursor_position == len(b.text):
             s = b.auto_suggest.get_suggestion(b, b.document)
@@ -422,6 +427,7 @@ class PyMudApp:
             b.cursor_right()
 
     def change_session(self, event: KeyPressEvent):
+        """快捷键Ctrl+左右箭头: 切换会话"""
         if self.current_session:
             current = self.current_session.name
             keys = list(self.sessions.keys())
@@ -439,6 +445,7 @@ class PyMudApp:
                     self.activate_session(new_key)
 
     def toggle_mousesupport(self, event: KeyPressEvent):
+        """快捷键F2: 切换鼠标支持状态。用于远程连接时本地复制命令执行操作"""
         self._mouse_support = not self._mouse_support
         if self._mouse_support:
             self.app.renderer.output.enable_mouse_support()
@@ -446,6 +453,13 @@ class PyMudApp:
             self.app.renderer.output.disable_mouse_support()
 
     def copy(self, raw = False):
+        """
+        复制会话中的选中内容
+
+        :param raw: 指定采取文本模式还是ANSI格式模式
+
+        ``注意: 复制的内容仅存在于运行环境的剪贴板中。若使用ssh远程，该复制命令不能访问本地剪贴板。``
+        """
         b = self.consoleView.buffer
         if b.selection_state:
             srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
@@ -504,6 +518,17 @@ class PyMudApp:
             self.set_status("未选中任何内容...")
 
     def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None, userid = None):
+        """
+        创建一个会话。菜单或者#session命令均调用本函数执行创建会话。
+
+        :param name: 会话名称
+        :param host: 服务器域名或IP地址
+        :param port: 端口号
+        :param encoding: 服务器编码
+        :param after_connect: 连接后要向服务器发送的内容，用来实现自动登录功能
+        :param scripts: 要加载的脚本清单
+        :param userid: 自动登录的ID(获取自cfg文件中的定义，绑定到菜单)，将以该值在该会话中创建一个名为id的变量
+        """
         result = False
         encoding = encoding or Settings.server["default_encoding"]
 
@@ -534,7 +559,7 @@ class PyMudApp:
             self.app.invalidate()
 
     def close_session(self):
-        "关闭当前会话"
+        "关闭当前会话。若当前会话处于连接状态，将弹出对话框以确认。"
         async def coroutine():
             if self.current_session:
                 if self.current_session.connected:
@@ -570,6 +595,7 @@ class PyMudApp:
     # 菜单选项操作 - 开始
 
     def act_new(self):
+        "菜单: 创建新会话"
         async def coroutine():
             dlgNew = NewSessionDialog()
             result = await self.show_dialog_as_float(dlgNew)
@@ -580,14 +606,17 @@ class PyMudApp:
         asyncio.ensure_future(coroutine())
 
     def act_connect(self):
+        "菜单: 连接/重新连接"
         if self.current_session:
             self.current_session.handle_connect()
 
     def act_discon(self):
+        "菜单: 断开连接"
         if self.current_session:
             self.current_session.disconnect()
 
     def act_nosplit(self):
+        "菜单: 取消分屏"
         if self.current_session:
             s = self.current_session
             b = s.buffer
@@ -595,39 +624,42 @@ class PyMudApp:
             b.cursor_position = len(b.text)
 
     def act_close_session(self):
+        "菜单: 关闭当前会话"
         self.close_session()
 
     def act_echoinput(self):
+        "菜单: 显示/隐藏输入指令"
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
         if self.current_session:
             self.current_session.info(f"回显输入命令被设置为：{'打开' if val else '关闭'}")
 
     def act_autoreconnect(self):
+        "菜单: 打开/关闭自动重连"
         val = not Settings.client["auto_reconnect"]
         Settings.client["auto_reconnect"] = val
         if self.current_session:
             self.current_session.info(f"自动重连被设置为：{'打开' if val else '关闭'}")
 
     def act_copy(self):
-        "复制菜单"
+        "菜单: 复制纯文本"
         self.copy()
 
     def act_copyraw(self):
-        "复制ANSI菜单"
+        "菜单: 复制(ANSI)"
         self.copy(raw = True)
 
     def act_clearsession(self):
-        "清空当前会话缓存的文本内容"
+        "菜单: 清空会话内容"
         self.consoleView.buffer.text = ""
 
     def act_reload(self):
-        "重新加载配置文件菜单"
+        "菜单: 重新加载脚本配置"
         if self.current_session:
             self.current_session.handle_reload()
 
+    # 暂未实现该功能
     def act_change_layout(self, layout):
-        "更改状态窗口显示"
         #if isinstance(layout, STATUS_DISPLAY):
         self.status_display = layout
         #self.console_frame.body.reset()
@@ -642,22 +674,28 @@ class PyMudApp:
         self.app.invalidate()
 
     def act_exit(self):
-        "退出菜单"
+        """菜单: 退出"""
         async def coroutine():
+            con_sessions = list()
             for session in self.sessions.values():
                 if session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">会话 {0} 还处于连接状态，确认要关闭？</style>'.format(session.name)))
-                    result = await self.show_dialog_as_float(dlgQuery)
-                    if result:
-                        session.disconnect()
+                    con_sessions.append(session.name)
+
+            if len(con_sessions) > 0:
+                dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">尚有 {0} 个会话 {1} 还处于连接状态，确认要关闭？</style>'.format(len(con_sessions), ", ".join(con_sessions))))
+                result = await self.show_dialog_as_float(dlgQuery)
+                if result:
+                    for ss_name in con_sessions:
+                        ss = self.sessions[ss_name]
+                        ss.disconnect()
 
                         # 增加延时等待确保会话关闭
-                        while session.connected:
+                        while ss.connected:
                             await asyncio.sleep(0.1)
 
                         for plugin in self._plugins.values():
                             if isinstance(plugin, Plugin):
-                                plugin.onSessionDestroy(self.current_session)
+                                plugin.onSessionDestroy(ss)
 
                     else:
                         return
@@ -667,20 +705,23 @@ class PyMudApp:
         asyncio.ensure_future(coroutine())
 
     def act_about(self):
-        "关于菜单"
+        "菜单: 关于"
         dialog_about = WelcomeDialog(True)
         self.show_dialog(dialog_about)
 
     # 菜单选项操作 - 完成
 
     def get_input_prompt(self):
+        "命令输入行提示符"
         return HTML(Settings.text["input_prompt"])
 
     def btn_title_clicked(self, name, mouse_event: MouseEvent):
+        "顶部会话标签点击切换鼠标事件"
         if mouse_event.event_type == MouseEventType.MOUSE_UP:
             self.activate_session(name)
 
     def get_frame_title(self):
+        "顶部会话标题选项卡"
         if len(self.sessions.keys()) == 0:
             return Settings.__appname__ + " " + Settings.__version__
         
@@ -704,12 +745,14 @@ class PyMudApp:
         return title_formatted_list[:-1]
 
     def get_statusbar_text(self):
+        "状态栏内容"
         return [
             ("class:status", " "),
             ("class:status", self.status_message),
         ]
     
     def get_statusbar_right_text(self):
+        "状态栏右侧内容"
         con_str, mouse_support, tri_status = "", "", ""
         if not self._mouse_support:
             mouse_support = "鼠标已禁用 "
@@ -743,6 +786,7 @@ class PyMudApp:
         return "{}{}{} {} {} ".format(mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
     def get_statuswindow_text(self):
+        "状态窗口: status_maker 的内容"
         text = ""
         if self.current_session:
             text = self.current_session.get_status()
@@ -750,6 +794,11 @@ class PyMudApp:
         return text
 
     def set_status(self, msg):
+        """
+        在状态栏中上显示消息。可在代码中调用
+        
+        :param msg: 要显示的消息
+        """
         self.status_message = msg
         self.app.invalidate()
 
@@ -759,15 +808,15 @@ class PyMudApp:
         该函数不应该在代码中直接调用。
 
         使用:
-            - #session {Name} {Host} {Port} {Encoding}
+            - #session {name} {host} {port} {encoding}
             - 当不指定 Encoding: 时, 默认使用utf-8编码
             - 可以直接使用 #{名称} 切换会话和操作会话命令
 
         参数:
-            :Name: 会话名称
-            :Host: 服务器域名或IP地址
-            :Port: 端口号
-            :Encoding: 编码格式，不指定时默认为 utf8
+            :name: 会话名称
+            :host: 服务器域名或IP地址
+            :port: 端口号
+            :encoding: 编码格式，不指定时默认为 utf8
     
         示例:
             ``#session {名称} {宿主机} {端口} {编码}`` 
@@ -805,6 +854,7 @@ class PyMudApp:
             self.set_status("错误的#session命令")
 
     def enter_pressed(self, buffer: Buffer):
+        "命令行回车按键处理"
         cmd_line = buffer.text
         space_index = cmd_line.find(" ")
         
@@ -846,26 +896,46 @@ class PyMudApp:
 
     @property
     def globals(self):
+        """
+        全局变量，快捷点访问器
+        用于替代get_globals与set_globals函数的调用
+        """
         return self._globals
 
     def get_globals(self, name, default = None):
-        "获取PYMUD全局变量"
+        """
+        获取PYMUD全局变量
+        
+        :param name: 全局变量名称
+        :param default: 当全局变量不存在时的返回值
+        """
         if name in self._globals.keys():
             return self._globals[name]
         else:
             return default
 
     def set_globals(self, name, value):
-        "设置PYMUD全局变量"
+        """
+        设置PYMUD全局变量
+
+        :param name: 全局变量名称
+        :param value: 全局变量值。值可以为任何类型。
+        """
         self._globals[name] = value
 
     def del_globals(self, name):
-        "移除一个PYMUD全局变量"
+        """
+        移除一个PYMUD全局变量
+        移除全局变量是从字典中删除该变量，而不是将其设置为None
+
+        :param name: 全局变量名称
+        """
         if name in self._globals.keys():
             self._globals.pop(name)
 
     @property
     def plugins(self):
+        "所有已加载的插件列表，快捷点访问器"
         return self._plugins
 
     def show_message(self, title, text, modal = True):
@@ -898,9 +968,11 @@ class PyMudApp:
         return result
 
     async def run_async(self):
+        "以异步方式运行本程序"
         await self.app.run_async()
 
     def run(self):
+        "运行本程序"
         self.app.run()
         #asyncio.run(self.run_async())
 
@@ -923,6 +995,7 @@ class PyMudApp:
     # plugins 处理
     #####################################
     def load_plugins(self):
+        "加载插件。将加载pymud包的plugins目录下插件，以及当前目录的plugins目录下插件"
         # 首先加载系统目录下的插件
         current_dir = os.path.dirname(__file__)
         plugins_dir = os.path.join(current_dir, "plugins")

@@ -7,8 +7,8 @@ import recommonmark, os, sys
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
 
-# HERE = os.path.dirname(__file__)
-# sys.path.insert(0, os.path.abspath(r'../../src'))
+HERE = os.path.dirname(__file__)
+sys.path.insert(0, os.path.abspath(r'../../src'))
 
 source_parsers = {
     '.md': CommonMarkParser,
