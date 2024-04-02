@@ -54,7 +54,7 @@ class PyMudApp:
 
     PyMudApp对象不需要手动创建，在命令行中执行 ``python -m pymud`` 时会自动创建对象实例。
 
-    构造函数参数： 
+    参数： 
         - ``cfg_data``: 替代配置数据，由本地pymud.cfg文件读取，用于覆盖settings.py中的默认Settings数据
 
     可替代字典: 含义请查阅 `应用配置及本地化 <settings.html>`_

@@ -11,6 +11,18 @@ from .settings import Settings
 class Session:
     """
     会话管理主对象，每一个角色的所有处理实现均在该类中实现。
+
+    **Session对象由PyMudApp对象进行创建和管理，不需要手动创建。**
+
+    :param app: 对应的PyMudApp对象
+    :param name: 本会话的名称
+    :param host: 本会话连接的远程服务器地址
+    :param port: 本会话连接的远程服务器端口
+    :param encoding: 远程服务器的编码
+    :param after_connect: 当连接到远程服务器后执行的操作
+    :param loop: asyncio的消息循环队列
+    :param kwargs: 关键字参数清单，当前支持的关键字 **scripts** : 需加载的脚本清单
+
     """
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
     _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
@@ -156,6 +168,7 @@ class Session:
             self.open()
 
     def initialize(self):
+        "初始化Session有关对象。 **无需脚本调用。**"
         self._line_buffer = bytearray()
         
         self._triggers = DotDict()
@@ -172,10 +185,11 @@ class Session:
         self._command_history = []
 
     def open(self):
+        "创建到远程服务器的连接，同步方式。通过调用异步connect方法实现。"
         asyncio.ensure_future(self.connect(), loop = self.loop)
 
     async def connect(self):
-        "异步非阻塞方式创建远程连接"
+        "创建到远程服务器的连接，异步非阻塞方式。"
         def _protocol_factory():
             return MudClientProtocol(self, onDisconnected = self.onDisconnected)
         
@@ -200,11 +214,17 @@ class Session:
                 asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
 
     async def reconnect(self, timeout = 15):
+        """
+        重新连接到远程服务器，异步非阻塞方式。该方法在 `Settings.client['auto_reconnect']` 设置为真时，断开后自动调用
+        
+        :param timeout: 重连之前的等待时间，默认15s，可由 `Settings.client['reconnect_wait']` 设置所覆盖
+        """
         self.info(f"{timeout}秒之后将自动重新连接...")
         await asyncio.sleep(timeout)
         await self.create_task(self.connect())
 
     def onConnected(self):
+        "当连接到服务器之后执行的操作。包括打印连接时间，执行自定义事件(若设置)等。"
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.info(f"{now}: 已成功连接到服务器")
         if isinstance(self.after_connect, str):
@@ -215,6 +235,7 @@ class Session:
             event_connected(self)
 
     def disconnect(self):
+        "断开到服务器的连接。"
         if self.connected:
             self.write_eof()
 
@@ -224,6 +245,7 @@ class Session:
             #     self.handle_save()
 
     def onDisconnected(self, protocol):
+        "当从服务器连接断开时执行的操作。包括保存变量(若设置)、打印断开时间、执行自定义事件(若设置)等。"
         # 断开时自动保存变量数据
         if Settings.client["var_autosave"]:
             self.handle_save()
@@ -241,8 +263,8 @@ class Session:
             asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
 
     @property
-    def connected(self):
-        "返回服务器端连接状态"
+    def connected(self) -> bool:
+        "只读属性，返回服务器端的连接状态"
         if self._protocol:
             con = self._protocol.connected
         else:
@@ -251,8 +273,8 @@ class Session:
         return con
 
     @property
-    def duration(self):
-        "返回服务器端连接的时间，以秒为单位"
+    def duration(self) -> float:
+        "只读属性，返回服务器端连接的时间，以秒为单位"
         dura = 0
         if self._protocol and self._protocol.connected:
             dura = self._protocol.duration
@@ -261,6 +283,21 @@ class Session:
 
     @property
     def status_maker(self):
+        """
+        可读写属性，会话状态窗口的内容生成器，应为一个可返回 `AnyFormattedText` 对象的不带额外参数的方法
+        
+        示例:
+            .. code:: python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                        self.session.status_maker = self.mystatus
+
+                    def mystatus(self):
+                        '可返回AnyFormattedText类型的对象。具体参见 prompt_toolkit 。'
+                        return "this is a test status"
+        """
         return self._status_maker
     
     @status_maker.setter
@@ -270,6 +307,20 @@ class Session:
 
     @property
     def event_connected(self):
+        """
+        可读写属性，自定义的会话连接事件，应为一个带一个额外参数 Session 的方法
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                        self.session.event_connected = self.onSessionConnected
+
+                    def onSessionConnected(self, session):
+                        session.info("Connected!")
+        """
         return self._events["connected"]
     
     @event_connected.setter
@@ -278,6 +329,11 @@ class Session:
 
     @property
     def event_disconnected(self):
+        """
+        可读写属性，自定义的会话断开事件，应为一个带一个参数 Session 的方法
+        
+        使用方法同 event_connected
+        """
         return self._events["disconnected"]
     
     @event_disconnected.setter
@@ -285,51 +341,119 @@ class Session:
         self._events["disconnected"] = event
 
     @property
-    def modules(self):
-        "返回本会话加载的所有模块，类型为顺序字典"
+    def modules(self) -> OrderedDict:
+        """
+        只读属性，返回本会话加载的所有模块，类型为顺序字典 OrderedDict
+
+        在字典中，关键字为模块名，值为模块本身与配置对象的二级字典，包含两个关键字， module 与 config
+
+        如，存在一个名为 my.py的模块文件，则加载后，session.modules['my'] 可以访问该模块有关信息。其中:
+
+        - `session.modules['my']['module']` 访问模块对象
+        - `session.modules['my']['config']` 访问该该模块文件中的Configuration类的实例（若有定义）
+        """
         return self._modules
 
     @property
-    def plugins(self):
-        "返回PYMUD的插件清单辅助访问器"
+    def plugins(self) -> DotDict:
+        """
+        只读属性，为PYMUD插件的辅助点访问器
+
+        如，存在一个名为myplugin.py的插件文件并已正常加载，该文件中定义了 PLUGIN_NAME 为 "myplugin"，则可以通过本属性及插件名访问该插件
+
+        .. code:: Python
+
+            plugin = session.plugins.myplugin  # plugin为 Plugin类型的对象实例
+        """
         return self.application.plugins
 
     @property
     def vars(self):
-        "本会话变量的辅助访问器"
+        """
+        本会话内变量的辅助点访问器，可以通过vars+变量名快速访问该变量值
+
+        .. code:: Python
+
+            # 以下两个获取变量值的方法等价
+            exp = session.vars.exp
+            exp = session.getVariable('exp')
+
+            # 以下两个为变量赋值的方法等价
+            session.vars.exp = 10000
+            session.setVariable('exp', 10000)
+        """
         return self._variables
 
     @property
     def globals(self):
-        "全局变量的辅助访问器"
+        """
+        全局变量的辅助点访问器，可以通过globals+变量名快速访问该变量值
+
+        全局变量与会话变量的区别在于，全局变量在所有会话之间是共享和统一的
+        
+        .. code:: Python
+
+            # 以下两个获取全局变量值的方法等价
+            hooked = session.globals.hooked
+            hooked = session.getGlobal('hooked')
+
+            # 以下两个为全局变量赋值的方法等价
+            session.globals.hooked = True
+            session.setGlobal('hooked', True)
+        """
         return self.application.globals
 
     @property
     def tris(self):
-        "本回话的触发器辅助访问器"
+        """
+        本会话的触发器的辅助点访问器，可以通过tris+触发器id快速访问触发器
+
+        .. code:: Python
+            
+            session.tris.mytri.enabled = False
+        """
         return self._triggers
 
     @property
     def alis(self):
-        "本回话的别名辅助访问器"
+        """
+        本会话的别名辅助点访问器，可以通过alis+别名id快速访问别名
+        
+        .. code:: Python
+            
+            session.alis.myali.enabled = False
+        """
         return self._aliases
     
     @property
     def cmds(self):
-        "本回话的命令辅助访问器"
+        """
+        本会话的命令辅助点访问器，可以通过cmds+命令id快速访问命令
+        
+        .. code:: Python
+            
+            session.cmds.mycmd.enabled = False
+        """
         return self._commands
 
     @property
     def timers(self):
-        "本回话的定时器辅助访问器"
+        """
+        本会话的定时器辅助点访问器，可以通过timers+定时器id快速访问定时器
+        
+        .. code:: Python
+            
+            session.timers.mytimer.enabled = False
+        """
         return self._timers
 
     @property
     def gmcp(self):
-        "本回话的GMCP辅助访问器"
+        "本会话的GMCP辅助访问器"
         return self._gmcp
 
     def get_status(self):
+        "返回状态窗口内容的真实函数。 **脚本中无需调用。**"
         text = f"这是一个默认的状态窗口信息\n会话: {self.name} 连接状态: {self.connected}"
         if callable(self._status_maker):
             text = self._status_maker()
@@ -337,7 +461,15 @@ class Session:
         return text
 
     def getPlainText(self, rawText: str, trim_newline = False) -> str:
-        "将带有VT100或者MXP转义字符的字符串转换为正常字符串（删除所有转义）"
+        """
+        将带有VT100或者MXP转义字符的字符串转换为正常字符串（删除所有转义）。 **脚本中无需调用。**
+
+        :param rawText: 原始文本对象
+        :param trim_newline: 返回值是否删除末尾的回车符和换行符
+
+        :return: 经处理后的纯文本字符串
+        
+        """
         plainText = self._esc_regx.sub("", rawText)
         if trim_newline:
             plainText = plainText.rstrip("\n").rstrip("\r")
@@ -345,7 +477,12 @@ class Session:
         return plainText
 
     def writetobuffer(self, data, newline = False):
-        "将数据写入到用于本地显示的缓冲中"
+        """
+        将数据写入到用于本地显示的缓冲中。 **脚本中无需调用。**
+        
+        :param data: 写入的数据, 应为 str 类型
+        :param newline: 是否额外增加换行符
+        """
         self.buffer.insert_text(data)
 
         if len(data) > 0 and (data[-1] == "\n"):
@@ -356,18 +493,29 @@ class Session:
             self._line_count += 1
 
     def clear_half(self):
-        "清除过多缓冲"
+        """
+        清除半数缓冲。 **脚本中无需调用。**
+
+        半数的数量由 Settings.client['buffer_lines'] 确定，默认为5000行。
+        """
         if (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
             self._line_count = self.buffer.clear_half()
 
     def feed_data(self, data) -> None:
-        "永远只会传递1个字节的数据，以bytes形式"
+        """
+        由协议对象调用，将收到的远程数据加入会话缓冲。永远只会传递1个字节的数据，以bytes形式。 **脚本中无需调用。**
+        
+        :param data: 传入的数据， bytes 格式
+        """
         self._line_buffer.extend(data)
 
         if (len(data) == 1) and (data[0] == ord("\n")):
             self.go_ahead()
 
     def feed_eof(self) -> None:
+        """
+        由协议对象调用，处理收到远程 eof 数据，即远程断开连接。 **脚本中无需调用。**
+        """
         self._eof = True
         if self.connected:
             self._transport.write_eof()
@@ -375,6 +523,16 @@ class Session:
         self.log.info(f"服务器断开连接! {self._protocol.__repr__}")
     
     def feed_gmcp(self, name, value) -> None:
+        """
+        由协议对象调用，处理收到远程 GMCP 数据。 **脚本中无需调用。**
+
+        :param name: 收到的GMCP数据的 name
+        :param value: 收到的GMCP数据的 value。 该数据值类型为 字符串形式执行过eval后的结果
+
+        **注** 当未通过GMCPTrigger对某个name的GMCP数据进行处理时，会通过session.info将该GMCP数据打印出来以供调试。
+        当已有GMCPTrigger处理该name的GMCP数据时，则不会再打印此信息。
+        """
+
         nothandle = True
         if name in self._gmcp.keys():
             gmcp = self._gmcp[name]
@@ -386,13 +544,32 @@ class Session:
             self.info(f"{name}: {value}", "GMCP")
 
     def feed_msdp(self, name, value) -> None:
+        """
+        由协议对象调用，处理收到远程 MSDP 数据。 **脚本中无需调用。**
+
+        :param name: 收到的MSDP数据的 name
+        :param value: 收到的MSDP数据的 value
+
+        **注** 由于北大侠客行不支持MSDP，因此该函数体并未实现
+        """
         pass
 
     def feed_mssp(self, name, value) -> None:
-        pass
+        """
+        由协议对象调用，处理收到远程 MSSP 数据。 **脚本中无需调用。**
+
+        :param name: 收到的MSSP数据的 name
+        :param value: 收到的MSSP数据的 value
+
+        **注** 由于北大侠客行不支持MSSP，因此该函数体并未实现
+        """
 
     def go_ahead(self) -> None:
-        "把当前接收缓冲内容放到显示缓冲中"
+        """
+        对当前接收缓冲内容进行处理并放到显示缓冲中。 **脚本中无需调用。**
+        
+        触发器的响应在该函数中进行处理。
+        """
         raw_line = self._line_buffer.decode(self.encoding, Settings.server["encoding_errors"])
         tri_line = self.getPlainText(raw_line, trim_newline = True)
         self._line_buffer.clear()
@@ -441,43 +618,88 @@ class Session:
             self.writetobuffer(self.display_line)
 
     def set_exception(self, exc: Exception):
+        """
+        由协议对象调用，处理异常。 **脚本中无需调用。**
+
+        :param exc: 异常对象
+        """
         self.error(f"连接过程中发生异常，异常信息为： {exc}")
-        pass
+
 
     def create_task(self, coro, *args, name: str = None) -> asyncio.Task:
+        """
+        创建一个任务，并将其加入到会话的任务管理队列中。
+
+        加入会话管理的任务，在任务完成（结束或中止）后，会自动从管理队列中移除。
+
+        :param coro: 一个async定义的协程对象或者其他可等待对象
+        :param name: 任务的名称定义，可选项。该属性仅在3.10及以后的Python版本中支持
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                        self.session.create_task(self.async_example())
+
+                    async def async_example(self):
+                        await asyncio.sleep(1)
+                        self.session.info("show a message after 1 second")
+        """
         if self.pyversion in ["3.7", "3.8", "3.9"]:
             task = self.loop.create_task(coro)
-            #task = asyncio.create_task(coro)
         else:
             task = self.loop.create_task(coro, name = name)
-            #task = asyncio.create_task(coro, name = name)
+
         task.add_done_callback(self._tasks.discard)
         self._tasks.add(task)
-        #self._tasks.append(task)
+
         return task
 
     def remove_task(self, task: asyncio.Task, msg = None):
+        """
+        清除一个受本会话管理的任务。若任务未完成，则取消该任务。
+
+        由于加入会话管理的任务，在任务完成后会自动从管理队列中移除，因此该方法主要用来取消未完成的任务。
+
+        :param task: 由本会话管理的一个 asyncio.Task 对象
+        :param msg: 本意是用来反馈 task.cancel() 时的消息，但为了保持兼容低版本Python环境，该参数并未使用。
+        """
         result = task.cancel()
         self._tasks.discard(task)
-        # if task in self._tasks:
-        #     self._tasks.remove(task)
+
         return result
 
     def clean_finished_tasks(self):
-        "清理已经完成的任务"
+        # 清理已经完成的任务。
+        # 自PyMUD 0.19.2post2版之后，清理完成任务在该任务完成时刻自动调用，因此本函数不再使用，保留的目的是为了向前兼容。
+
         self._tasks = set([t for t in self._tasks if not t.done()])
 
-        # for task in self._tasks:
-        #     if isinstance(task, asyncio.Task) and task.done():
-        #         self._tasks.remove(task)
-
     def write(self, data) -> None:
-        "向服务器写入数据（RAW格式字节数组/字节串）"
+        """
+        向服务器写入数据（RAW格式字节数组/字节串）。 **一般不应在脚本中直接调用。**
+
+        :param data: 向传输中写入的数据, 应为 bytes, bytearray, memoryview 类型
+        """
         if self._transport and not self._transport.is_closing():
             self._transport.write(data)
     
     def writeline(self, line: str) -> None:
-        "向服务器中写入一行。如果使用;分隔（使用Settings.client.seperator指定）的多个命令，将逐行写入"
+        """
+        向服务器中写入一行，用于向服务器写入不经别名或命令解析时的数据。将自动在行尾添加换行符。
+        
+        - 如果line中包含分隔符（由Settings.client.seperator指定，默认为半角分号;）的多个命令，将逐行依次写入。
+        - 当 Settings.cleint["echo_input"] 为真时，向服务器写入的内容同时在本地缓冲中回显。
+
+        :param line: 字符串行内容
+
+        示例:
+            .. code:: Python
+
+                session.writeline("open door")
+        """
         if self.seperator in line:
             lines = line.split(self.seperator)
             for ln in lines:
@@ -497,8 +719,22 @@ class Session:
     
     def exec(self, cmd: str, name = None, *args, **kwargs):
         """
-        在名称为name的会话中使用exec_command执行MUD命令
-        当不指定name时，在当前会话中执行。
+        在名称为name的会话中使用exec_command执行MUD命令。当不指定name时，在当前会话中执行。
+
+        - exec 与 writeline 都会向服务器写入数据。其差异在于，exec执行的内容，会先经过Alias处理和Command处理，实际向远程发送内容与cmd可以不一致。
+        - exec 在内部通过调用 exec_command 实现， exec 可以实现与 exec_command 完全相同的功能
+        - exec 是后来增加的函数，因此保留 exec_command 的目的是为了脚本的向前兼容
+        
+        :param cmd: 要执行的命令
+        :param name: 要执行命令的会话的名称，当不指定时，在当前会话执行。
+        :param args: 保留兼容与扩展性所需，脚本中调用时无需指定
+        :param kwargs: 保留兼容与扩展性所需，脚本中调用时无需指定
+
+        示例:
+            .. code:: Python
+
+                session.addAlias(SimpleAlias(self.session, "^cb\s(\S+)\s(\S+)", "#3 get %1 from jinnang;#wa 250;combine gem;#wa 250;pack gem", id = "ali_combine"))
+                session.exec("cb j1a")
         """
         name = name or self.name
         if name in self.application.sessions.keys():
@@ -507,10 +743,32 @@ class Session:
         else:
             self.error(f"不存在名称为{name}的会话")
 
+    async def exec_async(self, cmd: str, name = None, *args, **kwargs):
+        """
+        exec的异步形式。在名称为name的会话中使用exec_command_async执行MUD命令。当不指定name时，在当前会话中执行。
+
+        - exec_async 在内部通过调用 exec_command_async 实现， exec_async 可以实现与 exec_command_async 完全相同的功能
+        - exec_async 是后来增加的函数，因此保留 exec_command_async 的目的是为了脚本的向前兼容
+        - 异步调用时，该函数要等待对应的代码执行完毕后才会返回。可以用于确保命令执行完毕。
+        """
+        name = name or self.name
+        if name in self.application.sessions.keys():
+            session = self.application.sessions[name]
+            await session.exec_command_async(cmd, *args, **kwargs)
+        else:
+            self.error(f"不存在名称为{name}的会话")
+
+    
+
     def exec_code(self, cl: CodeLine, *args, **kwargs):
         """
-        执行解析为CodeLine形式的MUD命令（必定为单个命令）
-        这是新修改命令执行后的最核心执行函数，所有真实调用的起源
+        执行解析为CodeLine形式的MUD命令（必定为单个命令）。一般情况下，脚本中不应调用该方法，而应使用exec/exec_command。
+        
+        这是命令执行的最核心执行函数，所有真实调用的起源（同步调用情况下）
+
+        :param cl: CodeLine形式的执行代码
+        :param args: 保留兼容与扩展性所需
+        :param kwargs: 保留兼容与扩展性所需
         """
         if cl.length == 0:
             self.writeline("")
@@ -565,8 +823,15 @@ class Session:
 
     async def exec_code_async(self, cl: CodeLine, *args, **kwargs):
         """
-        执行解析为CodeLine形式的MUD命令（必定为单个命令）
-        这是新修改命令执行后的最核心执行函数，所有真实调用的起源
+        该方法为exec_code的异步形式实现。一般情况下，脚本中不应调用该方法，而应使用 exec_command_async。
+        
+        这是命令执行的最核心执行函数，所有真实调用的起源（异步调用情况下）。
+
+        异步调用时，该函数要等待对应的代码执行完毕后才会返回。可以用于确保命令执行完毕。
+
+        :param cl: CodeLine形式的执行代码
+        :param args: 保留兼容与扩展性所需
+        :param kwargs: 保留兼容与扩展性所需
         """
         if cl.length == 0:
             self.writeline("")
@@ -606,7 +871,7 @@ class Session:
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
                     if asyncio.iscoroutinefunction(handler):
-                        await handler(code = cl, *args, **kwargs)
+                        await self.create_task(handler(code = cl, *args, **kwargs))
                     else:
                         handler(code = cl, *args, **kwargs)
                 else:
@@ -618,7 +883,11 @@ class Session:
             
     def exec_text(self, cmdtext: str):
         """
-        执行文本形式的MUD命令（必定为单个命令，且确定不是#开头的）
+        执行文本形式的MUD命令。必定为单个命令，且确定不是#开头的，同时不进行参数替代
+
+        一般情况下，脚本中不应调用该方法，而应使用 exec/exec_command。
+
+        :param cmdtext: 纯文本命令
         """
         isNotCmd = True
         for command in self._commands.values():
@@ -644,9 +913,13 @@ class Session:
             if notAlias:
                 self.writeline(cmdtext)
 
-        # self.clean_finished_tasks()
-
     async def exec_text_async(self, cmdtext: str):
+        """
+        该方法为 exec_text 的异步形式实现。一般情况下，脚本中不应调用该方法，而应使用 exec_async/exec_command_async。
+
+        异步调用时，该函数要等待对应的代码执行完毕后才会返回。可以用于确保命令执行完毕。
+        """
+
         isNotCmd = True
         for command in self._commands.values():
             if isinstance(command, Command) and command.enabled:
@@ -673,10 +946,18 @@ class Session:
 
     def exec_command(self, line: str, *args, **kwargs) -> None:
         """
-        执行MUD命令。多个命令可以用分隔符隔开。
-        此函数中，多个命令是一次性发送到服务器的，并未进行等待确认上一条命令执行完毕
-        本函数和writeline的区别在于，本函数会先进行Command和Alias解析，若不是再使用writeline发送
-        当line不包含Command和Alias时，等同于writeline
+        在当前会话中执行MUD命令。多个命令可以用分隔符隔开。
+
+        - 此函数中，多个命令是一次性发送到服务器的，并未进行等待确认上一条命令执行完毕。
+        - 若要等待每一个命令执行完毕后再进行下一个命令，则应使用本函数的异步形式 exec_command_async
+        - 本函数和writeline的区别在于，本函数会先进行Command和Alias解析，若不是再使用writeline发送
+        - 当line不包含Command和Alias时，等同于writeline
+        - 本函数使用方法与 exec 相同，差异在于不能指定会话名
+        - exec 是后来增加的函数，因此保留 exec_command 的目的是为了脚本的向前兼容
+
+        :param line: 需指定的内容
+        :param args: 保留兼容性与扩展性需要
+        :param kwargs: 保留兼容性与扩展性需要
         """
 
         ## 以下为函数执行本体
@@ -690,7 +971,12 @@ class Session:
             cb.execute(self)
 
     def exec_command_after(self, wait: float, line: str):
-        "延时一段时间之后，执行命令(exec_command)"
+        """
+        延时一段时间之后，执行命令exec_command
+
+        :param wait: float, 延时等待时间，单位为秒。
+        :param line: str, 延时等待结束后执行的内容
+        """
         async def delay_task():
             await asyncio.sleep(wait)
             self.exec_command(line)
@@ -699,8 +985,12 @@ class Session:
 
     async def exec_command_async(self, line: str, *args, **kwargs):
         """
-        异步执行MUD命令，是exec_command的异步实现
-        异步时，多个命令是逐个发送到服务器的，每一命令都等待确认上一条命令执行完毕，且多命令之间会插入interval时间等待
+        exec_command 的异步形式。在当前会话中执行MUD命令。多个命令可以用分隔符隔开。
+
+        - 异步时，多个命令是逐个发送到服务器的，每一命令都等待确认上一条命令执行完毕，且多命令之间会插入一定时间等待
+        - 多个命令之间的间隔等待时间由 Settings.client["interval"] 指定，单位为 ms
+        - 本函数使用方法与 exec_async 相同，差异在于不能指定会话名
+        - exec_async 是后来增加的函数，因此保留 exec_command_async 的目的是为了脚本的向前兼容
         """
 
         ## 以下为函数执行本体
@@ -715,19 +1005,39 @@ class Session:
             await cb.async_execute(self)
 
     def write_eof(self) -> None:
+        """
+        向服务器发送 eof 信息，即与服务器断开连接。 **脚本中无需调用。**
+        
+        若要在脚本中控制断开与服务器的连接，请使用 session.disconnect()
+        """
         self._transport.write_eof()
     
     def getUniqueNumber(self):
-        "获取本session中的唯一编号"
+        """
+        获取本session中的唯一数值。该方法用来为各类对象生成随机不重复ID
+
+        :return: 返回为整数，返回结果在本会话中唯一。
+        """
         self._uid += 1
         return self._uid
 
     def getUniqueID(self, prefix):
-        "根据唯一编号获取本session中的唯一名称, 格式为: prefix_uid"
+        """
+        根据唯一编号获取本session中的唯一名称, 格式为: prefix_uid
+
+        :param prefix: 为唯一数值增加的前缀
+        :return: 形式为 prefix_uid 的唯一标识
+        """
         return "{0}_{1}".format(prefix, self.getUniqueNumber())
 
     def enableGroup(self, group: str, enabled = True):
-        "使能或禁用Group中所有对象, 返回组内对象个数。顺序为：别名，触发器，命令，定时器，GMCP"
+        """
+        使能或禁用Group中所有对象, 返回组内各对象个数。
+        
+        :param group: 组名，即各对象的 group 属性的值
+        :param enabled: 使能/禁用开关。为True时表示使能， False为禁用
+        :return: 5个整数的列表，依次表示改组内操作的 别名，触发器，命令，定时器，GMCP 的个数
+        """
         counts = [0, 0, 0, 0, 0]
         for ali in self._aliases.values():
             if isinstance(ali, Alias) and (ali.group == group):
@@ -800,59 +1110,158 @@ class Session:
             self._delObject(id, cls)
 
     def addAliases(self, alis: dict):
-        "向会话中增加多个别名"
+        """
+        向会话中增加多个别名
+
+        :param alis: 多个别名的字典。字典 key 应为每个别名的 id。
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                        self._aliases = dict()
+
+                        self._initAliases()
+
+                    def _initAliases(self):
+                        self._aliases['my_ali1'] = SimpleAlias(self.session, "n", "north", id = "my_ali1")
+                        self._aliases['my_ali2'] = SimpleAlias(self.session, "s", "south", id = "my_ali2")
+                        self.session.addAliases(self._aliases)
+        """
         self._addObjects(alis, Alias)
 
     def addCommands(self, cmds: dict):
-        "向会话中增加多个命令"
+        """
+        向会话中增加多个命令。使用方法与 addAliases 类似。
+
+        :param cmds: 多个命令的字典。字典 key 应为每个命令的 id。
+        """
         self._addObjects(cmds, Command)
 
     def addTriggers(self, tris: dict):
-        "向会话中增加多个触发器"
+        """
+        向会话中增加多个触发器。使用方法与 addAliases 类似。
+
+        :param tris: 多个触发器的字典。字典 key 应为每个触发器的 id。
+        """
         self._addObjects(tris, Trigger)
 
     def addGMCPs(self, gmcps: dict):
-        "增加多个GMCP处理函数"
+        """
+        向会话中增加多个GMCPTrigger。使用方法与 addAliases 类似。
+
+        :param gmcps: 多个GMCPTrigger的字典。字典 key 应为每个GMCPTrigger的 id。
+        """
         self._addObjects(gmcps, GMCPTrigger)
 
     def addTimers(self, tis: dict):
-        "向会话中增加多个定时器"
+        """
+        向会话中增加多个定时器。使用方法与 addAliases 类似。
+
+        :param tis: 多个定时器的字典。字典 key 应为每个定时器的 id。
+        """
         self._addObjects(tis, Timer)
 
     def addAlias(self, ali: Alias):
-        "向会话中增加别名"
+        """
+        向会话中增加一个别名。
+
+        :param ali: 要增加的别名对象，应为 Alias 类型或其子类
+        """
         self._addObject(ali, Alias)
 
     def addCommand(self, cmd: Command):
-        "向会话中增加命令"
+        """
+        向会话中增加一个命令。
+
+        :param cmd: 要增加的命令对象，应为 Command 类型或其子类
+        """
         self._addObject(cmd, Command)
 
     def addTrigger(self, tri: Trigger):
-        "向会话中增加触发器"
+        """
+        向会话中增加一个触发器。
+
+        :param tri: 要增加的触发器对象，应为 Trigger 类型或其子类
+        """
         self._addObject(tri, Trigger)
 
     def addTimer(self, ti: Timer):
-        "向会话中增加定时器"
+        """
+        向会话中增加一个定时器。
+
+        :param ti: 要增加的定时器对象，应为 Timer 类型或其子类
+        """
         self._addObject(ti, Timer)
 
     def addGMCP(self, gmcp: GMCPTrigger):
-        "增加GMCP处理函数"
+        """
+        向会话中增加一个GMCP触发器。
+
+        :param gmcp: 要增加的GMCP触发器对象，应为 GMCPTrigger 类型或其子类
+        """
+
         self._addObject(gmcp, GMCPTrigger)
 
     def delAlias(self, ali):
-        "从会话中移除别名，可接受Alias对象或alias的id"
+        """
+        从会话中移除一个别名，可接受 Alias 对象或其 id
+        
+        :param ali: 要删除的别名指代，可以为别名 id 或者别名自身
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+
+                        ali = Alias(session, "s", "south", id = "my_ali1")
+                        session.addAlias(ali)
+
+                        # 以下两行语句均可以删除该别名
+                        session.delAlias("my_ali1")
+                        session.delAlias(ali)
+        """
         if isinstance(ali, Alias):
             self._delObject(ali.id, Alias)
         elif isinstance(ali, str) and (ali in self._aliases.keys()):
             self._delObject(ali, Alias)
 
     def delAliases(self, ali_es: Iterable):
-        "删除一组别名"
+        """
+        从会话中移除一组别名，可接受 Alias 对象或其 id 的迭代器
+        
+        :param ali_es: 要删除的一组别名指代，可以为别名 id 或者别名自身的列表
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                        self._aliases = dict()
+
+                        self._aliases["my_ali1"] = Alias(session, "s", "south", id = "my_ali1")
+                        self._aliases["my_ali2"] = Alias(session, "n", "north", id = "my_ali2")
+                        
+                        session.addAliases(self._aliase)
+
+                        # 以下两行语句均可以删除两个别名
+                        session.delAliases(self._aliases)
+                        session.delAliases(self._aliases.keys())
+        """
         for ali in ali_es:
             self.delAlias(ali)
 
     def delCommand(self, cmd):
-        "从会话中移除命令，可接受Command对象或command的id"
+        """
+        从会话中移除一个命令，可接受 Command 对象或其 id。使用方法与 delAlias 类似
+        
+        :param cmd: 要删除的命令指代，可以为命令id或者命令自身
+        """
         if isinstance(cmd, Command):
             cmd.reset()
             self._delObject(cmd.id, Command)
@@ -861,24 +1270,42 @@ class Session:
             self._delObject(cmd, Command)
 
     def delCommands(self, cmd_s: Iterable):
-        "删除一组命令"
+        """
+        从会话中移除一组命令，可接受可接受 Command 对象或其 id 的迭代器。使用方法与 delAliases 类似
+        
+        :param cmd_s: 要删除的命令指代，可以为命令 id 或者命令自身的列表
+        """
         for cmd in cmd_s:
             self.delCommand(cmd)
 
     def delTrigger(self, tri):
-        "从会话中移除触发器，可接受Trigger对象或trigger的id"
+        """
+        从会话中移除一个触发器，可接受 Trigger 对象或其的id。使用方法与 delAlias 类似
+        
+        :param tri: 要删除的触发器指代，可以为触发器 id 或者触发器自身
+        """
+
         if isinstance(tri, Trigger):
             self._delObject(tri.id, Trigger)
         elif isinstance(tri, str) and (tri in self._triggers.keys()):
             self._delObject(tri, Trigger)
 
     def delTriggers(self, tri_s: Iterable):
-        "删除一组触发器"
+        """
+        从会话中移除一组触发器，可接受可接受 Trigger 对象或其 id 的迭代器。使用方法与 delAliases 类似
+        
+        :param tri_s: 要删除的触发器指代，可以为触发器 id 或者触发器自身的列表
+        """
         for tri in tri_s:
             self.delTrigger(tri)
 
     def delTimer(self, ti):
-        "从会话中移除定时器，可接受Timer对象或者timer的id"
+        """
+        从会话中移除一个定时器，可接受 Timer 对象或其的id。使用方法与 delAlias 类似
+        
+        :param ti: 要删除的定时器指代，可以为定时器 id 或者定时器自身
+        """
+
         if isinstance(ti, Timer):
             ti.enabled = False
             self._delObject(ti.id, Timer)
@@ -887,24 +1314,40 @@ class Session:
             self._delObject(ti, Timer)
 
     def delTimers(self, ti_s: Iterable):
-        "删除一组定时器"
+        """
+        从会话中移除一组定时器，可接受可接受 Timer 对象或其 id 的迭代器。使用方法与 delAliases 类似
+        
+        :param ti_s: 要删除的定时器指代，可以为定时器 id 或者定时器自身的列表
+        """
         for ti in ti_s:
             self.delTimer(ti)
 
     def delGMCP(self, gmcp: GMCPTrigger):
-        "从会话中移除GMCP触发器，可接受GMCPTrigger对象或其id"
+        """
+        从会话中移除一个GMCP触发器，可接受 GMCPTrigger 对象或其的id。使用方法与 delAlias 类似
+        
+        :param gmcp: 要删除的GMCP触发器指代，可以为GMCP触发器 id 或者GMCP触发器自身
+        """
         if isinstance(gmcp, GMCPTrigger):
             self._delObject(gmcp.id, GMCPTrigger)
         elif isinstance(gmcp, str) and (gmcp in self._gmcp.keys()):
             self._delObject(gmcp, GMCPTrigger)
 
     def delGMCPs(self, gmcp_s: Iterable):
-        "删除一组GMCP"
+        """
+        从会话中移除一组GMCP触发器，可接受可接受 GMCPTrigger 对象或其 id 的迭代器。使用方法与 delAliases 类似
+        
+        :param gmcp_s: 要删除的GMCP触发器指代，可以为 id 或者GMCP触发器自身的列表
+        """
         for gmcp in gmcp_s:
             self.delGMCP(gmcp)
 
     def replace(self, newstr):
-        "替换当前行内容显示为newstr"
+        """
+        将当前行内容显示替换为newstr。该方法仅在用于触发器的同步处置中才能正确相应
+
+        :param newstr: 替换后的内容
+        """
         if len(newstr) > 0:
             newstr += Settings.client["newline"]
         self.display_line = newstr
@@ -914,23 +1357,66 @@ class Session:
     ## 变量 Variables 处理
     ## ###################
     def delVariable(self, name):
-        """删除一个变量"""
+        """
+        删除一个变量。删除变量是从session管理的变量列表中移除关键字，而不是设置为 None
+        
+        :param name: 变量名
+        """
         assert isinstance(name, str), "name必须是一个字符串"
         if name in self._variables.keys():
             self._variables.pop(name)
 
     def setVariable(self, name, value):
-        """设置一个变量的值"""
+        """
+        设置一个变量的值。可以使用vars快捷点访问器实现同样效果。
+        
+        :param name: 变量名。变量名必须为一个字符串
+        :param value: 变量的值。变量值可以为任意 Python 类型。但为了要保存变量数据到硬盘，建议使用可序列化类型。
+
+        示例:
+            .. code:: Python
+
+                # 以下两种方式等价
+                session.setVariable("myvar1", "the value")
+                session.vars.myvar1 = "the value"
+        """
         assert isinstance(name, str), "name必须是一个字符串"
         self._variables[name] = value
 
     def getVariable(self, name, default = None):
+        """
+        获取一个变量的值。可以使用vars快捷点访问器实现类似效果，但vars访问时，默认值总为None。
+        
+        :param name: 变量名。变量名必须为一个字符串
+        :param default: 当会话中不存在该变量时，返回的值。默认为 None。
+        :return: 变量的值，或者 default
+
+        示例:
+            .. code:: Python
+
+                # 以下两种方式等价
+                myvar = session.getVariable("myvar1", None)
+                myvar = session.vars.myvar1
+        """
         """获取一个变量的值. 当name指定的变量不存在时，返回default"""
         assert isinstance(name, str), "name必须是一个字符串"
         return self._variables.get(name, default)
     
     def setVariables(self, names, values):
-        """设置一组变量的值，names为名称元组，values为值元组"""
+        """
+        同时设置一组变量的值。要注意，变量名称和值的数量要相同。当不相同时，抛出异常。
+
+        :param names: 所有变量名的元组或列表
+        :param values: 所有变量对应值的元祖或列表
+
+        示例:
+            .. code:: Python
+
+                hp_key   = ("qi", "jing", "neili", "jingli")
+                hp_value = [1000, 800, 1100, 1050]
+
+                session.setVariables(hp_key, hp_value)
+        """
         assert isinstance(names, tuple) or isinstance(names, list), "names命名应为元组或列表，不接受其他类型"
         assert isinstance(values, tuple) or isinstance(values, list), "values值应为元组或列表，不接受其他类型"
         assert (len(names) > 0) and (len(values) > 0) and (len(names) == len(values)), "names与values应不为空，且长度相等"
@@ -940,7 +1426,17 @@ class Session:
             self.setVariable(name, value)
 
     def getVariables(self, names):
-        """获取一组变量的值，names为获取值的元组，返回values元组"""
+        """
+        同时获取一组变量的值。
+
+        :param names: 所有变量名的元组或列表
+        :return: 返回所有变量值的元组。可在获取值时直接解包。
+
+        示例:
+            .. code:: Python
+
+                qi, jing, neili, jingli = session.getVariables(["qi", "jing", "neili", "jingli"])
+        """
         assert isinstance(names, tuple) or isinstance(names, list), "names命名应为元组或列表，不接受其他类型"
         assert len(names) > 0, "names应不为空"
         values = list()
@@ -951,24 +1447,51 @@ class Session:
         return tuple(values)
     
     def updateVariables(self, kvdict: dict):
-        """使用dict字典更新变量值"""
+        """
+        使用字典更新一组变量的值。若变量不存在将自动添加。
+
+        :param kvdict: 变量/值的字典
+
+        示例:
+            .. code:: Python
+                
+                newvars = {"qi": 1000, "jing": 800, "neili": 1100, "jingli": 1050}
+                session.updateVariables(newvars)
+        """
+
         self._variables.update(kvdict)
 
     ## ###################
     ## 全局变量 Globals 处理
     ## ###################
     def delGlobal(self, name):
-        "删除一个全局变量"
+        """
+        删除一个全局变量，使用方式与会话变量variable相同
+
+        :param name: 全局变量的名称
+        """
         assert isinstance(name, str), "name必须是一个字符串"
         self.application.del_globals(name)
 
     def setGlobal(self, name, value):
-        """设置一个全局变量的值"""
+        """
+        设置一个全局变量的值，使用方式与会话变量variable相同
+        
+        :param name: 全局变量的名称
+        :param value: 全局变量的值
+        """
         assert isinstance(name, str), "name必须是一个字符串"
         self.application.set_globals(name, value)
 
     def getGlobal(self, name, default = None):
-        """获取一个全局变量的值。当name指定的变量不存在时，返回default"""
+        """
+        获取一个全局变量的值，使用方式与会话变量variable相同
+        
+        :param name: 全局变量的名称
+        :param default: 当全局变量不存在时的返回值
+        :return: 全局变量的值，或者 default
+        """
+
         assert isinstance(name, str), "name必须是一个字符串"
         return self.application.get_globals(name, default)
 
@@ -1688,7 +2211,13 @@ class Session:
                 ss.exec_command(new_cmd)
                 
     def clean(self):
-        "清除会话有关任务项和事件标识"
+        """
+        清除会话有关任务项和事件标识，具体包括：
+        
+        - 复位所有可能包含异步操作的对象，包括定时器、触发器、别名、GMCP触发器、命令
+        - 取消所有由本会话管理但仍未完成的任务
+        - 清空会话管理的所有任务
+        """
         try:
             # 加载时，取消所有任务，复位所有含async的对象, 保留变量
             for tm in self._timers.values():
@@ -1720,7 +2249,9 @@ class Session:
             pass
 
     def reset(self):
-        "复位：清除所有异步项和等待对象，卸载所有模块，清除所有会话有关对象"
+        """
+        复位：清除所有异步项和等待对象，卸载所有模块，清除所有会话有关对象。
+        """
         self.clean()
 
         modules = self._modules.values()
@@ -1735,7 +2266,15 @@ class Session:
         self._tasks.clear()
 
     def load_module(self, module_names):
-        "当名称为元组/列表时，加载指定名称的系列模块，当名称为字符串时，加载单个模块"
+        """
+        模块加载函数。
+
+        :param module_names: 要加载的模块清单。为元组/列表时，加载指定名称的系列模块，当名称为字符串时，加载单个模块。
+
+        示例:
+            - session.load_module('mymodule'):  加载名为mymodule.py文件对应的模块
+            - session.load_modules(['mymod1', 'mymod2']): 依次加载mymod1.py与mymod2.py文件对应的模块
+        """
         if isinstance(module_names, (list, tuple)):
             for mod in module_names:
                 mod = mod.strip()
@@ -1777,7 +2316,14 @@ class Session:
             self.error(f"异常追踪为： {traceback.format_exc()}")
 
     def unload_module(self, module_names):
-        "当名称为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块"
+        """
+        模块卸载函数。卸载模块时，将自动调用模块中名称为Configuration类对象的unload方法。
+
+        一般使用 #unload 命令来卸载模块，而不是在脚本中使用 unload_module 函数来卸载模块
+
+        :param module_names: 要卸载的模块清单。为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块。
+        """
+
         if isinstance(module_names, (list, tuple)):
             for mod in module_names:
                 mod = mod.strip()
@@ -1807,7 +2353,13 @@ class Session:
             self.warning(f"指定模块名称 {module_name} 并未加载.")
 
     def reload_module(self, module_names = None):
-        "重新加载指定名称模块，可以字符串指定单个或以列表形式指定多个模块。若未指定名称，则重新加载所有已加载模块"
+        """
+        模块重新加载函数。
+
+        一般使用 #reload 命令来重新加载模块，而不是在脚本中使用 reload_module 函数来重新加载模块
+
+        :param module_names: 要重新加载的模块清单。为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块。当不指定时，重新加载所有已加载模块。
+        """
         if module_names is None:
             self.clean()
             mods = list(self._modules.keys())
@@ -2234,13 +2786,31 @@ class Session:
         self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
-        "输出信息（蓝色），自动换行"
+        """
+        使用默认的INFO_STYLE（绿色）输出信息，并自动换行。信息格式类似 [title] msg
+        
+        :param msg: 要输出的信息
+        :param title: 要显示在前面的标题，不指定时默认为 PYMUD INFO
+        :param style: 要输出信息的格式(ANSI)， 默认为 INFO_STYLE, \x1b[32m
+        """
         self.info2(msg, title, style)
 
     def warning(self, msg, title = "PYMUD WARNING", style = Settings.WARN_STYLE):
-        "输出警告（黄色），自动换行"
+        """
+        使用默认的WARN_STYLE（黄色）输出信息，并自动换行。信息格式类似 [title] msg
+        
+        :param msg: 要输出的信息
+        :param title: 要显示在前面的标题，不指定时默认为 PYMUD WARNING
+        :param style: 要输出信息的格式(ANSI)， 默认为 WARN_STYLE, \x1b[33m
+        """
         self.info2(msg, title, style)
 
     def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
-        "输出错误（红色），自动换行"
+        """
+        使用默认的ERR_STYLE（红色）输出信息，并自动换行。信息格式类似 [title] msg
+        
+        :param msg: 要输出的信息
+        :param title: 要显示在前面的标题，不指定时默认为 PYMUD ERROR
+        :param style: 要输出信息的格式(ANSI)， 默认为 ERR_STYLE, \x1b[31m
+        """
         self.info2(msg, title, style)
