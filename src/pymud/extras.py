@@ -1,10 +1,10 @@
 # External Libraries
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
-from typing import TYPE_CHECKING, Any
+from typing import Any
 import time
 
-from typing import Callable, Iterable, List, Optional, Sequence, Union
+from typing import Iterable
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
@@ -12,79 +12,40 @@ from prompt_toolkit.formatted_text import to_formatted_text, fragment_list_to_te
 from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
 from prompt_toolkit.layout.processors import Processor, Transformation
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.auto_suggest import AutoSuggest, DynamicAutoSuggest
-from prompt_toolkit.buffer import Buffer, BufferAcceptHandler
-from prompt_toolkit.completion import Completer, DynamicCompleter
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.data_structures import Point
-from prompt_toolkit.layout.controls import SearchBufferControl, UIContent, UIControl
-from prompt_toolkit.lexers import Lexer, SimpleLexer
+from prompt_toolkit.layout.controls import UIContent
+from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
-from prompt_toolkit.search import SearchState
-from prompt_toolkit.selection import SelectionType, SelectionState
-from prompt_toolkit.buffer import Buffer, BufferAcceptHandler, BufferEventHandler, ValidationState, CompletionState, YankNthArgState
+from prompt_toolkit.selection import SelectionType
+from prompt_toolkit.buffer import Buffer, ValidationState
 
 from prompt_toolkit.filters import (
-    Condition,
     FilterOrBool,
-    has_focus,
-    is_done,
-    is_true,
-    to_filter,
 )
 from prompt_toolkit.formatted_text import (
-    AnyFormattedText,
     StyleAndTextTuples,
-    Template,
     to_formatted_text,
 )
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text
-from prompt_toolkit.history import History, InMemoryHistory
-from prompt_toolkit.key_binding.key_bindings import KeyBindings, KeyBindingsBase
-from prompt_toolkit.key_binding.key_processor import KeyPressEvent
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.search import SearchState
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.key_binding.key_bindings import KeyBindingsBase
 from prompt_toolkit.layout.containers import (
-    AnyContainer,
-    ColorColumn,
-    ConditionalContainer,
-    Container,
-    DynamicContainer,
-    Float,
-    FloatContainer,
-    HSplit,
-    ScrollOffsets,
-    VSplit,
     Window,
     WindowAlign,
 )
 from prompt_toolkit.layout.controls import (
     BufferControl,
     FormattedTextControl,
-    GetLinePrefixCallable,
-)
-from prompt_toolkit.layout.dimension import AnyDimension
-from prompt_toolkit.layout.dimension import Dimension as D
-from prompt_toolkit.layout.dimension import to_dimension
-from prompt_toolkit.layout.margins import (
-    ConditionalMargin,
-    Margin,
-    NumberedMargin,
-    ScrollbarMargin,
 )
 from prompt_toolkit.layout.processors import (
-    AppendAutoSuggestion,
-    BeforeInput,
-    ConditionalProcessor,
-    PasswordProcessor,
     Processor,
-    TabsProcessor,
 )
-from prompt_toolkit.lexers import DynamicLexer, Lexer
+from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
-from prompt_toolkit.validation import DynamicValidator, Validator
-from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame
+from prompt_toolkit.widgets import Button, MenuContainer, MenuItem
 from prompt_toolkit.widgets.base import Border
 
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Screen, WritePosition
@@ -93,7 +54,6 @@ from prompt_toolkit.formatted_text.utils import (
     fragment_list_to_text,
     fragment_list_width,
 )
-from prompt_toolkit.utils import Event
 
 from .settings import Settings
 
@@ -1011,6 +971,26 @@ class MenuItem:
 
 
 class DotDict(dict):
+    """
+    可以通过点.访问内部key-value对的字典。此类型继承自dict。
+
+    - 由于继承关系，此类型可以使用所有dict可以使用的方法
+    - 额外增加的点.访问方法使用示例如下
+
+    示例:
+        .. code:: Python
+
+            mydict = DotDict()
+            
+            # 以下写内容访问等价
+            mydict["key1"] = "value1"
+            mydict.key1 = "value1"
+
+            # 以下读访问等价
+            val = mydict["key1"]
+            val = mydict.key1
+    """
+
     def __getattr__(self, __key):
         if (not __key in self.__dict__) and (not __key.startswith("__")):
             return self.__getitem__(__key)
@@ -1031,6 +1011,15 @@ import importlib
 import importlib.util
 
 class Plugin:
+    """
+    插件管理类。对加载的插件文件进行管理。该类型由PyMudApp进行管理，无需人工创建。
+
+    有关插件的详细信息，请参见 `插件 <plugins.html>`_
+
+    :param name: 插件的文件名, 如'myplugin.py'
+    :param location: 插件所在的目录。自动加载的插件包括PyMUD包目录下的plugins目录以及当前目录下的plugins目录
+
+    """
     def __init__(self, name, location):
         self._plugin_file = name
         self._plugin_loc  = location
@@ -1038,6 +1027,7 @@ class Plugin:
         self.reload()
 
     def reload(self):
+        "加载/重新加载插件对象"
         #del self.modspec, self.mod
         self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
         self.mod     = importlib.util.module_from_spec(self.modspec)
@@ -1049,23 +1039,41 @@ class Plugin:
         
     @property
     def name(self):
+        "插件名称，由插件文件中的 PLUGIN_NAME 常量定义"
         return self.mod.__dict__["PLUGIN_NAME"]
     
     @property
     def desc(self):
+        "插件描述，由插件文件中的 PLUGIN_DESC 常量定义"
         return self.mod.__dict__["PLUGIN_DESC"]
     
     @property
     def help(self):
+        "插件帮助，由插件文件中的文档字符串定义"
         return self.mod.__doc__
     
     def onAppInit(self, app):
+        """
+        PyMUD应用启动时对插件执行的操作，由插件文件中的 PLUGIN_PYMUD_START 函数定义
+
+        :param app: 启动的 PyMudApp 对象实例
+        """
         self._app_init(app)
 
     def onSessionCreate(self, session):
+        """
+        新会话创建时对插件执行的操作，由插件文件中的 PLUGIN_SESSION_CREATE 函数定义
+
+        :param session: 新创建的会话对象实例
+        """
         self._session_create(session)
 
     def onSessionDestroy(self, session):
+        """
+        会话关闭时（注意不是断开）对插件执行的操作，由插件文件中的 PLUGIN_SESSION_DESTROY 函数定义
+
+        :param session: 所关闭的会话对象实例
+        """
         self._session_destroy(session)
 
     def __getattr__(self, __name: str) -> Any:

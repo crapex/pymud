@@ -11,7 +11,9 @@ from .settings import Settings
 
 class CodeLine:
     """
-    PyMUD中可执行的代码块（单行）"""
+    PyMUD中可执行的代码块（单行），不应由脚本直接调用。
+    若脚本需要生成自己的代码块，应使用 CodeBlock。
+    """
 
     @classmethod
     def create_line(cls, line: str):
@@ -150,7 +152,11 @@ class CodeLine:
 
 class CodeBlock:
     """
-    PyMUD中可以执行的代码块（最终使用，单行或多行）
+    PyMUD中可以执行的代码块，可以进行命令、别名检测，以及完成变量替代。
+
+    但一般情况下，不需要手动创建 CodeBlock 对象，而是在 SimpleTrigger, SimpleAlias 等类型中直接使用字符串进行创建。或者在命令行输入文本将自动创建。
+
+    :param code: 代码块的代码本身。可以单行、多行、以及多层代码块
     """
 
     @classmethod
@@ -221,9 +227,36 @@ class CodeBlock:
 
     @property
     def syncmode(self):
+        """
+        只读属性: 同步模式。在创建代码块时，根据代码内容自动判定模式。
+        
+        该属性有四个可能值
+            - ``dontcare``: 同步异步均可，既不存在强制同步命令，也不存在强制异步命令
+            - ``sync``: 强制同步，仅存在强制同步模式命令及其他非同步异步命令
+            - ``async``: 强制异步，仅存在强制异步模式命令及其他非同步异步命令
+            - ``conflict``: 模式冲突，同时存在强制同步和强制异步命令
+
+        强制同步模式命令包括:
+            - #gag
+            - #replace
+
+        强制异步模式命令包括:
+            - #wait
+        """
+
         return self.__syncmode
 
     def execute(self, session, *args, **kwargs):
+        """
+        执行该 CodeBlock。执行前判断 syncmode。
+        - 仅当 syncmode 为 sync 时，才使用同步方式执行。
+        - 当 syncmode 为其他值时，均使用异步方式执行
+        - 当 syncmode 为 conflict 时，同步命令失效，并打印警告
+
+        :param session: 命令执行的会话实例
+        :param args: 兼容与扩展所需，用于变量替代及其他用途
+        :param kwargs: 兼容与扩展所需，用于变量替代及其他用途
+        """
         sync = kwargs.get("sync", None)
         if sync == None:
             if self.syncmode in ("dontcare", "async"):
@@ -231,7 +264,7 @@ class CodeBlock:
             elif self.syncmode == "sync":
                 sync = True
             elif self.syncmode == "conflict":
-                session.warning("该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将实效。")
+                session.warning("该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将失效。")
                 sync = False
 
         if sync:
@@ -242,6 +275,9 @@ class CodeBlock:
             session.create_task(self.async_execute(session, *args, **kwargs))
         
     async def async_execute(self, session, *args, **kwargs):
+        """
+        以异步方式执行该 CodeBlock。参数与 execute 相同。
+        """
         for code in self.codes:
             if isinstance(code, CodeLine):
                 await code.async_execute(session, *args, **kwargs)
@@ -252,9 +288,28 @@ class CodeBlock:
         session.clean_finished_tasks()
 
 class BaseObject:
-    """MUD会话支持的对象基类"""
+    """
+    MUD会话支持的对象基类。
+    
+    :param session: 所属会话对象
+    :param args: 兼容与扩展所需
+    :param kwargs: 兼容与扩展所需
+
+    kwargs支持的关键字:
+        :id: 唯一ID。不指定时，默认使用 __abbr__ + UniqueID 来生成
+        :group: 所属的组名。不指定时，默认使用空字符串
+        :enabled: 使能状态。不指定时，默认使用 True
+        :priority: 优先级，越小优先级越高。不指定时，默认使用 100
+        :timeout: 超时时间，单位为秒。不指定时，默认使用 10
+        :sync: 同步模式。不指定时，默认为 True
+        :oneShot: 仅执行一次标识。不指定时，默认为 False
+        :onSuccess: 成功时的同步回调函数。不指定时，默认使用 self.onSuccess
+        :onFailure: 失败时的同步回调函数。不指定时，默认使用 self.onFailure
+        :onTimeout: 超时时的同步回调函数。不指定时，默认使用 self.onTimeout
+    """
 
     State = namedtuple("State", ("result", "id", "line", "wildcards"))
+
     NOTSET  = N = -1
     FAILURE = F = 0
     SUCCESS = S = 1
@@ -262,6 +317,8 @@ class BaseObject:
     ABORT   = A = 3
 
     __abbr__ = "obj"
+    "内部缩写代码前缀"
+
     def __init__(self, session, *args, **kwargs):
         self.session    = session
         self._enabled   = True              # give a default value
@@ -286,7 +343,7 @@ class BaseObject:
 
     @property
     def enabled(self):
-        "使能或取消使能本对象"
+        "可读写属性，使能或取消使能本对象"
         return self._enabled
 
     @enabled.setter
@@ -304,16 +361,6 @@ class BaseObject:
     def onTimeout(self, *args, **kwargs):
         "超时后执行的默认回调函数"
         self.log.debug(f"{self} 缺省超时回调函数被执行.")
-
-    def expandInnerVariables(self, input: str):
-        "内部变量扩展。使用内部变量应直接使用python格式化方式: {0} 以此之类"
-        # TODO: 后续设计
-        pass
-
-    def expandOutterVariables(self, input: str):
-        "外部变量扩展。使用外部变量，应使用@varname格式，且前后有空格表示"
-        # TODO: 后续设计
-        pass 
 
     def debug(self, msg):
         "在logging中记录debug信息"
@@ -388,7 +435,21 @@ class GMCPTrigger(BaseObject):
         return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
             
 class MatchObject(BaseObject):
-    "支持匹配内容的对象，包括Alias, Trigger, Command, Module等等"
+    """
+    支持匹配内容的对象，包括Alias, Trigger, Command 等对象以及其子类对象。继承自 BaseObject
+    
+    :param session: 同 BaseObject , 本对象所属的会话
+    :param patterns: 用于匹配的模式。详见 patterns 属性
+    :param args: 兼容与扩展所需
+    :param kwargs: 兼容与扩展所需
+
+    MatchObject 新增了部分 kwargs 关键字，包括：
+        :ignoreCase: 忽略大小写，默认为 False
+        :isRegExp: 是否是正则表达式，默认为 True
+        :keepEval: 是否持续匹配，默认为 False
+        :raw: 是否匹配含有VT100 ANSI标记的原始数据，默认为 False
+    """
+
     __abbr__ = "mob"
     def __init__(self, session, patterns, *args, **kwargs):
         self.ignoreCase    = kwargs.get("ignoreCase", False)          # 忽略大小写，非默认
@@ -410,6 +471,14 @@ class MatchObject(BaseObject):
 
     @property
     def patterns(self):
+        """
+        可读写属性， 本对象的匹配模式。该属性可以在运行时动态更改，改后即时生效。
+
+        - 构造函数中的 patterns 用于指定初始的匹配模式。
+        - 该属性支持字符串和其他可迭代对象（如元组、列表）两种形式。
+            - 当为字符串时，使用单行匹配模式
+            - 当为可迭代对象时，使用多行匹配模式。多行的行数由可迭代对象所确定。
+        """
         return self._patterns
 
     @patterns.setter
@@ -437,7 +506,7 @@ class MatchObject(BaseObject):
                 self._mline = 0
 
     def reset(self):
-        "复位事件，用于async执行"
+        "复位事件，用于async执行未等待结果时，对事件的复位"
         self.event.clear()
 
     def set(self):
@@ -445,6 +514,14 @@ class MatchObject(BaseObject):
         self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
+        """
+        匹配函数。由 Session 调用。
+
+        :param line: 匹配的数据行
+        :param docallback: 匹配成功后是否执行回调函数，默认为 True
+
+        :return: BaseObject.State 类型，一个包含 result, id, name, line, wildcards 的命名元组对象
+        """
         result = self.NOTSET
 
         if not self.multiline:                              # 非多行
@@ -513,7 +590,11 @@ class MatchObject(BaseObject):
         return state
     
     async def matched(self) -> BaseObject.State:
-        "异步等待匹配，返回BaseObject.state"
+        """
+        匹配函数的异步模式，等待匹配成功之后才返回。返回值 BaseObject.state
+        
+        异步匹配模式用于 Trigger 的异步模式以及 Command 的匹配中。
+        """
         # 等待，再复位
         try:
             self.reset()
@@ -528,11 +609,22 @@ class MatchObject(BaseObject):
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}"'
 
 class Alias(MatchObject):
-    """别名，实现方式-MatchObject"""
+    """
+    别名 Alias 类型，继承自 MatchObject。
+
+    其内涵与 MatchObject 完全相同，仅对缩写进行了覆盖。
+    """
+    
     __abbr__ = "ali"
 
 class SimpleAlias(Alias):
-    "简单Alias，使用类似Zmud方法的处理方式"
+    """
+    简单别名 SimpleAlias 类型，继承自 Alias, 包含了 Alias 的全部功能， 并使用 CodeBlock 对象创建了 onSuccess 的使用场景。
+    
+    :param session: 本对象所属的会话， 同 MatchObject
+    :param patterns: 匹配模式，同 MatchObject
+    :param code: str, 当匹配成功时执行的代码， 使用 CodeBlock 进行实现
+    """
 
     def __init__(self, session, patterns, code, *args, **kwargs):
         self._code = code
@@ -540,6 +632,7 @@ class SimpleAlias(Alias):
         super().__init__(session, patterns, *args, **kwargs)
 
     def onSuccess(self, id, line, wildcards):
+        "覆盖了基类的默认 onSuccess方法，使用 CodeBlock 执行构造函数中传入的 code 参数"
         self._codeblock.execute(self.session, id = id, line = line, wildcards = wildcards)
 
     def __detailed__(self) -> str:
@@ -549,7 +642,12 @@ class SimpleAlias(Alias):
         return self.__detailed__()
 
 class Trigger(MatchObject):
-    """触发器，实现方式-MatchObject"""
+    """
+    触发器 Trigger 类型，继承自 MatchObject。
+
+    其内涵与 MatchObject 完全相同，仅对缩写进行了覆盖，并增写了 triggered 异步方法。
+    """
+
     __abbr__ = "tri"
 
     def __init__(self, session, patterns, *args, **kwargs):
@@ -557,6 +655,11 @@ class Trigger(MatchObject):
         self._task = None
 
     async def triggered(self):
+        """
+        异步触发的可等待函数。内部通过 MatchObject.matched 实现
+
+        差异在于对创建的 matched 任务进行了管理。
+        """
         if isinstance(self._task, asyncio.Task) and (not self._task.done()):
             self._task.cancel()
 
@@ -564,7 +667,13 @@ class Trigger(MatchObject):
         return await self._task
 
 class SimpleTrigger(Trigger):
-    "简单Trigger，使用类似Zmud方法的处理方式"
+    """
+    简单别名 SimpleTrigger 类型，继承自 Trigger, 包含了 Trigger 的全部功能， 并使用 CodeBlock 对象创建了 onSuccess 的使用场景。
+    
+    :param session: 本对象所属的会话， 同 MatchObject
+    :param patterns: 匹配模式，同 MatchObject
+    :param code: str, 当匹配成功时执行的代码， 使用 CodeBlock 进行实现
+    """
 
     def __init__(self, session, patterns, code, *args, **kwargs):
         self._code = code

@@ -127,10 +127,10 @@ class MudClientProtocol(Protocol):
 
     def __init__(self, session, *args, **kwargs) -> None:
         """
-        MUD客户端协议实现, 参数包括：       \n
-          + session: 管理protocol的会话     \n
-        除此之外，还可以接受的命名参数包括： \n
-          + onConnected:    当连接建立时的回调，包含2个参数： MudClientProtocol本身，以及生成的传输Transport对象  \n
+        MUD客户端协议实现, 参数包括：     
+          + session: 管理protocol的会话   
+        除此之外，还可以接受的命名参数包括：
+          + onConnected:    当连接建立时的回调，包含2个参数： MudClientProtocol本身，以及生成的传输Transport对象 
           + onDisconnected: 当连接断开时的回调，包含1个参数： MudClientProtocol本身
         """
 
