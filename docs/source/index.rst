@@ -70,7 +70,7 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.19.1
    syscommand
    hotkeys
    scripts
-   advanced
+   plugins
    references
    updatehistory
    

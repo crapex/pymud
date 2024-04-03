@@ -395,8 +395,14 @@ class BaseObject:
 
 class GMCPTrigger(BaseObject):
     """
-    支持GMCP收到数据的处理，可以类似于Trigger的使用用法
-    GMCP必定以指定name为触发，触发时，其值直接传递给对象本身
+    GMCP触发器 GMCPTrigger 类型，继承自 BaseObject。
+
+    GMCP触发器处于基于 GMCP 协议的数据，其使用方法类似于 Trigger 对象
+    
+    但 GMCPTrigger 必定以指定name为触发，触发时，其值直接传递给对象本身
+
+    :param session: 本对象所属的会话
+    :param name: 触发对应的 GMCP 的 name
     """
     def __init__(self, session, name, *args, **kwargs):
         self.event = asyncio.Event()
@@ -411,6 +417,9 @@ class GMCPTrigger(BaseObject):
         self.event.clear()
 
     async def triggered(self):
+        """
+        异步触发的可等待函数。其使用方法和 Trigger.triggered() 类似，且参数与返回值均与之兼容。
+        """
         self.reset()
         await self.event.wait()
         state = BaseObject.State(True, self.id, self.line, self.value)
@@ -681,6 +690,8 @@ class SimpleTrigger(Trigger):
         super().__init__(session, patterns, *args, **kwargs)
 
     def onSuccess(self, id, line, wildcards):
+        "覆盖了基类的默认 onSuccess方法，使用 CodeBlock 执行构造函数中传入的 code 参数"
+        
         raw = self.session.getVariable("%raw")
         self._codeblock.execute(self.session, id = id, line = line, raw = raw, wildcards = wildcards)
 
@@ -691,19 +702,42 @@ class SimpleTrigger(Trigger):
         return self.__detailed__()
 
 class Command(MatchObject):
-    """命令，实现方式-MatchObject"""
+    """
+    命令 Command 类型，继承自 MatchObject。
+    命令是 PYMUD 的最大特色，它是一组归纳了同步/异步执行、等待响应、处理的集成对象。
+    要使用命令，不能直接使用 Command 类型，应总是继承并使用其子类，务必覆盖基类的 execute 方法。
+
+    有关 Command 的使用帮助，请查看帮助页面
+
+    :param session: 本对象所属的会话
+    :param patterns: 匹配模式
+    """
     __abbr__ = "cmd"
     def __init__(self, session, patterns, *args, **kwargs):
         super().__init__(session, patterns, sync = False, *args, **kwargs)
         self._tasks = set()
 
     def create_task(self, coro, *args, name = None):
+        """
+        创建并管理任务。由 Command 创建的任务，同时也被 Session 所管理。
+        其内部是调用 asyncio.create_task 进行任务创建。
+
+        :param coro: 任务包含的协程或可等待对象
+        :param name: 任务名称， Python 3.10 才支持的参数
+        """
         task = self.session.create_task(coro, *args, name)
         task.add_done_callback(self._tasks.discard)
         self._tasks.add(task)
         return task
 
     def remove_task(self, task: asyncio.Task, msg = None):
+        """
+        取消任务并从管理任务清单中移除。由 Command 取消和移除的任务，同时也被 Session 所取消和移除。
+
+        :param task: 要取消的任务
+        :param msg: 取消任务时提供的消息， Python 3.10 才支持的参数
+        """
+
         result = self.session.remove_task(task, msg)
         self._tasks.discard(task)
         # if task in self._tasks:
@@ -711,20 +745,44 @@ class Command(MatchObject):
         return result
     
     def reset(self):
+        """
+        复位命令，并取消和清除所有本对象管理的任务。
+        """
+
         super().reset()
 
-        for task in self._tasks:
+        for task in list(self._tasks):
             if isinstance(task, asyncio.Task) and (not task.done()):
-                task.cancel()
+                self.remove_task(task)
 
     async def execute(self, cmd, *args, **kwargs):
+        """
+        命令调用的入口函数。该函数由 Session 进行自动调用。
+        通过 ``Session.exec`` 系列方法调用的命令，最终是执行该命令的 execute 方法。
+
+        子类必须实现并覆盖该方法。
+        """
         self.reset()
         return
 
 class SimpleCommand(Command):
+    """
+    对命令的基本应用进行了基础封装的一种可以直接使用的命令类型，继承自 Command。
+
+    SimpleCommand 并不能理解为 “简单” 命令，因为其使用并不简单。
+    只有在熟练使用 Command 建立自己的命令子类之后，对于某些场景的应用才可以简化代码使用 SimpleCommand 类型。
+
+    :param session: 本对象所属的会话
+    :param patterns: 匹配模式
+    :param succ_tri: 代表成功的响应触发器清单，可以为单个触发器，或一组触发器，必须指定
+
+    kwargs关键字参数特殊支持：
+        :fail_tri: 代表失败的响应触发器清单，可以为单个触发器，或一组触发器，可以为 None
+        :retry_tri: 代表重试的响应触发器清单，可以为单个触发器，或一组触发器，可以为 None
+    """
+
     MAX_RETRY = 20
 
-    """简单命令"""
     def __init__(self, session, patterns, succ_tri, *args, **kwargs):
         super().__init__(session, patterns, succ_tri, *args, **kwargs)
         self._succ_tris = list()
@@ -755,6 +813,16 @@ class SimpleCommand(Command):
                     self._retry_tris.append(retry_tri)
 
     async def execute(self, cmd, *args, **kwargs):
+        """
+        覆盖基类的 execute 方法, SimpleCommand 的默认实现。
+
+        :param cmd: 执行时输入的实际指令
+
+        kwargs接受指定以下参数，在执行中进行一次调用:
+            :onSuccess: 成功时的回调
+            :onFailure: 失败时的回调
+            :onTimeout: 超时时的回调
+        """
         self.reset()
         # 0. check command
         cmd = cmd or self.patterns
@@ -774,14 +842,12 @@ class SimpleCommand(Command):
             for tr in self._retry_tris:
                 tr.reset()
                 tasklist.append(self.session.create_task(tr.triggered()))
-
+            
+            await asyncio.sleep(0.1)
             self.session.writeline(cmd)
-
+            
             done, pending = await asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED")
             
-            # 任务完成后增加0.1s等待（不应该等待)
-            # await asyncio.sleep(0.1)
-
             tasks_done = list(done)
             
             tasks_pending = list(pending)
@@ -834,7 +900,18 @@ class SimpleCommand(Command):
         return result
 
 class Timer(BaseObject):
-    "PYMUD定时器"
+    """
+    定时器 Timer 类型，继承自 MatchObject。PYMUD 支持同时任意多个定时器。
+
+    :param session: 对象所属会话
+    
+    Timer 中使用的 kwargs 均继承自 BaseObject，包括:
+        - id: 标识
+        - group: 组名
+        - enabled: 使能状态
+        - timeout: 定时时间
+        - onSuccess: 定时到期执行的函数
+    """
     __abbr__ = "ti"
 
     def __init__(self, session, *args, **kwargs):
@@ -846,6 +923,7 @@ class Timer(BaseObject):
         self.reset()
 
     def startTimer(self):
+        "启动定时器"
         if not isinstance(self._task, asyncio.Task):
             self._halt = False
             self._task = asyncio.create_task(self.onTimerTask())
@@ -853,7 +931,8 @@ class Timer(BaseObject):
         asyncio.ensure_future(self._task)
 
     async def onTimerTask(self):
-        # 定时任务，修改为一直循环
+        "定时任务的调用方法，脚本中无需调用"
+
         while self._enabled:
             await asyncio.sleep(self.timeout)
 
@@ -863,15 +942,6 @@ class Timer(BaseObject):
             if self.oneShot or self._halt:
                 break
 
-        # if self.enabled:
-        #     await asyncio.sleep(self.timeout)
-        #     if callable(self._onSuccess):
-        #         self._onSuccess(self.id)
-
-        #     if self.oneShot:
-        #         self.enabled = False
-        #     else:   
-        #         await asyncio.create_task(self.onTimerTask())
 
     def reset(self):
         "复位定时器，清除所创建的定时任务"
@@ -886,6 +956,7 @@ class Timer(BaseObject):
 
     @property
     def enabled(self):
+        "可读写属性，定时器使能状态"
         return self._enabled
     
     @enabled.setter
@@ -903,12 +974,19 @@ class Timer(BaseObject):
         return self.__detailed__()
             
 class SimpleTimer(Timer):
+    """
+    简单定时器 SimpleTimer 类型，继承自 Timer, 包含了 Timer 的全部功能， 并使用 CodeBlock 对象创建了 onSuccess 的使用场景。
+    
+    :param session: 本对象所属的会话， 同 MatchObject
+    :param code: str, 当定时任务到期时执行的代码， 使用 CodeBlock 实现
+    """
     def __init__(self, session, code, *args, **kwargs):
         self._code = code
         self._codeblock = CodeBlock(code)
         super().__init__(session, *args, **kwargs)
 
     def onSuccess(self, id):
+        "覆盖了基类的默认 onSuccess方法，使用 CodeBlock 执行构造函数中传入的 code 参数"
         self._codeblock.execute(self.session, id = id)
 
     def __detailed__(self) -> str:
