@@ -697,8 +697,8 @@ class PyMudApp:
                             if isinstance(plugin, Plugin):
                                 plugin.onSessionDestroy(ss)
 
-                    else:
-                        return
+                else:
+                    return
                 
             self.app.exit()
 
