@@ -1677,7 +1677,10 @@ class Session:
             - #global
         '''
 
-        args = code.code[2:]
+        new_cmd_text, new_code = code.expand(self, *args, **kwargs)
+        args = new_code[2:]
+
+        #args = code.code[2:]
 
         if len(args) == 0:
             vars = self._variables
@@ -1735,7 +1738,13 @@ class Session:
                 self.warning(f"当前session中不存在名称为 {args[0]} 的变量")
             
         elif len(args) == 2:
-            self.setVariable(args[0], args[1])
+            val = None
+            try:
+                val = eval(args[1])
+            except:
+                val = args[1]
+
+            self.setVariable(args[0], val)
 
     def handle_global(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -1756,7 +1765,9 @@ class Session:
             - #variable
         '''
 
-        args = code.code[2:]
+        new_cmd_text, new_code = code.expand(self, *args, **kwargs)
+        args = new_code[2:]
+        #args = code.code[2:]
 
         if len(args) == 0:
             vars = self.application.globals
@@ -1810,7 +1821,12 @@ class Session:
                 self.info("全局空间不存在名称为 {} 的变量".format(var), "全局变量")
             
         elif len(args) == 2:
-            self.application.set_globals(args[0], args[1])
+            val = None
+            try:
+                val = eval(args[1])
+            except:
+                val = args[1]
+            self.application.set_globals(args[0], val)
 
     def _handle_objs(self, name: str, objs: dict, *args):
         if len(args) == 0:
@@ -2775,6 +2791,8 @@ class Session:
         self.error(new_text[6:])
 
     def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+        msg = f"{msg}"
+
         if Settings.client["newline"] in msg:
             new_lines = list()
             msg_lines = msg.split(Settings.client["newline"])

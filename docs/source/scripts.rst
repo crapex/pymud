@@ -78,6 +78,68 @@
 
         插件有相应的插件规范，详细参见 `插件`_
 
+
+6.3 变量的使用
+------------------------
+
+6.3.1 变量概览
+^^^^^^^^^^^^^^^^^^^^^
+
+    从被管理的情况以及访问的范围划分，PYMUD可以使用的变量可以包括三大类：
+
+        - Python 变量
+            即在脚本中，自己定义的 Python 变量对象。此类对象不受 PYMUD 应用管理，当应用退出、会话关闭、脚本重新加载后，变量的结果由脚本代码自行设定，其定义、使用请按照 Python 的语法要求执行。
+            Python 变量请参考 Python 语言有关文档，此处不再详细展开。
+
+        - 单会话访问的变量
+            即 Session 所属的 Variable 对象。此类对象包括了系统提供的部分变量，以及自行定义的变量。自行定义的变量在会话的所有脚本中都可以直接访问使用，并且可以通过 pymud.cfg 设置（默认已设置），在应用退出、会话关闭、脚本重新加载时，进行了持久化存储操作。
+            Variable 对象，通过会话对象的属性字典实现和保存。PYMUD 规定，字典的键key作为变量名，必须为 str 类型，值 value 为变量的值，可以为任意 Python 类型，但仍建议采用可以持久化的类型。
+        
+        - 跨会话访问的变量
+             即 PYMUD 所属的 Global 对象。此类对象与 Variable 对象区别为，这些对象可以在不同的会话之间进行访问，共享同一个变量对象。
+             Global 对象通过 PyMudApp 对象的属性字典实现和保存。该对象不会被持久化，字典的键key作为变量名，必须为 str 类型。值可以为任何 Python 支持的类型。
+
+    在设计自己脚本的时候，要根据上述不同类型变量的特点，选择合适的类型。
+    个人建议，默认首选 Variable 类型，若有跨会话访问需求，请选择 Global 类型。对于某些函数或方法中的临时变量，再使用 Python 变量。
+
+6.3.1 单会话访问的变量 (Variable) 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    PYMUD 应用系统本身提供了部分 Variable 变量，这些变量均用 % 开头。其中，部分为单个函数中使用的局部变量，部分为可全局访问使用的变量。 系统提供的 Variable 变量包括：
+
+    - %1 ~ %9: 在触发器、别名的同步响应函数中，使用正则匹配的匹配组。 类似于 mushclient 与 zmud 中的 %1 ~ 9%。
+    - %line: 在触发器、别名的同步响应函数中，匹配的行本身（经ANSI转义处置后的纯文本）。对于多行触发器， %line会返回多行。
+    - %raw: 在触发器的同步响应函数中，匹配的行本身的原始代码（未经ANSI转义处置）。
+    - %copy: 使用PYMUD复制功能（非系统复制功能）复制到当前剪贴板中的内容。
+
+    变量可以使用 Session 对象提供的方法以及 Session 对象提供的快捷点访问器在脚本中进行操作。也可以使用 `#var <syscommand.html#var>`_ 命令来进行操作。
+    
+    创建变量/修改变量值的方法:
+    可以使用 `setVariable <references.html#pymud.Session.setVariable>`_, `setVariables <references.html#pymud.Session.setVariables>`_, `vars <references.html#pymud.Session.vars>`_ 来创建变量（当变量不存在时）或修改变量值（当变量存在时）。
+    可以使用 `getVariable <references.html#pymud.Session.getVariable>`_, `getVariables <references.html#pymud.Session.getVariables>`_, `vars <references.html#pymud.Session.vars>`_ 来读取变量值。
+    可以使用 `delVariable <references.html#pymud.Session.delVariable>`_ 来移除一个变量。
+    
+    具体使用示例如下：
+
+    .. code:: Python
+
+        tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")
+        self.session.addTrigger(tri)
+
+        money = {'cash': 0, 'gold': 1, 'silver': 50, 'coin': 77}
+        self.session.setVariable("money", money)
+        # 在使用时，则这样获取
+        money = self.session.getVariable("money")
+
+        money_key   = ('cash', 'gold', 'silver', 'coin')
+        money_count = (0, 1, 50, 77)
+        self.session.setVariables(money_key, money_count)
+        # 在使用时，则这样获取.
+        silver = self.session.getVariable("silver")
+
+
+
+
 .. _#mods: syscommand.html#modules
 .. _pymud.Session: references.html#pymud.Session
 .. _sessions: settings.html#sessions

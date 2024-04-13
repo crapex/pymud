@@ -120,27 +120,27 @@ class CodeLine:
                 else:
                     item_val = "None"
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             # 系统变量，%开头
             elif item == "%line":
                 new_code.append(line)
-                new_code_str = new_code_str.replace(item, line, 1)
+                new_code_str = new_code_str.replace(item, f"{line}", 1)
 
             elif item == "%raw":
                 new_code.append(raw)
-                new_code_str = new_code_str.replace(item, raw, 1)
+                new_code_str = new_code_str.replace(item, f"{raw}", 1)
 
             elif item[0] == "%":
                 item_val = session.getVariable(item, "")
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             # 非系统变量，@开头，在变量明前加@引用
             elif item[0] == "@":
                 item_val = session.getVariable(item[1:], "")
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             else:
                 new_code.append(item)
