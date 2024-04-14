@@ -129,11 +129,12 @@
             def __init__(self, session: Session):
                 self.session = session
 
+            def _opVariables(self):
                 # 系统变量 %line 的使用，直接在 SimpleTrigger 中使用
                 tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")
                 self.session.addTrigger(tri)
 
-                # Variable 使用，值类型为 dict 的 Varibble
+                # Variable 使用，值类型为 dict 的 Variable
                 money = {'cash': 0, 'gold': 1, 'silver': 50, 'coin': 77}
                 # 将 money 变量值设置为上述字典
                 self.session.setVariable("money", money)
