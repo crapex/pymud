@@ -123,20 +123,32 @@
 
     .. code:: Python
 
-        tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")
-        self.session.addTrigger(tri)
+        from pymud import Session, Trigger, SimpleAlias, SimpleTrigger
+        
+        class Configuration:
+            def __init__(self, session: Session):
+                self.session = session
 
-        money = {'cash': 0, 'gold': 1, 'silver': 50, 'coin': 77}
-        self.session.setVariable("money", money)
-        # 在使用时，则这样获取
-        money = self.session.getVariable("money")
+                # 系统变量 %line 的使用，直接在 SimpleTrigger 中使用
+                tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")
+                self.session.addTrigger(tri)
 
-        money_key   = ('cash', 'gold', 'silver', 'coin')
-        money_count = (0, 1, 50, 77)
-        self.session.setVariables(money_key, money_count)
-        # 在使用时，则这样获取.
-        silver = self.session.getVariable("silver")
+                # Variable 使用，值类型为 dict 的 Varibble
+                money = {'cash': 0, 'gold': 1, 'silver': 50, 'coin': 77}
+                # 将 money 变量值设置为上述字典
+                self.session.setVariable("money", money)
+                # 在使用时，则这样获取
+                money = self.session.getVariable("money")
 
+                # Variable 使用，同时设置多个变量，要求键，值数量相同
+                money_key   = ('cash', 'gold', 'silver', 'coin')
+                money_count = (0, 1, 50, 77)
+                # 以下代码将同时设置4个变量，分别为 cash = 0, gold = 1, silver = 50, coin = 77
+                self.session.setVariables(money_key, money_count)
+                # 在使用时，则这样获取单个变量
+                silver = self.session.getVariable("silver")
+                # 也可以同时获取多个变量，并自动使用元组解包
+                cash, gold = self.session.getVariables(("cash", "gold"))
 
 
 
