@@ -21,7 +21,7 @@ source_suffix = ['.rst', '.md']
 project = 'PYMUD 帮助文档'
 copyright = '2023-2024, crapex@crapex.cc'
 author = 'crapex'
-release = '0.19.3post1'
+release = '0.19.4'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -128,7 +128,8 @@
         class Configuration:
             def __init__(self, session: Session):
                 self.session = session
-
+                self._opVariables()
+                
             def _opVariables(self):
                 # 系统变量 %line 的使用，直接在 SimpleTrigger 中使用
                 tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")

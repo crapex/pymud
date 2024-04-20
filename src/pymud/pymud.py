@@ -462,8 +462,12 @@ class PyMudApp:
         """
         b = self.consoleView.buffer
         if b.selection_state:
-            srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
-            erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
+            cur1, cur2 = b.selection_state.original_cursor_position, b.document.cursor_position
+            start, end = min(cur1, cur2), max(cur1, cur2)
+            srow, scol = b.document.translate_index_to_position(start)
+            erow, ecol = b.document.translate_index_to_position(end)
+            # srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
+            # erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
 
             if not raw:
                 # Control-C 复制纯文本
