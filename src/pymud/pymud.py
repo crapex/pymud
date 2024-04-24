@@ -1013,7 +1013,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
+                        self.set_status(f"文件: {plugins_dir}\\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -1028,8 +1028,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件. 加载错误，信息为: {e}")
-
+                        self.set_status(f"文件: {plugins_dir}\\{file} 不是一个合法的插件文件. 加载错误，信息为: {e}")
 
     def reload_plugin(self, plugin: Plugin):
         "重新加载指定插件"
