@@ -886,7 +886,10 @@ class PyMudApp:
                         self.current_session.warning(e)
                         self.current_session.exec_command(cmd_line)
             else:
-                self.set_status("当前没有正在运行的session.")
+                if cmd_line == "#exit":
+                    self.act_exit()
+                else:
+                    self.set_status("当前没有正在运行的session.")
 
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:

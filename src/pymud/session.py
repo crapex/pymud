@@ -2316,7 +2316,12 @@ class Session:
             else:
                 mod = self._modules[module_name]["module"]
                 config = self._modules[module_name]["config"]
-                if config: del config
+                if config: 
+                    if hasattr(config, "unload"):
+                        unload = getattr(config, "unload", None)
+                        if callable(unload):
+                            unload(config)
+                    del config
                 mod = importlib.reload(mod)
                 if hasattr(mod, 'Configuration'):
                     config = mod.Configuration(self)
