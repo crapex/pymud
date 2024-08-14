@@ -2,7 +2,7 @@
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
 from typing import Any
-import time
+import time, datetime
 
 from typing import Iterable
 from prompt_toolkit import ANSI
@@ -434,6 +434,7 @@ class SessionBufferControl(BufferControl):
                         buffer.cursor_position = start
                         buffer.start_selection(selection_type=SelectionType.CHARACTERS)
                         buffer.cursor_position = end
+
                 else:
                     # Don't handle scroll events here.
                     return NotImplemented
@@ -1079,3 +1080,4 @@ class Plugin:
     def __getattr__(self, __name: str) -> Any:
         if hasattr(self.mod, __name):
             return self.mod.__getattribute__(__name)
+        

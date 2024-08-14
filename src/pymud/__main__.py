@@ -101,11 +101,16 @@ def module_entry(args):
             format = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
             datefmt = '%m-%d %H:%M',
             filename = args.logfile,
-            filemode = 'a' if args.filemode else 'w'
+            filemode = 'a' if args.filemode else 'w',
+            encoding = "utf-8"
             )
         
     else:
-        logging.basicConfig(level = logging.INFO)
+        logging.basicConfig(level = logging.NOTSET,
+            format = '%(asctime)s %(name)-12s: %(message)s',
+            datefmt = '%m-%d %H:%M',
+            handlers = [logging.NullHandler()],
+            )
         
     cfg = "pymud.cfg"
     if os.path.exists(cfg):
@@ -125,7 +130,7 @@ if __name__ == "__main__":
     par_init.set_defaults(func = init_pymud_env)
 
     parser.add_argument('-d', '--debug', dest = 'debug', action = 'store_true', default = False, help = '指定以调试模式进入PyMUD。此时，系统log等级将设置为logging.NOTSET, 所有log数据均会被记录。默认不启用。')
-    parser.add_argument('-l', '--logfile', dest = 'logfile', metavar = 'logfile', default = 'myapp.log', help = '指定调试模式下记录文件名，不指定时，默认为当前目录下的pymud.log')
+    parser.add_argument('-l', '--logfile', dest = 'logfile', metavar = 'logfile', default = 'pymud.log', help = '指定调试模式下记录文件名，不指定时，默认为当前目录下的pymud.log')
     parser.add_argument('-a', '--appendmode', dest = 'filemode', action = 'store_true', default = True, help = '指定log文件的访问模式是否为append尾部添加模式，默认为True。当为False时，使用w模式，即每次运行清空之前记录')
 
     args=parser.parse_args()

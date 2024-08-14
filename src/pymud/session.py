@@ -1,7 +1,11 @@
 import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig
 from collections.abc import Iterable
 from collections import OrderedDict
+import logging, queue
+from logging import FileHandler
+from logging.handlers import QueueHandler, QueueListener
 
+from .logger import Logger
 from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
 from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
@@ -73,6 +77,8 @@ class Session:
         "py",           # 直接执行python语句
 
         "all",          # 所有会话执行
+
+        "log",          # 记录处置
     )
 
     _commands_alias = {
@@ -96,7 +102,8 @@ class Session:
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, loop = None, **kwargs):
         self.pyversion = sysconfig.get_python_version()   
         self.loop = loop or asyncio.get_running_loop()    
-        self.log = logging.getLogger("pymud.Session")
+        self.syslog = logging.getLogger("pymud.Session")
+
         self.application = app
         self.name = name
         self._transport = None
@@ -108,6 +115,9 @@ class Session:
         self._events    = dict()
         self._events["connected"]    = None
         self._events["disconnected"] = None
+
+        self._loggers = dict()
+        self.log = self.getLogger(name)
 
         self._auto_script = kwargs.get("scripts", None)
 
@@ -159,7 +169,6 @@ class Session:
                             self.warning(f"自动从{file}中加载变量失败，错误消息为： {e}")
 
         
-
         if self._auto_script:
             self.info(f"即将自动加载以下模块:{self._auto_script}")
             self.load_module(self._auto_script)
@@ -340,6 +349,33 @@ class Session:
     def event_disconnected(self, event):
         self._events["disconnected"] = event
 
+    def getLogger(self, name, mode = 'a', encoding = 'utf-8', encoding_errors = 'ignore', raw = False) -> Logger:
+        """
+        根据指定名称和参数获取并返回一个记录器。若指定名称不存在，则创建一个该名称记录器。
+        
+        :param name: 指定的记录器名称
+        :param mode: 记录器的模式，可接受值为 a, w, n。 具体请参见 Logger 对象中 mode 参数
+        :param encoding: 记录文件的编码格式
+        :param encoding_errors: 编码错误的处理方式
+        :param raw: 是否以带ANSI标记的原始格式进行记录
+
+        :return 指定名称的记录器 Logger 对象
+        """
+        if name not in self.application.loggers.keys():
+            logger = Logger(name, mode, encoding, encoding_errors, raw)
+            self._loggers[name] = logger
+            self.application.loggers[name] = logger
+
+        else:
+            if name not in self._loggers.keys():
+                self.warning(f"其它会话中已存在一个名为 {name} 的记录器，将直接返回该记录器")
+
+            logger = self.application.loggers[name]
+            logger.mode = mode
+            logger.raw = raw
+
+        return logger
+
     @property
     def modules(self) -> OrderedDict:
         """
@@ -484,6 +520,7 @@ class Session:
         :param newline: 是否额外增加换行符
         """
         self.buffer.insert_text(data)
+        self.log.log(data)
 
         if len(data) > 0 and (data[-1] == "\n"):
             self._line_count += 1
@@ -491,6 +528,7 @@ class Session:
         if newline:
             self.buffer.insert_text(self.newline_cli)
             self._line_count += 1
+            self.log.log(self.newline_cli)
 
     def clear_half(self):
         """
@@ -520,7 +558,7 @@ class Session:
         if self.connected:
             self._transport.write_eof()
         self.state = "DISCONNECTED"
-        self.log.info(f"服务器断开连接! {self._protocol.__repr__}")
+        self.syslog.info(f"服务器断开连接! {self._protocol.__repr__}")
     
     def feed_gmcp(self, name, value) -> None:
         """
@@ -703,19 +741,22 @@ class Session:
         if self.seperator in line:
             lines = line.split(self.seperator)
             for ln in lines:
+                if Settings.client["echo_input"]:
+                    self.writetobuffer(f"\x1b[32m{ln}\x1b[0m")
+                else:
+                    self.log.log(f"\x1b[32m{ln}\x1b[0m\n")
+
                 cmd = ln + self.newline
                 self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
                 
-                if Settings.client["echo_input"]:
-                    self.writetobuffer(f"\x1b[32m{cmd}\x1b[0m")
-
         else:
+            if Settings.client["echo_input"]:
+                self.writetobuffer(f"\x1b[32m{line}\x1b[0m")
+            else:
+                self.log.log(f"\x1b[32m{line}\x1b[0m\n")
+
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
-
-            #if Settings.client["echo_input"]:
-            if Settings.client["echo_input"] and (len(cmd) > len(self.newline)):        # 修改2023-12-3， 向服务器发送空回车时，不回显
-                self.writetobuffer(f"\x1b[32m{cmd}\x1b[0m")
     
     def exec(self, cmd: str, name = None, *args, **kwargs):
         """
@@ -1604,7 +1645,8 @@ class Session:
             - #session
         '''
 
-        self.application.close_session()
+        #self.application.close_session()
+        self.application.act_close_session()
 
     async def handle_wait(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2837,3 +2879,94 @@ class Session:
         :param style: 要输出信息的格式(ANSI)， 默认为 ERR_STYLE, \x1b[31m
         """
         self.info2(msg, title, style)
+
+    def handle_log(self, code: CodeLine = None, *args, **kwargs):
+        '''
+        嵌入命令 #log 的执行函数，控制当前会话的记录状态。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #log : 显示所有记录器的状态情况
+            - #log start [logger-name] [-a|-w|-n] [-r] : 启动一个记录器
+
+                参数:
+                    - :logger-name: 记录器名称。当不指定时，选择名称为会话名称的记录器（会话默认记录器）
+                    - :-a|-w|-n: 记录器模式选择。 -a 为添加模式（未指定时默认值），在原记录文件后端添加； -w 为覆写模式，清空原记录文件并重新记录； -n 为新建模式，以名称和当前时间为参数，使用 name.now.log 形式创建新的记录文件
+                    - :-r: 指定记录器是否使用 raw 模式
+
+            - #log stop [logger-name] : 停止一个记录器
+                
+                参数:
+                    - :logger-name: 记录器名称。当不指定时，选择名称为会话名称的记录器（会话默认记录器）
+
+            - #log show [loggerFile]: 显示全部日志记录或指定记录文件
+
+                参数:
+                    - :loggerFile: 要显示的记录文件名称。当不指定时，弹出对话框列出当前目录下所有记录文件
+
+        示例:
+            - ``#log`` : 在当前会话窗口列出所有记录器状态
+            - ``#log start`` : 启动本会话默认记录器（记录器名为会话名）。该记录器以纯文本模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 name.log 文件的后端
+            - ``#log start -r`` : 启动本会话默认记录器。该记录器以raw模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 name.log 文件的后端
+            - ``#log start chat`` : 启动名为 chat 的记录器。该记录器以纯文本模式，记录代码中调用过该记录器 .log 进行记录的信息
+            - ``#log stop`` : 停止本会话默认记录器（记录器名为会话名）。
+
+        注意:
+            - 记录器文件模式（-a|-w|-n）在修改后，只有在下一次该记录器启动时才会生效
+            - 记录器记录模式（-r）在修改后立即生效
+        '''
+        
+        args = list()
+        if isinstance(code, CodeLine):
+            args = code.code[2:]
+
+        if len(args) == 0:
+            session_loggers = set(self._loggers.keys())
+            app_loggers = set(self.application.loggers.keys()).difference(session_loggers)
+            self.info("本会话中的记录器情况:")
+            for name in session_loggers:
+                logger = self.application.loggers[name]
+                self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
+
+            if len(app_loggers) > 0:
+                self.info("本应用其他会话中的记录器情况:")
+                for name in app_loggers:
+                    logger = self.application.loggers[name]
+                    self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
+
+        else:
+            name = self.name
+            if len(args) > 1 and not args[1].startswith('-'):
+                name = args[1]
+
+            if (args[0] == "start"):
+                if "-n" in args:
+                    mode = "n"
+                    mode_name = '新建'
+                elif "-w" in args:
+                    mode = "w"
+                    mode_name = '覆写'
+                else:
+                    mode = "a"
+                    mode_name = '添加'
+
+                raw = True if "-r" in args else False
+                raw_name = '原始ANSI' if raw else '纯文本'
+
+                logger = self.getLogger(name = name, mode = mode, raw = raw)
+                logger.enabled = True
+
+                self.info(f"{datetime.datetime.now()}: 记录器{name}以{mode_name}文件模式以及{raw_name}记录模式开启。")
+
+            elif (args[0] == "stop"):
+                self.info(f"{datetime.datetime.now()}: 记录器{name}记录已关闭。")
+                self.log.enabled = False
+
+            elif (args[0] == "show"):
+                if len(args) > 1 and not args[1].startswith('-'):
+                    file = args[1]
+                    self.application.logFileShown = file
+                    self.application.showLogInTab()
+                else:
+                    self.application.show_logSelectDialog()
+

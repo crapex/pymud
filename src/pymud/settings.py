@@ -11,9 +11,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.19.5"
+    __version__   = "0.20.0"
     "APP 当前版本"
-    __release__   = "2024-08-20"
+    __release__   = "2024-08-14"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -79,6 +79,7 @@ class Settings:
         "welcome"           : "欢迎使用PYMUD客户端 - 北大侠客行，最好的中文MUD游戏",
         "world"             : "世界",
         "new_session"       : "创建新会话...",
+        "show_log"          : "显示记录信息",
         "exit"              : "退出",
         "session"           : "会话",
         "connect"           : "连接/重新连接",
@@ -88,7 +89,7 @@ class Settings:
         "copy"              : "复制(纯文本)",
         "copyraw"           : "复制(ANSI)",
         "clearsession"      : "清空会话内容",
-        "closesession"      : "关闭当前会话",
+        "closesession"      : "关闭当前页面",
         "autoreconnect"     : "打开/关闭自动重连",
         "loadconfig"        : "加载脚本配置",
         "reloadconfig"      : "重新加载脚本配置",

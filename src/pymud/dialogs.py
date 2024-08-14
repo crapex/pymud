@@ -1,7 +1,7 @@
 import asyncio, webbrowser
 
 from prompt_toolkit.layout import AnyContainer, ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
-from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame
+from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame, RadioList
 from prompt_toolkit.layout.dimension import Dimension, D
 from prompt_toolkit import ANSI, HTML
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
@@ -127,3 +127,30 @@ class NewSessionDialog(BasicDialog):
         encoding = get_app().layout.get_buffer_by_name("encoding").text
         result = (name, host, port, encoding)
         self.set_done(result)
+
+
+class LogSelectionDialog(BasicDialog):
+    def __init__(self, text, values, modal=True):
+        self._header_text = text
+        self._selection_values = values
+        self._radio_list = RadioList(values = self._selection_values)
+        super().__init__('选择查看的记录', modal)
+
+    def create_body(self) -> AnyContainer:
+        
+
+        body=HSplit([
+            Label(text = self._header_text, dont_extend_height=True), 
+            self._radio_list
+            ])
+        return body
+    
+    def create_buttons(self):
+        ok_button = EasternButton(text="确定", handler=self.btn_ok_clicked)
+        cancel_button = EasternButton(text="取消", handler=(lambda: self.set_done(False)))
+        return [ok_button, cancel_button]
+    
+    def btn_ok_clicked(self):
+        result = self._radio_list.current_value
+        self.set_done(result)
+    

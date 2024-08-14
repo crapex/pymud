@@ -1,7 +1,7 @@
 8 类参考 class references
 =====================================
 
-.. autoclass:: pymud.pymud.PyMudApp
+.. autoclass:: pymud.PyMudApp
     :members:
 
 .. autoclass:: pymud.Session
@@ -47,4 +47,7 @@
     :members:
 
 .. autoclass:: pymud.extras.Plugin
+    :members:
+
+.. autoclass:: pymud.Logger
     :members:

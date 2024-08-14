@@ -5,7 +5,6 @@ MUD会话(session)中, 支持的对象列表
 import asyncio, logging, re
 from collections.abc import Iterable
 from collections import namedtuple
-import functools
 from typing import Any
 from .settings import Settings
 
@@ -991,3 +990,4 @@ class SimpleTimer(Timer):
 
     def __detailed__(self) -> str:
         return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
+
