@@ -2,7 +2,7 @@
 #
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
-import sphinx_rtd_theme
+#import sphinx_rtd_theme, sphinx_book_theme, sphinxawesome_theme, sphinx_nefertiti, piccolo_theme
 import recommonmark, os, sys
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
@@ -18,7 +18,7 @@ source_suffix = ['.rst', '.md']
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'PYMUD 帮助文档'
+project = 'PyMUD 帮助文档'
 copyright = '2023-2024, crapex@crapex.cc'
 author = 'crapex'
 release = '0.20.0'
@@ -37,5 +37,6 @@ language = 'zh_CN'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 # sphinx_bootstrap_theme  sphinx_rtd_theme sphinx_nefertiti
 
-html_theme = 'sphinx_rtd_theme'
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = 'piccolo_theme'
+html_static_path = ['css']
+html_css_files = ['custom.css']
