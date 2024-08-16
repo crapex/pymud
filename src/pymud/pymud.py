@@ -663,6 +663,7 @@ class PyMudApp:
                         plugin.onSessionDestroy(self.current_session)
 
                 name = self.current_session.name
+                self.current_session.closeLoggers()
                 self.current_session.clean()
                 self.current_session = None
                 self.consoleView.buffer = SessionBuffer()

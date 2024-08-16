@@ -116,9 +116,6 @@ class Session:
         self._events["connected"]    = None
         self._events["disconnected"] = None
 
-        self._loggers = dict()
-        self.log = self.getLogger(name)
-
         self._auto_script = kwargs.get("scripts", None)
 
         self._cmds_handler = dict()                         # 支持的命令的处理函数字典
@@ -143,6 +140,9 @@ class Session:
         self.display_line  = ""
 
         self.initialize()
+
+        self._loggers = dict()
+        self.log = self.getLogger(name)
 
         self.host = host
         self.port = port
@@ -175,6 +175,10 @@ class Session:
 
         if Settings.client["auto_connect"]:
             self.open()
+
+    def __del__(self):
+        self.clean()
+        self.closeLoggers()
 
     def initialize(self):
         "初始化Session有关对象。 **无需脚本调用。**"
@@ -375,6 +379,15 @@ class Session:
             logger.raw = raw
 
         return logger
+
+    def closeLoggers(self):
+        "移除本会话所有相关Logger"
+        for name in self._loggers.keys():
+            if isinstance(self._loggers[name], Logger):
+                self._loggers[name].enabled = False
+            
+            if name in self.application.loggers.keys():
+                self.application.loggers.pop(name)
 
     @property
     def modules(self) -> OrderedDict:
