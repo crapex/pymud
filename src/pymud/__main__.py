@@ -1,4 +1,5 @@
-import sys, os, json, platform, shutil, logging, argparse
+import os, json, platform, shutil, logging, argparse
+from pathlib import Path
 from .pymud import main
 from .settings import Settings
 
@@ -48,28 +49,41 @@ def init_pymud_env(args):
     dir = args.dir
     if dir:
         print(f"你已经指定了创建脚本的目录为 {args.dir}, 将不再检测操作系统")
+        dir = Path(dir)
 
     else:
         if system == "windows":
             dir = input("检测到当前系统为Windows, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[d:\pkuxkx]:")
-            if not dir: dir = "d:\\pkuxkx"
+            if not dir: dir = Path("d:\\pkuxkx")
+            else:
+                dir = Path(dir)
 
         elif system == "linux":
             dir = input("检测到当前系统为Linux, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[~/pkuxkx]:")
-            if not dir: dir = "~/pkuxkx"
+            if not dir:
+                dir = Path.home().joinpath('pkuxkx')
+            else:
+                dir = Path(dir)
 
         elif system == "darwin":
             dir = input("检测到当前系统为MacOS, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[~/pkuxkx]:")
-            if not dir: dir = "~/pkuxkx"
+            if not dir:
+                dir = Path.home().joinpath('pkuxkx')
+            else:
+                dir = Path(dir)
 
         else:
-            print(f"当前系统不是Windows、Linux或MacOS, 无法通过init来进行配置, 请手动配置. 默认配置即将推出")
+            print(f"当前系统不是Windows、Linux或MacOS, 无法通过init来进行配置, 请手动配置. 默认配置即将退出")
 
 
-    if not os.path.exists(dir):
-        print(f'检测到给定目录 {dir} 不存在，正在创建目录...', end = "")
-        os.mkdir(dir)
-        os.chdir(dir)
+    if isinstance(dir, Path):
+        if dir.exists() and dir.is_dir():
+            print(f'检测到给定目录 {dir} 已存在，切换至此目录...', end = "")
+            os.chdir(dir)
+        else:
+            print(f'检测到给定目录 {dir} 不存在，正在创建并切换至目录...', end = "")
+            dir.mkdir()
+            os.chdir(dir)
         print(f'完成!')
 
     if os.path.exists('pymud.cfg'):
