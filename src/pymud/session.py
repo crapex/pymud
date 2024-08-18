@@ -771,6 +771,27 @@ class Session:
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
     
+    async def waitfor(self, line: str, awaitable) -> None:
+        """
+        调用writline向服务器中写入一行后，等待到可等待对象再返回。
+        
+        :param line: 使用writeline写入的行
+        :param awaitable: 等待的可等待对象
+
+        由于异步的消息循环机制，如果在写入命令之后再创建可等待对象，则有可能服务器响应在可等待对象的创建之前
+        此时使用await就无法等待到可等待对象的响应，会导致任务出错。
+        一种解决方式是先创建可等待对象，然后写入命令，然后再等待可等待对象，但这种情况下需要写入三行代码，书写麻烦
+        因此该函数是用于简化此类使用时的写法。
+
+        示例:
+            await session.waitfor('a_cmd', self.create_task(a_tri.triggered()))
+            done, pending = await session.waitfor('a_cmd', asyncio.wait([self.create_task(a_tri.triggered()), self.create_task(b_tri.triggered())], return_when = 'FIRST_COMPLETED'))
+        """
+
+        await asyncio.sleep(0.1)
+        self.writeline(line)
+        return await awaitable
+
     def exec(self, cmd: str, name = None, *args, **kwargs):
         """
         在名称为name的会话中使用exec_command执行MUD命令。当不指定name时，在当前会话中执行。

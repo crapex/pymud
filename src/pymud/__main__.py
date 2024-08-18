@@ -44,47 +44,26 @@ CFG_TEMPLATE = {
 def init_pymud_env(args):
     print(f"欢迎使用PyMUD, 版本{Settings.__version__}. 使用PyMUD时, 建议建立一个新目录（任意位置），并将自己的脚本以及配置文件放到该目录下.")
     print("即将开始为首次运行初始化环境...")
-    system = platform.system().lower()
-
+    
     dir = args.dir
     if dir:
-        print(f"你已经指定了创建脚本的目录为 {args.dir}, 将不再检测操作系统")
+        print(f"你已经指定了创建脚本的目录为 {args.dir}")
         dir = Path(dir)
-
     else:
-        if system == "windows":
-            dir = input("检测到当前系统为Windows, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[d:\pkuxkx]:")
-            if not dir: dir = Path("d:\\pkuxkx")
-            else:
-                dir = Path(dir)
+        dir = Path.home().joinpath('pkuxkx')
 
-        elif system == "linux":
-            dir = input("检测到当前系统为Linux, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[~/pkuxkx]:")
-            if not dir:
-                dir = Path.home().joinpath('pkuxkx')
-            else:
-                dir = Path(dir)
-
-        elif system == "darwin":
-            dir = input("检测到当前系统为MacOS, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值[~/pkuxkx]:")
-            if not dir:
-                dir = Path.home().joinpath('pkuxkx')
-            else:
-                dir = Path(dir)
-
-        else:
-            print(f"当前系统不是Windows、Linux或MacOS, 无法通过init来进行配置, 请手动配置. 默认配置即将退出")
-
-
-    if isinstance(dir, Path):
-        if dir.exists() and dir.is_dir():
-            print(f'检测到给定目录 {dir} 已存在，切换至此目录...', end = "")
-            os.chdir(dir)
-        else:
-            print(f'检测到给定目录 {dir} 不存在，正在创建并切换至目录...', end = "")
-            dir.mkdir()
-            os.chdir(dir)
-        print(f'完成!')
+        system = platform.system().lower()
+        dir_enter = input(f"检测到当前系统为 {system}, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值 [{dir}]:")
+        if dir_enter:
+            dir = Path(dir_enter)
+                      
+    if dir.exists() and dir.is_dir():
+        print(f'检测到给定目录 {dir} 已存在，切换至此目录...')
+    else:
+        print(f'检测到给定目录 {dir} 不存在，正在创建并切换至目录...')
+        dir.mkdir()
+    
+    os.chdir(dir)
 
     if os.path.exists('pymud.cfg'):
         print(f'检测到脚本目录下已存在pymud.cfg文件，将直接使用此文件进入PyMUD...')
