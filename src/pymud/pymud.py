@@ -506,7 +506,7 @@ class PyMudApp:
                     line = self.mudFormatProc.line_correction(b.document.current_line)
                     start = max(0, scol)
                     end = min(ecol, len(line))
-                    line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                    line_plain = re.sub(r"\x1b\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
                     #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
@@ -518,7 +518,7 @@ class PyMudApp:
                     lines = []
                     for row in range(srow, erow + 1):
                         line = b.document.lines[row]
-                        line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                        line_plain = re.sub(r"\x1b\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
 
                     self.app.clipboard.set_text("\n".join(lines))
@@ -1162,21 +1162,6 @@ class PyMudApp:
             plugin.onSessionCreate(session)
         
 
-def main(cfg_data = None):
+def startApp(cfg_data = None):
     app = PyMudApp(cfg_data)
     app.run()
-
-if __name__ == "__main__":
-
-    cfg = "pymud.cfg"
-    import sys
-    args = sys.argv
-    if len(args) > 1:
-        cfg = args[1]
-
-    if os.path.exists(cfg):
-        with open(cfg, "r", encoding="utf8", errors="ignore") as fp:
-            cfg_data = json.load(fp)
-            main(cfg_data)
-    else:
-        main()

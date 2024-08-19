@@ -29,7 +29,7 @@ class Session:
 
     """
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
-    _esc_regx = re.compile("\x1b\\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
+    _esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
     _sys_commands = (
         "help",
@@ -771,12 +771,13 @@ class Session:
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
     
-    async def waitfor(self, line: str, awaitable) -> None:
+    async def waitfor(self, line: str, awaitable, wait_time = 0.05) -> None:
         """
         调用writline向服务器中写入一行后，等待到可等待对象再返回。
         
         :param line: 使用writeline写入的行
         :param awaitable: 等待的可等待对象
+        :param wait_time: 写入行前等待的延时，单位为s。默认0.05
 
         由于异步的消息循环机制，如果在写入命令之后再创建可等待对象，则有可能服务器响应在可等待对象的创建之前
         此时使用await就无法等待到可等待对象的响应，会导致任务出错。
@@ -787,8 +788,7 @@ class Session:
             await session.waitfor('a_cmd', self.create_task(a_tri.triggered()))
             done, pending = await session.waitfor('a_cmd', asyncio.wait([self.create_task(a_tri.triggered()), self.create_task(b_tri.triggered())], return_when = 'FIRST_COMPLETED'))
         """
-
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(wait_time)
         self.writeline(line)
         return await awaitable
 
@@ -808,7 +808,7 @@ class Session:
         示例:
             .. code:: Python
 
-                session.addAlias(SimpleAlias(self.session, "^cb\s(\S+)\s(\S+)", "#3 get %1 from jinnang;#wa 250;combine gem;#wa 250;pack gem", id = "ali_combine"))
+                session.addAlias(SimpleAlias(self.session, r"^cb\s(\S+)\s(\S+)", "#3 get %1 from jinnang;#wa 250;combine gem;#wa 250;pack gem", id = "ali_combine"))
                 session.exec("cb j1a")
         """
         name = name or self.name

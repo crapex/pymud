@@ -4,7 +4,8 @@ from .objects import CodeBlock, Alias, SimpleAlias, Trigger, SimpleTrigger, Comm
 from .extras import DotDict
 from .session import Session
 from .logger import Logger
+from .main import main
 
 __all__ = [
-    "PyMudApp", "Settings", "CodeBlock", "Alias", "SimpleAlias", "Trigger", "SimpleTrigger", "Command", "SimpleCommand", "Timer", "SimpleTimer", "GMCPTrigger", "Session", "PyMudApp", "DotDict", "Logger"
+    "PyMudApp", "Settings", "CodeBlock", "Alias", "SimpleAlias", "Trigger", "SimpleTrigger", "Command", "SimpleCommand", "Timer", "SimpleTimer", "GMCPTrigger", "Session", "PyMudApp", "DotDict", "Logger", "main"
 ]

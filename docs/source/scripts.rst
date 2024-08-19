@@ -273,7 +273,6 @@
             session.addAlias(Alias(session, "^starthook$",  id = "ali_starthook", onSuccess = lambda name, line, wildcards: session.globals.hook.start_webhook()))
             session.addAlias(Alias(session, "^stophook$",   id = "ali_stophook",  onSuccess = lambda name, line, wildcards: session.globals.hook.stop_webhook()))
             session.addAlias(Alias(session, "^send\s(.+)$", id = "ali_sendmsg", onSuccess = partial(sendMessageToHook, session)))
-            session.addCommand(CmdHookMessageHandler(session, id = "cmd_hook"))
 
         def PLUGIN_SESSION_DESTROY(session: Session):
             "在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。"
