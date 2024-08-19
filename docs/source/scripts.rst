@@ -51,8 +51,7 @@
 
             但由于PyMUD实现限制， 在脚本修改之后， #reload 仅可以重新加载由 PyMUD 进行管理的模块，也即是通过 #load 命令 或者 Session.load_module 所加载的模块。
             因此可以使用PyMUD子配置模块来替代 import xxx 的使用。
-
-            注：据使用者反馈，模块的#reload似乎不起作用，待后续进一步测试 @@@ TODO 2024-08-15
+            对子模块的#reload，需要在引用该子模块的主模块也执行#reload之后才生效。经测试，目前看来，模块的#reload是生效的
 
     PyMUD子配置模块:
         PyMUD模块中不包含名为 Configuration 的类型的PyMUD模块即属于PyMUD子配置模块。
@@ -74,13 +73,67 @@
                 def __init__(self, session: Session):
                     self.session = session
 
-                def unload(self):
+                # 注：0.20.0以后，__unload__或unload函数均可生效
+                def __unload__(self):
                     pass
     
     PyMUD插件:
         PyMUD插件本身也是一个标准的 Python模块。插件应放在 pymud包目录的plugins子目录下，或者当前脚本目录的plugins子目录下，在PyMUD启动时自动加载。
 
         插件有相应的插件规范，详细参见 `插件`_
+
+    模块的unload与reload:
+        下面给出了测试生效的子模块与主模块的reload与unload的一个示例
+
+        .. code:: Python
+
+            # filename: submodule.py
+            # 一个子模块的示例，定义了一个自定义的触发器
+
+            from pymud import Trigger, Session
+
+            class MyTestTrigger(Trigger):
+                def __init__(self, session, *args, **kwargs):
+                    super().__init__(session, r'^[>\s]*你嘻嘻地笑了起来.+', onSuccess = self._ontri)
+
+                def _ontri(self, name, line, wildcards):
+                    self.session.exec('haha')
+
+        .. code:: Python
+
+            # filename: mainmodule.py
+            # 一个主模块的示例，调用了子模块中的触发器
+
+            from pymud import SimpleAlias, SimpleTimer, Session
+            from submodule import MyTestTrigger
+
+            class Configuration:
+                def __init__(self, session: Session):
+                    self.session = session
+
+                self.objs = [
+                    SimpleAlias(session, r'^gta$', 'get all;xixi'),
+                    SimpleTimer(session, 'xixi', timeout = 10),
+                    TestTrigger(session)
+                ]
+
+                self.session.addObjects(self.objs)
+                
+            def __unload__(self):
+                self.session.delObjects(self.objs)
+
+        以下是测试步骤：
+            模块的加载与卸载:
+
+            - 在游戏中，通过 ``#load mainmodule`` 加载该主模块之后，别名、定时器、自定义触发器均生效。此时，子模块是通过import而非load_module加载到当前会话的
+            - 然后通过 ``#unload mainmodule`` 卸载该主模块之后，别名、定时器、自定义触发器全部被清除。
+
+            模块的重新加载
+
+            - 在游戏中，通过 ``#load mainmodule`` 加载该主模块之后，别名、定时器、自定义触发器均生效。此时，子模块是通过import而非load_module加载到当前会话的
+            - 此时，修改 submodule.py 的内容，例如将触发后的命令 haha 改为 hehe，保存文件
+            - 然后在游戏中，先使用 ``#load submodule`` 加载该子模块，然后 ``#reload submodule`` 重新加载该子模块，再 ``#reload mainmodule`` 重新加载主模块，此时，子模块的修改会生效。
+
 
 6.3 变量
 ------------------------
@@ -314,7 +367,8 @@
     要在会话中使用定时器，要做的两件事是：
 
     - 构建一个Timer类（或其子类）的实例。SimpleTimer是Timer的子类，你也可以构建自己定义的子类。
-    - 将该实例通过 `session.addTimer <references.html#pymud.Session.addTimer>`_ 方法增加到会话的定时器清单中。也可以通过 `session.addTimers <references.html#pymud.Session.addTimers>`_ 来同时添加多个定时器。
+    - 将该实例通过 `session.addTimer <references.html#pymud.Session.addTimer>`_ 方法或 `session.addObject <references.html#pymud.Session.addObject>`_ 增加到会话的定时器清单中。
+    - 也可以通过 `session.addTimers <references.html#pymud.Session.addTimers>`_ 方法或 `session.addObjects <references.html#pymud.Session.addObjects>`_ 来同时添加多个定时器。
 
 6.4.2 类型定义与构造函数
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^    
@@ -347,7 +401,9 @@
 6.4.3 定时器使用示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^        
 
-    下列代码中实现了两个定时器，均用于在莫高窟冥想时，每隔5s发送一次mingxiang命令。其中一个使用SimpleTimer实现，另一个使用标准Timer实现，并增加了仅在会话连接状态下发送的判断。
+    下列代码中实现了两个定时器，均用于在莫高窟冥想时，每隔5s发送一次mingxiang命令。
+    其中一个使用SimpleTimer实现，另一个使用标准Timer实现，并增加了仅在会话连接状态下发送的判断。
+    同时，该定时器在每一次执行之后，调整定时器时间为1-10s内的一个新随机值。
 
     .. code:: Python
 
@@ -357,20 +413,58 @@
         class Configuration:
             def __init__(self, session: Session):
                 self.session = session
+                
+                使用SimpleTimer定义一个默认10s超时的定时器, id自动生成, 超时执行代码 mingxiang
+                self.aTimer1 = SimpleTimer(session, code = 'mingxiang')
+                # 使用Timer定义一个5秒超时的定时器, id为timer2, 并指定本类型的onTimerMX2方法为超时执行函数
+                self.aTimer2 = Timer(session, timeout = 5, id = 'timer2', onSuccess = self.onTimer2)
+                
+                # 多个定时器可以使用list保存
+                self._timersList = [self.aTimer1, self.aTimer2]
 
-                # 使用SimpleTimer定义一个5秒超时的定时器，id为ti_mx1，超时执行代码 mingxiang
-                ti1 = SimpleTimer(session, code = 'mingxiang', timeout = 5, id = 'ti_mx1', )
-                session.addTimer(ti1)
+                # 多个定时器也可以使用dict保存 (向前兼容)
+                self._timersDict = {'timer1': self.aTimer1, 'timer2': self.aTimer2}
 
-                # 使用Timer定义一个5秒超时的定时器，id为ti_mx2，并指定本类型的onTimerMX2方法为超时执行函数
-                ti2 = Timer(session, timeout = 5, id = 'ti_mx2', onSuccess = self.onTimerMX2)
-                session.addTimer(ti2)
+                # 可以通过addTimer将定时器加入会话
+                session.addTimer(self.aTimer1)
 
-            # Timer ti_mx2的超时回调函数
-            def onTimerMX2(self, id, *args, **kwargs):
-                # 定时器超时时若本会话处于连接状态，则执行代码 mingxiang
+                # 也可以通过addObject将定时器加入会话
+                session.addObject(self.aTimer2)
+
+                # 也可以通过addObjects将所有定时器添加到会话
+                session.addObjects(self._timersList)         # 支持list对象
+                session.addObjects(self._timersDict)         # 也支持dict对象
+
+                # 也可以通过addTimers将所有定时器添加到会话, 同样也支持list对象或dict对象
+                session.addTimers(self._timersList)
+                session.addTimers(self._timersDict)
+
+            def __unload__(self):
+                # 可以通过delTimer从会话中移除单个定时器
+                self.session.delTimer(self.aTimer2)         # delTimer 支持 Timer 对象
+                self.session.delTimer('timer2')             # delTimer 也支持 Timer id
+
+                # 也可以通过delObject从会话中移除单个定时器
+                self.session.delObject(self.aTimer1)        # delObject 仅支持对象形式, 不支持id形式
+
+                # 也可以通过delTimers从会话中移除所有定时器
+                self.session.delTimers(self._timersList)    # 支持 Timer 对象的列表
+                self.session.delTimers(['timer2'])          # 也支持 Timer 对象的 id 列表
+
+                # 还以通过delObjects从会话中移除所有定时器
+                self.session.delObjects(self._timersList)   # delObjects 支持对象列表形式
+                self.session.delObjects(self._timersDict)   # delObjects 也支持对象字典形式
+
+            # timer2的超时回调函数
+            def onTimer2(self, id, *args, **kwargs):
+                # 定时器超时时若本会话处于连接状态, 则执行代码 mingxiang
                 if self.session.connected:
                     self.session.exec('mingxiang')
+
+                # 定时器还支持在运行中动态修改timeout的值
+                import random
+                timer = self.session.timers[id]
+                timer.timeout = random.randint(1, 10)
 
 6.5 别名
 ------------------------

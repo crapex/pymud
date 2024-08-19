@@ -132,6 +132,8 @@ def main():
     if hasattr(args, 'func'):
         args.func(args)
     else:
+        import sys
+        sys.path.append(f"{Path.cwd()}")
         startApp(args)
 
 if __name__ == "__main__":

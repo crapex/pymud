@@ -280,4 +280,8 @@
 
 ### 0.20.0 (2024-08-XX)
 + 功能调整: 将模块主入口函数从__main__.py中移动到main.py中，以使可以在当前目录下，可直接使用pymud，也可使用python -m pymud启动
-+ 问题修复: 修复多处正则表达式书写错误问题
++ 问题修复: 修复部分正则表达式书写错误问题
++ 功能调整: Session类的addTriggers等方法接受的dict中，会将对象本身id作为会话处理id。当该id与key不一致时，会同时显示警告。
++ 功能新增: Session类新增addObject, addObjects, delObject, delObjects用于操作别名、定时器、触发器、GMCP触发器、命令等对象。
++ 功能新增: 主模块卸载现在既可以定义在__unload__方法中，也可以定义在unload方法中
++ 问题修复: 修复原unload方法不能正确卸载的问题

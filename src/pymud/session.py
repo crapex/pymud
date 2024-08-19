@@ -8,7 +8,7 @@ from logging.handlers import QueueHandler, QueueListener
 from .logger import Logger
 from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
-from .objects import Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
+from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
 from .settings import Settings
 
 
@@ -1141,31 +1141,100 @@ class Session:
 
         return counts
 
-    def _addObjects(self, objs: dict, cls: type):
-        if cls == Alias:
-            self._aliases.update(objs)
-        elif cls == Command:
-            self._commands.update(objs)
-        elif cls == Trigger:
-            self._triggers.update(objs)
-        elif cls == Timer:
-            self._timers.update(objs)
-        elif cls == GMCPTrigger:
-            self._gmcp.update(objs)
+    # def _addObjects(self, objs: dict, cls: type):
+    #     if cls == Alias:
+    #         self._aliases.update(objs)
+    #     elif cls == Command:
+    #         self._commands.update(objs)
+    #     elif cls == Trigger:
+    #         self._triggers.update(objs)
+    #     elif cls == Timer:
+    #         self._timers.update(objs)
+    #     elif cls == GMCPTrigger:
+    #         self._gmcp.update(objs)
 
-    def _addObject(self, obj, cls: type):
-        #if type(obj) == cls:
-        if isinstance(obj, cls):
-            if cls == Alias:
-                self._aliases[obj.id] = obj
-            elif cls == Command:
-                self._commands[obj.id] = obj
-            elif cls == Trigger:
-                self._triggers[obj.id] = obj
-            elif cls == Timer:
-                self._timers[obj.id] = obj
-            elif cls == GMCPTrigger:
-                self._gmcp[obj.id] = obj
+    def _addObjects(self, objs):
+        if isinstance(objs, list) or isinstance(objs, tuple):
+            for item in objs:
+                self._addObject(item)
+
+        elif isinstance(objs, dict):
+            for key, item in objs.values():
+                if isinstance(item, BaseObject):
+                    if key != item.id:
+                        self.warning(f'对象 {item} 字典键值 {key} 与其id {item.id} 不一致，将丢弃键值，以其id添加到会话中...')
+
+                    self._addObject(item)
+
+    # def _addObject(self, obj, cls: type):
+    #     #if type(obj) == cls:
+    #     if isinstance(obj, cls):
+    #         if cls == Alias:
+    #             self._aliases[obj.id] = obj
+    #         elif cls == Command:
+    #             self._commands[obj.id] = obj
+    #         elif cls == Trigger:
+    #             self._triggers[obj.id] = obj
+    #         elif cls == Timer:
+    #             self._timers[obj.id] = obj
+    #         elif cls == GMCPTrigger:
+    #             self._gmcp[obj.id] = obj
+
+    def _addObject(self, obj):
+        if isinstance(obj, Alias):
+            self._aliases[obj.id] = obj
+        elif isinstance(obj, Command):
+            self._commands[obj.id] = obj
+        elif isinstance(obj, Trigger):
+            self._triggers[obj.id] = obj
+        elif isinstance(obj, Timer):
+            self._timers[obj.id] = obj
+        elif isinstance(obj, GMCPTrigger):
+            self._gmcp[obj.id] = obj
+
+    def addObject(self, obj: BaseObject):
+        """
+        向会话中增加单个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
+
+        :param obj: 特定对象本身，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                    
+                        self.session.addObject(SimpleAlias(session, r'^gta$', 'get all'),)
+                        self.session.addObject(SimpleTrigger(session, r'^[> ]*你嘻嘻地笑了起来.+', 'haha'))
+                        self.session.addObject(SimpleTimer(session, 'xixi', timeout = 10))
+
+        """
+        self._addObject(obj)
+
+    def addObjects(self, objs):
+        """
+        向会话中增加多个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
+
+        :param objs: 多个特定对象组成的元组、列表或者字典，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+                    
+                        self.objs = [
+                            SimpleAlias(session, r'^gta$', 'get all;xixi'),
+                            SimpleTrigger(session, r'^[> ]*你嘻嘻地笑了起来.+', 'haha'),
+                            SimpleTimer(session, 'xixi', timeout = 10)
+                        ]
+
+                        self.session.addObjects(self.objs)
+
+        """
+        self._addObjects(objs)
 
     def _delObject(self, id, cls: type):
         if cls == Alias:
@@ -1175,16 +1244,103 @@ class Session:
         elif cls == Trigger:
             self._triggers.pop(id, None)
         elif cls == Timer:
-            self._timers.pop(id, None)
+            timer = self._timers.pop(id, None)
+            if isinstance(timer, Timer):
+                timer.enabled = False
         elif cls == GMCPTrigger:
             self._gmcp.pop(id, None)
+
+    # def _delObject(self, obj):
+    #     if isinstance(obj, Alias):
+    #         self._aliases.pop(obj.id, None)
+    #     elif isinstance(obj, Command):
+    #         self._commands.pop(obj.id, None)
+    #     elif isinstance(obj, Trigger):
+    #         self._triggers.pop(obj.id, None)
+    #     elif isinstance(obj, Timer):
+    #         self._timers.pop(obj.id, None)
+    #     elif isinstance(obj, GMCPTrigger):
+    #         self._gmcp.pop(obj.id, None)
 
     def _delObjects(self, ids: Iterable, cls: type):
         "删除多个指定元素"
         for id in ids:
             self._delObject(id, cls)
 
-    def addAliases(self, alis: dict):
+    def delObject(self, obj):
+        """
+        从会话中移除一个对象，可直接删除 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类本身
+        
+        :param obj: 要删除的多个特定对象组成的元组、列表或者字典，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
+
+        示例:
+            .. code:: Python
+
+                class Configuration:
+                    def __init__(self, session):
+                        self.session = session
+
+                        ali = Alias(session, "s", "south", id = "my_ali1")
+                        
+                        # 以下几种方式均可将该别名添加到会话
+                        session.addObject(ali)
+                        session.addAlias(ali)
+
+                        # 以下三种方式均可以删除该别名
+                        session.delObjec(ali)
+                        session.delAlias(ali)
+                        session.delAlias("my_ali1")
+
+        """
+        if isinstance(obj, Alias):
+            self._aliases.pop(obj.id, None)
+        elif isinstance(obj, Command):
+            self._commands.pop(obj.id, None)
+        elif isinstance(obj, Trigger):
+            self._triggers.pop(obj.id, None)
+        elif isinstance(obj, Timer):
+            timer = self._timers.pop(obj.id, None)
+            if isinstance(timer, Timer):
+                timer.enabled = False
+        elif isinstance(obj, GMCPTrigger):
+            self._gmcp.pop(obj.id, None)
+
+    def delObjects(self, objs):
+        """
+        从会话中移除一组对象，可直接删除  Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
+        
+        :param objs: 要删除的对象本身，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
+
+        示例:
+
+        .. code:: Python
+
+            class Configuration:
+                def __init__(self, session):
+                    self.session = session
+                
+                    self.objs = [
+                        SimpleAlias(session, r'^gta$', 'get all;xixi'),
+                        SimpleTrigger(session, r'^[> ]*你嘻嘻地笑了起来.+', 'haha'),
+                        SimpleTimer(session, 'xixi', timeout = 10)
+                    ]
+
+                    self.session.addObjects(self.objs)
+
+                def __unload__(self):
+                    "卸载本模块时，删除所有本模块添加的对象"
+                    self.session.delObjects(self.objs)
+
+        """
+        if isinstance(objs, list) or isinstance(objs, tuple):
+            for item in objs:
+                self.delObject(item)
+
+        elif isinstance(objs, dict):
+            for key, item in objs.values():
+                    self.delObject(item)
+
+    def addAliases(self, alis):
         """
         向会话中增加多个别名
 
@@ -1205,55 +1361,55 @@ class Session:
                         self._aliases['my_ali2'] = SimpleAlias(self.session, "s", "south", id = "my_ali2")
                         self.session.addAliases(self._aliases)
         """
-        self._addObjects(alis, Alias)
+        self._addObjects(alis)
 
-    def addCommands(self, cmds: dict):
+    def addCommands(self, cmds):
         """
         向会话中增加多个命令。使用方法与 addAliases 类似。
 
         :param cmds: 多个命令的字典。字典 key 应为每个命令的 id。
         """
-        self._addObjects(cmds, Command)
+        self._addObjects(cmds)
 
-    def addTriggers(self, tris: dict):
+    def addTriggers(self, tris):
         """
         向会话中增加多个触发器。使用方法与 addAliases 类似。
 
         :param tris: 多个触发器的字典。字典 key 应为每个触发器的 id。
         """
-        self._addObjects(tris, Trigger)
+        self._addObjects(tris)
 
-    def addGMCPs(self, gmcps: dict):
+    def addGMCPs(self, gmcps):
         """
         向会话中增加多个GMCPTrigger。使用方法与 addAliases 类似。
 
         :param gmcps: 多个GMCPTrigger的字典。字典 key 应为每个GMCPTrigger的 id。
         """
-        self._addObjects(gmcps, GMCPTrigger)
+        self._addObjects(gmcps)
 
-    def addTimers(self, tis: dict):
+    def addTimers(self, tis):
         """
         向会话中增加多个定时器。使用方法与 addAliases 类似。
 
         :param tis: 多个定时器的字典。字典 key 应为每个定时器的 id。
         """
-        self._addObjects(tis, Timer)
+        self._addObjects(tis)
 
-    def addAlias(self, ali: Alias):
+    def addAlias(self, ali):
         """
         向会话中增加一个别名。
 
         :param ali: 要增加的别名对象，应为 Alias 类型或其子类
         """
-        self._addObject(ali, Alias)
+        self._addObject(ali)
 
-    def addCommand(self, cmd: Command):
+    def addCommand(self, cmd):
         """
         向会话中增加一个命令。
 
         :param cmd: 要增加的命令对象，应为 Command 类型或其子类
         """
-        self._addObject(cmd, Command)
+        self._addObject(cmd)
 
     def addTrigger(self, tri: Trigger):
         """
@@ -1261,7 +1417,7 @@ class Session:
 
         :param tri: 要增加的触发器对象，应为 Trigger 类型或其子类
         """
-        self._addObject(tri, Trigger)
+        self._addObject(tri)
 
     def addTimer(self, ti: Timer):
         """
@@ -1269,7 +1425,7 @@ class Session:
 
         :param ti: 要增加的定时器对象，应为 Timer 类型或其子类
         """
-        self._addObject(ti, Timer)
+        self._addObject(ti)
 
     def addGMCP(self, gmcp: GMCPTrigger):
         """
@@ -1278,7 +1434,7 @@ class Session:
         :param gmcp: 要增加的GMCP触发器对象，应为 GMCPTrigger 类型或其子类
         """
 
-        self._addObject(gmcp, GMCPTrigger)
+        self._addObject(gmcp)
 
     def delAlias(self, ali):
         """
@@ -1397,7 +1553,7 @@ class Session:
         for ti in ti_s:
             self.delTimer(ti)
 
-    def delGMCP(self, gmcp: GMCPTrigger):
+    def delGMCP(self, gmcp):
         """
         从会话中移除一个GMCP触发器，可接受 GMCPTrigger 对象或其的id。使用方法与 delAlias 类似
         
@@ -1967,7 +2123,7 @@ class Session:
                             self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
 
     def handle_alias(self, code: CodeLine = None, *args, **kwargs):
-        '''
+        """
         嵌入命令 #alias / #ali 的执行函数，操作别名。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
 
@@ -1998,7 +2154,7 @@ class Session:
             - #trigger
             - #timer
             - #command
-        '''
+        """
 
         self._handle_objs("Alias", self._aliases, *code.code[2:])
 
@@ -2393,10 +2549,11 @@ class Session:
                 mod = self._modules[module_name]["module"]
                 config = self._modules[module_name]["config"]
                 if config: 
-                    if hasattr(config, "unload"):
-                        unload = getattr(config, "unload", None)
+                    if hasattr(config, "__unload__") or hasattr(config, "unload"):
+                        unload = getattr(config, "__unload__", None) or getattr(config, "unload", None)
                         if callable(unload):
-                            unload(config)
+                            unload()
+
                     del config
                 mod = importlib.reload(mod)
                 if hasattr(mod, 'Configuration'):
@@ -2436,10 +2593,10 @@ class Session:
             mod = self._modules[module_name]["module"]
             config = self._modules[module_name]["config"]
             if config: 
-                if hasattr(config, "unload"):
-                    unload = getattr(config, "unload", None)
+                if hasattr(config, "__unload__") or hasattr(config, "unload"):
+                    unload = getattr(config, "__unload__", None) or getattr(config, "unload", None)
                     if callable(unload):
-                        unload(config)
+                        unload()
 
                 del config
             del mod

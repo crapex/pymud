@@ -2,7 +2,7 @@
 ## 0.15.8 (2023-12-05)
 发布到pip，增加模块使用
 
-## 0.16.1 (2023-12-11)
+## 0.16.1.post2 (2023-12-12)
 + 问题修复：修复__init__.py中的__all__变量为字符串
 + 功能增加：可以加载自定义Settings。在执行python -m pymud时，会自动从当前目录读取pymud.cfg文件。使用json格式将配置信息写在该文件中即可。支持模块中settings.py里的sessions, client, server, styles, text字段内容。
 + 功能增加：增加全局变量集，可以使用session.setGlobal和session.getGlobal进行访问，以便于跨session通信。也可以使用#global在命令行访问
@@ -18,35 +18,27 @@
 + 功能修改：退出时未断开session时的提示窗口文字改为红色（原黄色对比度问题，看不清楚）
 + 功能修改：恢复了#help功能，可以在任意会话中使用#help列出所有帮助主题，#help {topic}可以查看主题详情
 + 功能修改：在#reload重新加载脚本时，保留变量数据
-
-## 0.16.1.post1 (2023-12-12)
-+ 问题修复：修复版本显示，更正问为0.16.1（原0.16.0）
++ 问题修复：修复版本显示，更正为0.16.1（原0.16.0）
 + 问题修复：发布日期标志修改为当前时间
 + 功能修改：CodeLine的执行运行处理修改为不删除中间的多余空白
-
-## 0.16.1.post2 (2023-12-12)
 + 问题修复：修改github项目地址为原pymud地址
 
-## 0.16.2a1 (2023-12-18)
+## 0.16.2 (2023-12-19)
 + 功能修改：归一化#命令和非#命令处理，使session.exec_command、exec_command_async、exec_command_after均可以处理#命令，例如session.exec_command("#save")。同时，也可以在命令行使用#all发送#命令，如"#all #save"此类
 + 功能修改：调整脚本加载与变量自动加载的顺序。当前为连接自动加载时，首先加载变量，然后再加载脚本。目的是使脚本的变化可以覆盖加载的变量内容，而不是反向覆盖。
 + 功能修改：会话变量保存和加载可以配置是否打开，默认为打开。见Settings.client["var_autosave] 和 Settings.client["var_autoload"]。同理，该配置可以被本地pymud.cfg所覆盖
 + 功能修改：将MatchObject的同步onSuccess和异步await的执行顺序进行调整，以确保一定是同步onSuccess先执行。涉及Trigger、Command等。
 + 功能修改：修改了GMCPTrigger的onSuccess处置和await triggered处置参数，以保持与Trigger同步。当前，onSuccess函数传递3个参数，name，line（GMCP收到的原始str数据）,wildcards（经eval处理的GMCP数据，大概率是dict，偶尔也可能eval失败，返回与line相同值）。await triggered返回与Triggerd的await triggered相同，均为BaseObject.State，包含4个参数的元组，result（永为True)，name（GMCP的id)，line（GMCP原始数据），wildcards（GMCP处理后数据）。其中，后3个参数与onSuccess函数调用时传递参数相同。
-
-## 0.16.2 (2023-12-19)
 + 功能修改：增加GMCP默认处理。当未使用GMCPTrigger对对应的GMCP消息进行处理时，默认使用[GMCP] name: value的形式输出GMCP收到的消息，以便于个人脚本调试。
 + 功能修改：修改GMCP数据的处理方式从eval修改为json.load，其余不变。
 
-## 0.17.0a1 (2023-12-20)
+## 0.17.0 (2023-12-24)
 + 功能修改：调整修改GMCP数据的wildcards处理方式，恢复为eval，其余不变。（回滚0.16.2版更改）
 + 功能修改：将本地pymud.cfg文件的读取默认编码调整为utf8，以避免加载出现问题
 + 问题修复：sessions.py中，修复系统command与会话command重名的问题（这次才发现）
 + 功能修改：将自动脚本加载调整到session创建初始，而不论是否连接服务器
 + 功能修改：脚本load和reload时，不再清空任何对象，保留内容包括：中止并清空所有task，关闭所有定时器，将所有异步对象复位
 + 功能修改：去掉了左右边框
-
-## 0.17.0b1 (2023-12-23)
 + 问题修复：修复了当使用session.addCommand/addTrigger/addAlias等添加对象，而对象是Command/Trigger/Alias等的子类时，由于类型检查失败导致无法成功的问题
 + 功能修改：增加自动重连配置，Settings.client["auto_reconnect"]配置，当为True时，若连接过程中出现异常断开，则10秒后自动重连。该配置默认为False。
 + 功能修改：当连接过程中出现异常时，异常提示中增加异常时刻。
@@ -62,12 +54,11 @@
 |PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
 |PLUGIN_SESSION_DESTROY|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
 
-## 0.17.0 (2023-12-24)
 + 功能修改：对session自动加载mud文件中变量失败时的异常进行管理，此时将不加载变量，自动继续进行
 + 功能修改：所有匹配类对象的匹配模式patterns支持动态修改，涉及Alias，Trigger，Command。修改方式为直接对其patterns属性赋值。如tri.patterns = aNewPattern
 + 功能修改：连接/断开连接时刻都会在提示中增加时刻信息，而不论是否异常。
 
-## 0.17.1 (2023-12-27)
+## 0.17.1post1 (2023-12-27)
 本版对模块功能进行了整体调整，支持加载/卸载/重载/预加载多个模块，具体内容如下：
 + 当模块中存在名为Configuration类时，以主模块形式加载，即：自动创建该Configuration类的实例（与原脚本相同）
 + 当模块中不存在名为Configuration类时，以子模块形式加载，即：仅加载该模块，但不会创建Configuration的实例
@@ -103,26 +94,18 @@
  }
 ```
 
-## 0.17.1post1 (2023-12-27)
 + 问题修复：修复enableGroup中定时器处的bug
 + 功能修改：会话连接和重新连接时，取消原定时器停止的设定，目前保留为只清除所有task、复位Command
 + 功能修改：auto_reconnect设定目前对正常/异常断开均有效。若设置为True，当连接断开后15s后自动重连
 + 功能修改：会话菜单下增加“打开/关闭自动重连”子菜单，可以动态切换自动重连是否打开。
 
-## 0.17.2 (2023-12-28)
+## 0.17.2post4 (2023-12-29)
 + 功能修改：会话菜单 "显示/隐藏命令" 和 "打开/关闭自动重连" 操作后，增加在当前会话中提示状态信息。
 + 功能修改：Timer实现进行修改，以确保一个定时器仅创建一个任务。
 + 功能调整：Timer对象在复位Session对象时，也同时复位。目的是确保reload时不重新创建定时器任务。
 + 功能调整：在会话连接时，不再复位Session有关对象信息。该复位活动仅在连接断开时和脚本重新加载时进行。
 + 功能调整：启动PYMUD时，会将控制台标题设置为PYMUD+版本号。
-
-## 0.17.2post1 (2023-12-28)
-+ 问题修复：修复定时器Timer中的bug。
-
-## 0.17.2post2 (2023-12-28)
 + 问题修复：修复会话特定脚本模块会被其他会话加载的bug。
-
-## 0.17.2post4 (2023-12-29)
 + 问题修复：修复定时器Timer中的bug。
 
 ## 0.17.3 (2024-01-02)
@@ -139,7 +122,7 @@
 + 功能增加：为Session增加两个事件属性，分别为event_connected和event_disconnected，接受一个带有session参数的函数，在连接和连接断开时触发。
 + 功能调整：调整了时间显示格式，只显示到秒，不显示毫秒数。
 
-## 0.18.0b1 (2024-01-21) 
+## 0.18.0 (2024-01-24) 
 + 问题修复：修复了delTrigger/delAlias等等无法删除对象的问题
 + 功能调整：delTrigger等函数，修改为既可以接受Trigger对象本身，也可以接受其id。其他类似
 + 功能增加：增加了delTriggers（注意，带s）等函数，可以删除多个指定对象。可接受列表、元组等可迭代对象，并且其内容既可以为对象本身，也可以为id。
@@ -154,11 +137,9 @@
 + 功能新增：session类型新增exec方法，使用方法为：session.exec(cmd, session_name)。可以使名为session_name的会话执行cmd命令。当不指定session_name时，在当前会话执行。
 + 功能调整：定时器创建时若不指定id，其自动生成的id前缀由tmr调整为ti
 + 实现调整：将#all、#session_name cmd等命令的实现从pymud.py中移动到了session.py中，这样可以在脚本中使用session.exec_command("#all xixi")。
-+ 当前已知问题：由于同步/异步执行问题，在SimpleTrigger中，#gag和#replace的执行结果会很奇怪，可能会隐藏和替换掉非触发行。可行的办法为在onSuccess里，调用session.replace进行处理。
-
-## 0.18.0 (2024-01-24)
 + 问题修复：修复了点击菜单"重新加载脚本配置"报错的问题
 + 功能调整：从菜单里点击创建会话时，会自动以登录名为本会话创建id变量
++ 当前已知问题：由于同步/异步执行问题，在SimpleTrigger中，#gag和#replace的执行结果会很奇怪，可能会隐藏和替换掉非触发行。可行的办法为在onSuccess里，调用session.replace进行处理。
 
 ## 0.18.1 (2024-02-05)
 + 问题修复：统一处置了task.cancel的参数和create_task的name属性，以适应更低版本的python环境（低至3.7）
@@ -174,17 +155,11 @@
 + 功能调整：原#unload时通过调用__del__来实现卸载的时间不可控，现将模块卸载改为调用unload函数。若需卸载时人工清除有关定时器、触发器等，请在Configuration类下新增unload函数（参数仅self），并在其中进行实现
 + 功能新增：新增会话Variable和全局Global的删除接口。可以通过session.delVariable(name)删除一个变量，可以通过session.delGlobal(name)来删除一个全局Global变量
 
-## 0.18.4 (2024-02-19)
+## 0.18.4post4 (2024-02-23)
 + 功能新增：新增Settings.client["buffer_lines"]，表示保留的缓冲行数（默认5000）。当Session内容缓冲行数达到该值2倍时（10000行），将截取一半（5000行），后一半内容进行保留，前一半丢弃。此功能是为了减少长时挂机的内存消耗和响应时间。
 + 功能修复：解决在显示美化（Settings.client["beautify"]）打开之后，复制部分文字不能正确判断起始终止的问题。
-
-## 0.18.4post1 (2024-02-19)
 + 功能调整：修改缓冲行数判断逻辑，加快客户端判断响应速度。
-
-## 0.18.4post2 (2024-02-20)
 + 问题调整：修改缓冲截取处理中的小BUG。
-
-## 0.18.4post4 (2024-02-23)
 + 功能调整：将帮助窗口中的链接改到帮助网址： https://pymud.readthedocs.org
 + 问题修复：修复了随包提供的pkuxkx.py样例脚本中的几处错误
 
@@ -205,7 +180,7 @@
 + 功能调整: 将除#session之外的所有其他#命令实现统一到Session类中实现，这些命令均支持通过Session.exec_command运行
 + 功能调整: python -m pymud init时，创建的pymud.cfg文件增加了keys字典
 
-## 0.19.2 （2024-03-22）
+## 0.19.2post2 （2024-03-24）
 + 错误修复：订正部分错别字、错误帮助、错别格式
 + 系统完善：完善帮助体系，按reST格式重写所有有关的docstring
 + 功能调整：session.exec_command / exec_command_async / exec 系列命令调整，现在可以在exec时带变量参数了。例如 session.exec("dazuo @dzpt")，直接调用 dzpt的变量值
@@ -213,25 +188,17 @@
 + 功能调整: 变通解决了菜单栏右边单击 帮助 菜单会响应问题
 + 错误修复: 修复了会话关闭时插件卸载的代码错误
 + 功能调整: 在会话关闭、程序退出时增加等待，确保收到服务器断开命令之后才关闭和退出
-
-## 0.19.2post1 （2024-03-23）
 + 问题修复: 在退出程序时增加了插件卸载调用
 + 实现调整: 在清除task的列表推导过程中去掉了类型判断以减少任务时间占用
 + 其他调整: 从包中删除了拷贝过来作为参考的文件
 + 帮助完善: 帮助文档逻辑完善
-
-## 0.19.2post2 （2024-03-24）
 + 实现调整: 改用官方示例的task清除方式，每个任务结束后清除
 
-## 0.19.3 (2024-03-27)
+## 0.19.3post2 （2024-04-05）
 + 问题修复: 一次发送多个命令时，发送顺序可能不正确的情况
-
-## 0.19.3post1 (2024-04-03)
 + 功能增加: 新增一个exec_async函数，是exec函数的异步形式。可以在其他会话中异步执行一段代码
 + 帮助完善: 帮助文档逻辑完善，已完成整个包的内置文档的编写和修改
 + 注: 由于我没弄太明白 readthedocs.io 网站对于读取github源代码的逻辑，目前只能通过新发布正式版本的形式来使 readthedocs.io 网站的文档中的类参考自动更新。
-
-## 0.19.3post2 （2024-04-05）
 + 问题修复: 修复退出程序时的小bug
 
 ## 0.19.4 (2024-04-20)
@@ -241,9 +208,17 @@
 + 功能调整: 变量替代时，会自动实现类型转化，当被替代变量值为非 str 类型时不会再报错
 + 问题修复: 修复之前从后向前选择时，无法复制的问题
 
-## 0.20.0a1 (2024-08-14)
+## 0.20.0 (2024-08-XX)
 + 功能调整: 使用argsparser标准模块来配置命令行，可以使用 python -m pymud -h 查看命令行具体参数及说明
 + 功能调整: 恢复在__init__.py中增加PyMudApp的导出，可以恢复使用from pymud import PyMudApp了
 + 功能调整: 在没有session的时候，也可以执行#exit命令
 + 功能调整: 模块加载和重新加载前，会自动调用模块的unload方法（若有）
 + 功能新增: 增加log功能，详见 #log 命令介绍、类参考中的 Logger 类，以及 Session 类的 handle_log 方法
++ 功能调整: 将模块主入口函数从__main__.py中移动到main.py中，以使可以在当前目录下，可直接使用pymud，也可使用python -m pymud启动
++ 问题修复: MacOS下 python -m pymud init 创建目录报错的问题。同时，将所有系统上的默认目录均使用 ~/pkuxkx （影响windows）
++ 问题修复: 修复部分正则表达式书写错误问题
++ 问题修复: 修复原unload方法不能正确卸载的问题
++ 功能新增: Session类新增waitfor函数，用于执行一段代码后立即等待某个触发器的情况，简化原三行代码写法
++ 功能调整: Session类的addTriggers等方法接受的dict中，会将对象本身id作为会话处理id。当该id与key不一致时，会同时显示警告。
++ 功能新增: Session类新增addObject, addObjects, delObject, delObjects用于操作别名、定时器、触发器、GMCP触发器、命令等对象。
++ 功能新增: 主模块卸载现在既可以定义在__unload__方法中，也可以定义在unload方法中

@@ -11,7 +11,7 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.20.0a2"
+    __version__   = "0.20.0"
     "APP 当前版本"
     __release__   = "2024-08-19"
     "APP 当前版本发布日期"
