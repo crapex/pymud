@@ -1159,7 +1159,7 @@ class Session:
                 self._addObject(item)
 
         elif isinstance(objs, dict):
-            for key, item in objs.values():
+            for key, item in objs.items():
                 if isinstance(item, BaseObject):
                     if key != item.id:
                         self.warning(f'对象 {item} 字典键值 {key} 与其id {item.id} 不一致，将丢弃键值，以其id添加到会话中...')
@@ -1337,7 +1337,7 @@ class Session:
                 self.delObject(item)
 
         elif isinstance(objs, dict):
-            for key, item in objs.values():
+            for key, item in objs.items():
                     self.delObject(item)
 
     def addAliases(self, alis):
