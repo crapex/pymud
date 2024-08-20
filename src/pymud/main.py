@@ -1,4 +1,4 @@
-import os, json, platform, shutil, logging, argparse
+import os, sys, json, platform, shutil, logging, argparse
 from pathlib import Path
 from .pymud import PyMudApp
 from .settings import Settings
@@ -104,8 +104,11 @@ def startApp(args):
             datefmt = '%m-%d %H:%M',
             handlers = [logging.NullHandler()],
             )
-        
-    cfg = "pymud.cfg"
+
+    startup_path = Path(args.startup_dir).resolve()
+    sys.path.append(f"{startup_path}")
+    os.chdir(startup_path)
+    cfg = startup_path.joinpath("pymud.cfg")
     cfg_data = None
     if os.path.exists(cfg):
         with open(cfg, "r", encoding="utf8", errors="ignore") as fp:
@@ -115,25 +118,23 @@ def startApp(args):
     app.run()
 
 def main():
-    #parser = argparse.ArgumentParser(prog = "pymud", usage = "python -m pymud [-h] [-d] [-l logfile] [-a] {init} ...", description = "PyMUD命令行参数帮助")
     parser = argparse.ArgumentParser(prog = "pymud", description = "PyMUD命令行参数帮助")
     subparsers = parser.add_subparsers(help = 'init用于初始化运行环境')
 
-    par_init = subparsers.add_parser('init', usage = "python -m pymud init [-h] [-d dir]", description = '初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.')
+    par_init = subparsers.add_parser('init', description = '初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.')
     par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, default = '', help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
     par_init.set_defaults(func = init_pymud_env)
 
     parser.add_argument('-d', '--debug', dest = 'debug', action = 'store_true', default = False, help = '指定以调试模式进入PyMUD。此时，系统log等级将设置为logging.NOTSET, 所有log数据均会被记录。默认不启用。')
     parser.add_argument('-l', '--logfile', dest = 'logfile', metavar = 'logfile', default = 'pymud.log', help = '指定调试模式下记录文件名，不指定时，默认为当前目录下的pymud.log')
     parser.add_argument('-a', '--appendmode', dest = 'filemode', action = 'store_true', default = True, help = '指定log文件的访问模式是否为append尾部添加模式，默认为True。当为False时，使用w模式，即每次运行清空之前记录')
+    parser.add_argument('-s', '--startup_dir', dest = 'startup_dir', metavar = 'startup_dir', default = '.', help = '指定启动目录，默认为当前目录。使用该参数可以在任何目录下，通过指定脚本目录来启动')
 
     args=parser.parse_args()
 
     if hasattr(args, 'func'):
         args.func(args)
     else:
-        import sys
-        sys.path.append(f"{Path.cwd()}")
         startApp(args)
 
 if __name__ == "__main__":

@@ -318,8 +318,8 @@ class PyMudApp:
                 ),
 
                 MenuItem(
-                    "",    # 增加一个空名称MenuItem，阻止右侧空白栏点击响应
-                    children=[]
+                    "",    # 增加一个空名称MenuItem，单机后焦点移动至命令行输入处，阻止右侧空白栏点击响应
+                    handler = lambda : self.app.layout.focus(self.commandLine)
                 )
             ],
             floats=[
@@ -340,34 +340,9 @@ class PyMudApp:
         ss = Settings.sessions
 
         for key, site in ss.items():
-            host = site["host"]
-            port = site["port"]
-            encoding = site["encoding"]
-            autologin = site["autologin"]
-            scripts = list()
-            default_script = site["default_script"]
-            
-            def_scripts = list()
-            if isinstance(default_script, str):
-                def_scripts.extend(default_script.split(","))
-            elif isinstance(default_script, (list, tuple)):
-                def_scripts.extend(default_script)
-
             menu = MenuItem(key)
-            for name, info in site["chars"].items():
-                after_connect = autologin.format(info[0], info[1])
-                sess_scripts = list()
-                sess_scripts.extend(def_scripts)
-                
-                if len(info) == 3:
-                    session_script = info[2]
-                    if session_script:
-                        if isinstance(session_script, str):
-                            sess_scripts.extend(session_script.split(","))
-                        elif isinstance(session_script, (list, tuple)):
-                            sess_scripts.extend(session_script)
-
-                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, sess_scripts, info[0]))
+            for name in site["chars"].keys():
+                sub = MenuItem(name, handler = functools.partial(self._quickHandleSession, key, name))
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -919,6 +894,50 @@ class PyMudApp:
         self.status_message = msg
         self.app.invalidate()
 
+    def _quickHandleSession(self, group, name):
+        '''
+        根据指定的组名和会话角色名，从Settings内容，创建一个会话
+        '''
+        handled = False
+        if name in self.sessions.keys():
+           self.activate_session(name)
+           handled = True
+
+        else:
+            site = Settings.sessions[group]
+            if name in site["chars"].keys():
+                host = site["host"]
+                port = site["port"]
+                encoding = site["encoding"]
+                autologin = site["autologin"]
+                default_script = site["default_script"]
+                
+                def_scripts = list()
+                if isinstance(default_script, str):
+                    def_scripts.extend(default_script.split(","))
+                elif isinstance(default_script, (list, tuple)):
+                    def_scripts.extend(default_script)
+
+                charinfo = site["chars"][name]
+
+                after_connect = autologin.format(charinfo[0], charinfo[1])
+                sess_scripts = list()
+                sess_scripts.extend(def_scripts)
+                    
+                if len(charinfo) == 3:
+                    session_script = charinfo[2]
+                    if session_script:
+                        if isinstance(session_script, str):
+                            sess_scripts.extend(session_script.split(","))
+                        elif isinstance(session_script, (list, tuple)):
+                            sess_scripts.extend(session_script)
+
+                self.create_session(name, host, port, encoding, after_connect, sess_scripts, charinfo[0])
+                handled = True
+        
+        return handled
+
+
     def handle_session(self, *args):
         '''
         嵌入命令 #session 的执行函数，创建一个远程连接会话。
@@ -929,12 +948,18 @@ class PyMudApp:
             - 当不指定 Encoding: 时, 默认使用utf-8编码
             - 可以直接使用 #{名称} 切换会话和操作会话命令
 
+            - #session {group}.{name}
+            - 相当于直接点击菜单{group}下的{name}菜单来创建会话. 当该会话已存在时，切换到该会话
+
         参数:
             :name: 会话名称
             :host: 服务器域名或IP地址
             :port: 端口号
             :encoding: 编码格式，不指定时默认为 utf8
     
+            :group: 组名, 即配置文件中, sessions 字段下的某个关键字
+            :name: 会话快捷名称, 上述 group 关键字下的 chars 字段中的某个关键字
+
         示例:
             ``#session {名称} {宿主机} {端口} {编码}`` 
                 创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} 。其中，编码可以省略，此时使用Settings.server["default_encoding"]的值，默认为utf8
@@ -947,6 +972,9 @@ class PyMudApp:
             ``#newstart give miui gold`` 
                 使名称为newstart的会话执行give miui gold指令，但不切换到该会话
 
+            ``#session pkuxkx.newstart``
+                通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。若该会话存在，则切换到该会话
+
         相关命令:
             - #close
             - #exit
@@ -954,8 +982,17 @@ class PyMudApp:
         '''
 
         nothandle = True
+        errmsg = "错误的#session命令"
+        if len(args) == 1:
+            host_session = args[0]
+            if '.' in host_session:
+                group, name = host_session.split('.')
+                nothandle = not self._quickHandleSession(group, name)
 
-        if len(args) >= 3:
+            else:
+                errmsg = f'通过单一参数快速创建会话时，要使用 group.name 形式，如 #session pkuxkx.newstart'
+
+        elif len(args) >= 3:
             session_name = args[0]
             session_host = args[1]
             session_port = int(args[2])
@@ -968,7 +1005,7 @@ class PyMudApp:
             nothandle = False
         
         if nothandle:
-            self.set_status("错误的#session命令")
+            self.set_status(errmsg)
 
     def enter_pressed(self, buffer: Buffer):
         "命令行回车按键处理"

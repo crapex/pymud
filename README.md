@@ -285,3 +285,7 @@
 + 功能新增: Session类新增addObject, addObjects, delObject, delObjects用于操作别名、定时器、触发器、GMCP触发器、命令等对象。
 + 功能新增: 主模块卸载现在既可以定义在__unload__方法中，也可以定义在unload方法中
 + 问题修复: 修复原unload方法不能正确卸载的问题
++ 功能新增: 命令行参数增加指定启动目录的功能，参数为 -s, --startup_dir。即可以从任意目录通过指定脚本目录方式启动PyMUD了。例如， PS C:\> pymud -s d:\prog\pkuxkx 相当于 PS D:\prog\pkuxk> pymud
++ 功能新增: 增加 #disconnect, #dis 命令，可以使当前会话从服务器断开。相当于操作菜单 会话->断开连接
++ 功能新增: #session 命令增加快捷创建会话功能，假如已有快捷菜单 世界->pkuxkx->newstart , 则可以通过 #session pkuxkx.newstart 直接创建该会话，效果等同于点击该菜单
++ 功能调整: 点击菜单创建会话时，若会话已存在，则将该会话切换为当前会话

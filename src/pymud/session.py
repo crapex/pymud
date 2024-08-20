@@ -36,6 +36,7 @@ class Session:
         "exit",
         "close",
         "connect",      # 连接到服务器
+        "disconnect",   # 从服务器断开连接
 
         "info",         # 输出蓝色info
         "warning",      # 输出黄色warning
@@ -89,6 +90,7 @@ class Session:
         "var" : "variable",
         "rep" : "repeat",
         "con" : "connect",
+        "dis" : "disconnect",
         "wa"  : "wait",
         "mess": "message",
         "action": "trigger",
@@ -1869,6 +1871,7 @@ class Session:
         该函数不应该在代码中直接调用。
         
         相关命令:
+            - #disconnect
             - #close
             - #exit
         '''
@@ -1889,6 +1892,18 @@ class Session:
             time_msg += f"{math.ceil(sec)} 秒"
 
             self.info("已经与服务器连接了 {}".format(time_msg))
+
+    def handle_disconnect(self, code: CodeLine = None, *args, **kwargs):
+        '''
+        嵌入命令 #disconnect / #dis 的执行函数，断开到远程服务器的连接（仅当远程服务器已连接时有效）。
+        该函数不应该在代码中直接调用。
+        
+        相关命令:
+            - #connect
+            - #close
+        '''
+
+        self.disconnect()
 
     def handle_variable(self, code: CodeLine = None, *args, **kwargs):
         '''

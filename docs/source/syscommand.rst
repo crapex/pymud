@@ -78,6 +78,16 @@
 
     `#command`_ 命令的简写
 
+``#dis``
+----------------
+
+    `#disconnect`_ 命令的简写
+
+``#disconnect``
+----------------
+
+    断开到远程服务器的连接。命令是通过调用 ``Session.disconnect()`` 来实现连接。
+
 ``#error``
 ----------------
 
@@ -253,6 +263,7 @@
     - ``#session {名称} {宿主机} {端口} {编码}`` :  创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} 。其中，编码可以省略，此时使用Settings.server["default_encoding"]的值，默认为utf8
     - ``#session newstart mud.pkuxkx.net 8080 GBK`` : 使用GBK编码连接到mud.pkuxkx.net的8080端口，并将该会话命名为newstart
     - ``#session newstart mud.pkuxkx.net 8081`` : 使用UTF8编码连接到mud.pkuxkx.net的8081端口，并将该会话命名为newstart
+    - ``#session pkuxkx.newstart`` : 通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。若该会话存在，则切换到该会话
     - ``#newstart`` : 将名称为newstart的会话切换为当前会话
     - ``#newstart give miui gold`` : 使名称为newstart的会话执行give miui gold指令，但不切换到该会话
 

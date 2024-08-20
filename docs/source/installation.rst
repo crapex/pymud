@@ -45,23 +45,59 @@ PyMUD 支持通过命令行参数进行启动配置。可以通过 ``pymud -h`` 
 1.4 运行
 ----------------------
 
-PyMUD 通过在当前目录下直接键入命令 ``pymud`` 或使用Python的标准模块调用语法 ``python -m pymud`` 执行。建议建立自己的脚本目录，并在该目录下执行。
+PyMUD 通过在当前目录下直接键入命令 ``pymud`` 或使用Python的标准模块调用语法 ``python -m pymud`` 执行。建议建立自己的脚本目录，通过命令行指定该目录，或者将当前目录切换至该目录下后执行。
 
-.. code:: powershell
+PyMUD 支持命令行参数配置启动行为。具体参数及含义可以通过增加 -h 或者 --help 查看。列出如下：
 
-    cd ~/pkuxkx        # 进入自己的脚本目录(可由 python -m pymud init 创建)
-    python -m pymud    # 运行PyMUD
-    pymud              # 也可以直接使用pymud命令运行PyMUD
+.. code:: 
 
+    PS C:\> pymud -h
+    usage: pymud [-h] [-d] [-l logfile] [-a] [-s startup_dir] {init} ...
+
+    PyMUD命令行参数帮助
+
+    positional arguments:
+        {init}                init用于初始化运行环境
+
+    options:
+        -h, --help            show this help message and exit
+        -d, --debug           指定以调试模式进入PyMUD。此时，系统log等级将设置为logging.NOTSET, 所有log数据均会被记录。默认不启用。
+        -l logfile, --logfile logfile
+                              指定调试模式下记录文件名，不指定时，默认为当前目录下的pymud.log
+        -a, --appendmode      指定log文件的访问模式是否为append尾部添加模式，默认为True。当为False时，使用w模式，即每次运行清空之前记录
+        -s startup_dir, --startup_dir startup_dir
+                              指定启动目录，默认为当前目录。使用该参数可以在任何目录下，通过指定脚本目录来启动
+
+    PS C:\> pymud init -h
+    usage: usage: pymud init [-h] [-d dir]
+
+    初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.
+
+    options:
+        -h, --help         show this help message and exit
+        -d dir, --dir dir  指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值
+
+
+.. code::
+
+    # 示例 从脚本目录的当前目录启动 PyMUD
+    PS C:\> cd ~\pkuxkx                # 进入自己的脚本目录(可由 pymud init 创建)
+    PS C:\Users\home\pkuxkx> pymud     # 直接使用pymud命令运行PyMUD. 也可以使用 python -m pymud 命令，效果相同
+
+    # 示例: 从任意位置通过指定脚本目录启动 PyMUD
+    PS C:\> pymud -s ~\pkuxkx
+
+    # 示例: 从任意位置通过指定脚本目录启动 PyMUD, 并打开调试模式
+    PS C:\> pymud -d -s ~\pkuxkx
 
 1.5 Windows下安装与启动示例
 --------------------------------------------
 
 - 建议使用 `Windows Terminal`_ 作为shell，并使用 `PowerShell 7`_ 作为启动终端
 - 使用pip安装pymud，shell中执行: ``pip install pymud``
-- 创建自己的脚本目录，如 d:\\pkuxkx： ``mkdir pkuxkx``
-- 进入自己的脚本目录， ``cd pkuxkx``
-- 启动运行pymud: ``pymud`` 或 ``python -m pymud``
+- 通过init创建自己的脚本目录: ``pymud init``
+- 在脚本目录下启动运行pymud: ``pymud`` 或 ``python -m pymud``
+- 或者直接在任意目录下，通过命令行指定脚本目录方式运行： ``pymud -s ~\pkuxkx``
 
 安装步骤
 """""""""""""""""""""""""""""""""""""

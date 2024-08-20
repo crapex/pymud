@@ -414,7 +414,7 @@
             def __init__(self, session: Session):
                 self.session = session
                 
-                使用SimpleTimer定义一个默认10s超时的定时器, id自动生成, 超时执行代码 mingxiang
+                # 使用SimpleTimer定义一个默认10s超时的定时器, id自动生成, 超时执行代码 mingxiang
                 self.aTimer1 = SimpleTimer(session, code = 'mingxiang')
                 # 使用Timer定义一个5秒超时的定时器, id为timer2, 并指定本类型的onTimerMX2方法为超时执行函数
                 self.aTimer2 = Timer(session, timeout = 5, id = 'timer2', onSuccess = self.onTimer2)
@@ -455,7 +455,7 @@
                 self.session.delObjects(self._timersList)   # delObjects 支持对象列表形式
                 self.session.delObjects(self._timersDict)   # delObjects 也支持对象字典形式
 
-            # timer2的超时回调函数
+            # timer2的超时回调函数，该函数由系统自动调用，并传递定时器的 id 作为参数
             def onTimer2(self, id, *args, **kwargs):
                 # 定时器超时时若本会话处于连接状态, 则执行代码 mingxiang
                 if self.session.connected:
@@ -496,8 +496,8 @@
             def __init__(self, session, patterns, code, *args, **kwargs):
                 pass
 
-    为了使用统一的函数语法，除重要的参数session（指定会话）、patterns（指定匹配模式）、code（SimpleAlias）的执行代码之外，
-    其余所有别名的参数都通过命名参数在kwargs中指定。别名支持和使用的命名参数、默认值及其含义如下：
+    别名的基础类型 `MatchObject`_ 类也是继承自 `BaseObject`_ 类，因此，别名通过 kwargs 指定的关键字参数许多都和 `Timer`_ 定时器相同。
+    别名支持和使用的关键字参数、默认值及其含义如下：
 
     + :id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
     + :group: 别名所属的组名，默认未空。支持使用session.enableGroup来进行整组对象的使能/禁用
@@ -507,11 +507,87 @@
     + :ignoreCase: 忽略大小写，默认为False。别名模式匹配时是否忽略大小写。
     + :isRegExp：是否正则表达式，默认为True。即指定的别名模式匹配模式patterns是否为正则表达式。
 
-    构造函数中的其他参数含义如下：
+    构造函数中的位置参数含义如下：
 
     + :session: 指定的会话对象，必须有
     + :patterns: 匹配模式，应传递字符串（正则表达式或原始数据）。
     + :code: SimpleAlias独有，即别名模式匹配成功后，执行的代码串。该代码串类似于zmud的应用，可以用mud命令、别名以分号（；）隔开，也可以在命令之中插入PyMUD支持的#指令，如#wait（缩写为#wa）
+
+6.5.3 别名使用示例
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    下列代码中实现了多个别名，展示了SimpleAlias, Alias的各种用法
+
+    .. code:: Python
+
+        # examples for Alias and SimpleAlias
+        from pymud import Alias, SimpleAlias, Session
+
+        class Configuration:
+            def __init__(self, session: Session):
+                self.session = session
+                
+                # 使用 SimpleAlias 建立一个简单别名，以 yz_xy 将从扬州中央广场到信阳小广场的路径设置为别名，可以如此建立：
+                self.alias1 = SimpleAlias(self.session, "^yz_xy$", "#4 w;nw;#5 w")
+                # 使用 SimpleAlias 建立一个带参数的简单别名，之后可以使用 gp silver, gp gold, gp letter 等代替 get silver/gold/letter from corpse
+                self.alias2 = SimpleAlias(self.session, "^gp\s(.+)$", "get %1 from corpse")
+                # 使用 Alias 建立一个标准别名，可以扩展 gp 别名的用法，此时，可以使用 gp2 gold 代替 get gold from corpse 2 命令
+                self.alias3 = Alias(self.session, "^gp(\d+)?\s(.+)$", id = "ali_get", onSuccess = self.onali_getfromcorpse)
+                # 多个别名可以使用list保存
+                self._aliasList = [self.alias1, self.alias2, self.alias3]
+
+                # 多个别名也可以使用dict保存 (向前兼容)
+                self._aliasDict = {'alias1': self.alias1, 'alias2': self.alias2, 'ali_get': self.alias3}
+
+                # 可以通过addAlias将单个别名加入会话
+                session.addAlias(self.alias1)
+
+                # 也可以通过addObject将单个别名加入会话
+                session.addObject(self.alias2)
+
+                # 也可以通过addObjects将所有别名添加到会话
+                session.addObjects(self._aliasList)         # 支持list对象
+                session.addObjects(self._aliasDict)         # 也支持dict对象
+
+                # 也可以通过addAliases将所有定时器添加到会话, 同样也支持list对象或dict对象
+                session.addAliases(self._aliasList)
+                session.addAliases(self._aliasDict)
+
+            def __unload__(self):
+                # 可以通过delAlias从会话中移除单个别名
+                self.session.delAlias(self.alias1)          # delAlias 支持 Alias 类或其子类对象 
+                self.session.delAlias('ali_get')            # delAlias 也支持 Alias id
+
+                # 也可以通过delObject从会话中移除单个别名
+                self.session.delObject(self.alias1)         # delObject 仅支持对象形式, 不支持id形式
+
+                # 也可以通过delAliases从会话中移除所有定时器
+                self.session.delAliases(self._aliasList)    # 支持 Alias 对象的列表
+                self.session.delAliases(['ali_get'])        # 也支持 Alias 对象的 id 列表
+
+                # 还以通过delObjects从会话中移除所有定时器
+                self.session.delObjects(self._aliasList)    # delObjects 支持对象列表形式
+                self.session.delObjects(self._aliasDict)    # delObjects 也支持对象字典形式
+
+            # alias3别名ali_get的成功回调调函数，该函数由系统自动调用，并传递别名的 id、键入的整行 line， 匹配的结果数组 wildcards 作为参数
+            # 假设键入的命令为 gp2 gold， 则系统调用该函数时，id, line, wildcards 三个参数分别为：
+            # id: 'ali_get' -> 别名的id属性，str类型
+            # line: 'gp2 gold' -> 键入的完整命令，str类型
+            # wildcards: ['2', 'gold'] -> 匹配的捕获数据形成的列表（数组），由str类型构成的list类型
+            def onali_getfromcorpse(self, id, line, wildcards):
+                "别名get xxx from corpse xxx"
+                index = wildcards[0]
+                item  = wildcards[1]
+
+                if index:
+                    cmd = f"get {item} from corpse {index}"
+                else:
+                    cmd = f"get {item} from corpse"
+
+                self.session.writeline(cmd)
+
+
+
 
 .. _#mods: syscommand.html#modules
 .. _pymud.Session: references.html#pymud.Session
