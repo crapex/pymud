@@ -89,6 +89,10 @@ def init_pymud_env(args):
     startApp(args)
 
 def startApp(args):
+    startup_path = Path(args.startup_dir).resolve()
+    sys.path.append(f"{startup_path}")
+    os.chdir(startup_path)
+
     if args.debug:
         logging.basicConfig(level = logging.NOTSET,
             format = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
@@ -105,9 +109,6 @@ def startApp(args):
             handlers = [logging.NullHandler()],
             )
 
-    startup_path = Path(args.startup_dir).resolve()
-    sys.path.append(f"{startup_path}")
-    os.chdir(startup_path)
     cfg = startup_path.joinpath("pymud.cfg")
     cfg_data = None
     if os.path.exists(cfg):

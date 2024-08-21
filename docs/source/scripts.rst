@@ -243,17 +243,17 @@
         # 文件名: chathook.py (非完整代码，仅用于展示 global 的应用)
         # 定义一个chathook插件，并供全局各Session使用
 
-        from functools import partial
-        from pymud import PyMudApp, Session, Trigger, SimpleAlias, SimpleTrigger
+        from pymud import PyMudApp, Session, Alias
         
         class ChatHook:
             def __init__(self, app: PyMudApp) -> None:
                 self.app = app
+                
                 # 使用 PyMudApp.set_globals 设置一个布尔型全局变量 hooked，指示是否已与chat服务器连接
                 self.app.set_globals("hooked", False)
-                # 使用 快捷点访问器 设置一个ChatHook类型的全局变量 hook，用于各会话中使用该对象并调用对象函数
+                
+                # 使用 快捷点访问器 将本类型的实例赋值给全局变量 hook，用于各会话中使用该对象并调用对象函数
                 app.globals.hook = self
-                self.site = None
 
             def start_webhook(self):
                 try:
@@ -261,76 +261,48 @@
                     hooked = self.app.get_globals("hooked")
                     if not hooked:
                         asyncio.ensure_future(self.start_webserver())
-                    else:
-                        if self.app.current_session:
-                            self.app.current_session.info("WEBHOOK已监听!", "CHATHOOK")
 
                 except Exception as e:
-                    self.app.set_status(f"插件CHATHOOK在启动WEBHOOK时发生错误，错误信息：{e}")
+                    # 此处省略
+                    pass
 
             def stop_webhook(self):
                 try:
+                    # 使用 PyMudApp.get_globals 获取全局变量 hooked 判断是否已与服务器连接
                     hooked = self.app.get_globals("hooked")
                     if hooked:
                         asyncio.ensure_future(self.stop_webserver())
 
+                except Exception as e:
+                    # 此处省略
+                    pass
+
             async def start_webserver(self):
                 try:
-                    self.webapp = web.Application()
-                    self.webapp.add_routes([web.post('/', self.handle_post), web.get('/', self.handle_get)])
-                    self.runner = web.AppRunner(self.webapp)
-                    await self.runner.setup()
-                    self.site = web.TCPSite(self.runner, '0.0.0.0', 8000)
-                    await self.site.start()
-                    
+                    # 其他代码省略
+
                     # 使用 PyMudApp.set_globals 函数设置 hooked 变量的值
                     self.app.set_globals("hooked", True)
-                    if self.app.current_session:
-                        self.app.current_session.info("WEBHOOK已在端口8000进行监听.", "CHATHOOK")
-                    self.app.set_status("插件CHATHOOK的WEBHOOK已在端口8000进行监听.")
-                except OSError as e:
-                    # 备注：WinError错误代码为10048，98应该为LINUX系统
-                    if (e.errno == 98) or (e.errno == 10048):
-                        self.app.set_status("端口8000使用中，插件CHATHOOK的WEBHOOK监听服务启动失败.")
-                    else:
-                        self.app.set_status(f"插件CHATHOOK的WEBHOOK监听服务启动出现OSError错误，错误代码: {e.errno}")
 
-                except Exception as e2:
-                    self.app.set_status(f"插件CHATHOOK的WEBHOOK监听服务启动出现错误: {e2}")
+                except Exception as e:
+                    # 此处省略
+                    pass
 
             async def stop_webserver(self):
                 try:
                     if isinstance(self.site, web.TCPSite):
-                        await self.site.stop()
+                        # 其他代码省略
 
                         # 使用 PyMudApp.set_globals 函数设置 hooked 变量的值
                         self.app.set_globals("hooked", False)
-                        self.app.set_status("插件CHATHOOK的WEBHOOK已关闭8000端口的监听.")
-                        if self.app.current_session:
-                            self.app.current_session.info("插件CHATHOOK的WEBHOOK已关闭8000端口的监听.", "CHATHOOK")
+
                 except Exception as e:
-                    self.app.set_status(f"插件CHATHOOK的WEBHOOK监听服务关闭时出现错误: {e}")
+                    # 此处省略
+                    pass
 
             def sendFullme(self, session, link, extra_text = "FULLME", user = 5):
+                # 此处省略
                 pass
-
-
-        def PLUGIN_PyMUD_START(app):
-            "PyMUD自动读取并加载插件时自动调用的函数， app为APP本体。该函数仅会在程序运行时，自动加载一次"
-            chathook = ChatHook(app)
-            app.set_status(f"插件{PLUGIN_NAME}已加载!")
-
-        def PLUGIN_SESSION_CREATE(session: Session):
-            "在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次"
-            #session.info(f"插件{PLUGIN_NAME}已被本会话加载!!! 已成功向本会话中添加触发器 {TRIGGER_ID} !!!")
-            session.addAlias(Alias(session, "^starthook$",  id = "ali_starthook", onSuccess = lambda name, line, wildcards: session.globals.hook.start_webhook()))
-            session.addAlias(Alias(session, "^stophook$",   id = "ali_stophook",  onSuccess = lambda name, line, wildcards: session.globals.hook.stop_webhook()))
-            session.addAlias(Alias(session, "^send\s(.+)$", id = "ali_sendmsg", onSuccess = partial(sendMessageToHook, session)))
-
-        def PLUGIN_SESSION_DESTROY(session: Session):
-            "在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。"
-            #session.delTrigger(session.tris[TRIGGER_ID])
-
 
     .. code:: Python
 
@@ -391,7 +363,7 @@
     其余所有定时器的参数都通过命名参数在kwargs中指定。定时器支持和使用的命名参数、默认值及其含义如下：
 
     + id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
-    + group: 触发器所属的组名，默认未空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + group: 触发器所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
     + enabled: 使能状态，默认为True。标识是否使能该定时器。
     + timeout: 超时时间，即定时器延时多久后执行操作，默认为10s
     + oneShot: 单次执行，默认为False。当为True时，定时器仅响应一次，之后自动停止。否则，每隔timeout时间均会执行。
@@ -477,7 +449,8 @@
     要在会话中使用别名，要做的两件事是：
 
     - 构建一个Alias类（或其子类）的实例。SimpleAlias是Alias的子类，你也可以构建自己定义的别名子类。
-    - 将该实例通过session.addAlias方法增加到会话的别名清单中。也可以通过session.addAliases来同时添加多个别名
+    - 将该实例通过 `session.addAlias <references.html#pymud.Session.addAlias>`_ 方法或 `session.addObject <references.html#pymud.Session.addObject>`_ 增加到会话的别名清单中。
+    - 也可以通过 `session.addAliases <references.html#pymud.Session.addAliases>`_ 方法或 `session.addObjects <references.html#pymud.Session.addObjects>`_ 来同时添加多个别名。
 
 6.5.2 类型定义与构造函数
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -500,7 +473,7 @@
     别名支持和使用的关键字参数、默认值及其含义如下：
 
     + :id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
-    + :group: 别名所属的组名，默认未空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + :group: 别名所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
     + :priority: 优先级，默认100。在对键入命令进行别名触发时会按优先级排序执行，越小优先级越高。
     + :enabled: 使能状态，默认为True。标识是否使能该别名。
     + :onSuccess: 函数的引用，默认为空。当别名被触发时自动调用的函数，函数类型应为func(id, line, wildcards)形式。
@@ -587,7 +560,710 @@
                 self.session.writeline(cmd)
 
 
+6.6 触发器
+------------------------
 
+6.6.1 触发器概览
+^^^^^^^^^^^^^^^^^^^^^
+
+    当要针对服务器的响应执行对应的操作，则要使用到触发器（Trigger）。PyMUD支持多种特性的触发器，并内置实现了 `Trigger`_ 和 `SimpleTrigger`_ 两个基础类。
+
+    要在会话中使用触发器，要做的两件事是：
+
+    - 构建一个Trigger类（或其子类）的实例。SimpleTrigger是Trigger的子类，你也可以构建自己定义的触发器子类。
+    - 将该实例通过 `session.addTrigger <references.html#pymud.Session.addTrigger>`_ 方法或 `session.addObject <references.html#pymud.Session.addObject>`_ 增加到会话的触发器清单中。
+    - 也可以通过 `session.addTriggers <references.html#pymud.Session.addTriggers>`_ 方法或 `session.addObjects <references.html#pymud.Session.addObjects>`_ 来同时添加多个触发器。
+
+6.6.2 类型定义与构造函数
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    `Trigger`_ 是触发器的基础类，同 Alias 一样，也是继承自 `MatchObject`_ 类。 `SimpleTrigger`_ 继承自 `Trigger`_ ，可以直接用命令而非函数来实现触发时的操作。
+
+    二者的构造函数分别如下：
+
+    .. code:: Python
+
+        class Trigger(MatchObject):
+            def __init__(self, session, patterns, *args, **kwargs):
+                pass
+
+        class SimpleTrigger(Alias):
+            def __init__(self, session, patterns, code, *args, **kwargs):
+                pass
+
+    触发器也是继承的基础类型 `MatchObject`_ ，与别名存在很多相似性。一个是对输入的内容进行匹配后触发相应的操作，另一个时对收到的服务器内容进行匹配后触发响应的操作。
+    因此，触发器通过 kwargs 指定的关键字参数许多都和 `Alias`_ 别名相同。触发器支持和使用的关键字参数、默认值及其含义如下：
+
+    与Alias定义基本类似的关键字参数包括:
+
+    + :id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
+    + :group: 触发器所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + :priority: 优先级，默认100。在对收到服务器内容触发时会按优先级排序执行，越小优先级越高。
+    + :enabled: 使能状态，默认为True。标识是否使能该触发器。
+    + :onSuccess: 函数的引用，默认为空。当触发器被触发时自动调用的函数，函数类型应为func(id, line, wildcards)形式。
+    + :ignoreCase: 忽略大小写，默认为False。触发器进行模式匹配时是否忽略大小写。
+    + :isRegExp：是否正则表达式，默认为True。即指定的触发器模式匹配模式patterns是否为正则表达式。
+
+    触发器额外生效的关键字参数包括:
+
+    + keepEval: 匹配成功后持续进行后续匹配，默认为False。当有两个满足相同匹配模式的触发器时，要设置该属性为True，否则第一次匹配成功后，该行不会进行后续触发器匹配（意味着只有最高优先级的触发器会被匹配）
+    + raw: 原始代码匹配，默认为False。当为True时，对MUD服务器的数据原始代码（含ANSI字符、VT100控制指令等）进行匹配。在进行颜色匹配的时候使用。
+
+    另外，构造函数中的位置参数含义如下：
+
+    + :session: 指定的会话对象，必须有
+    + :patterns: 匹配模式，应传递字符串（正则表达式或原始数据）。多行触发时，传递一个匹配模式的列表。
+    + :code: SimpleAlias独有，即别名模式匹配成功后，执行的代码串。该代码串类似于zmud的应用，可以用mud命令、别名以分号（；）隔开，也可以在命令之中插入PyMUD支持的#指令，如#wait（缩写为#wa）
+
+6.6.3 触发器基本使用示例
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    下列代码中实现了多个触发器，展示了SimpleTrigger, Trigger的各种用法
+
+    .. code:: Python
+
+        # examples for Trigger and SimpleTrigger
+        import webbrowser
+        from pymud import Trigger, SimpleTrigger, Session
+
+
+        HP_KEYS = (
+                "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli", 
+                "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing", 
+                "vigour/qi", "vigour/yuan", "food", "water", "fighting", "busy"
+            )
+
+        REGX_HPBRIEF   = [
+            r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', 
+            r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', 
+            r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$'
+        ]
+
+        REGX_WEAR = r"^.+□(?:\x1b\[[\d;]+m)?(身|脚)\S+一[双|个|件|把](?:\x1b\[([\d;]+)m)?([^\x1b\(\)]+)(?:\x1b\[[\d;]+m)?\(.+\)"
+
+        class Configuration:
+            def __init__(self, session: Session):
+                self.session = session
+                
+                # 将多个别名使用list保存（也可以使用dict，此处不再详细列举，请参考上面Alias等的使用）
+                self._trisList = [
+                    # 简单触发器使用示例: 
+                    # 在新手任务（平一指配药）任务中，要在要到任务后，自动n一步，并在延时500ms后进行配药;配药完成后自动s，并提交配好的药，并再次接下一个任务，则可以使用SimpleTrigger如此建立触发器：
+                    SimpleTrigger(self.session, "^[> ]*你向平一指打听有关『工作』的消息。", "n;#wa 500;peiyao"),
+                    SimpleTrigger(self.session, "^[> ]*不知过了多久，你终于把药配完。", "s;#wa 500;give ping yao;#wa 500;ask ping about 工作"),
+
+                    # 标准触发器使用示例:
+                    # 当收到有关fullme或者其他图片任务的链接信息时，自动调用浏览器打开该网址，则可以建立一个标准触发器（示例中同时指定了触发器id），并使用lambda函数来作为成功回调：
+                    Trigger(self.session, id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', onSuccess = lambda id, line, wildcards: webbrowser.open(line)),
+
+                    # 多行触发器使用示例
+                    # 对hpbrief命令的long模式建立三行触发器，获取hpbrief内容并保存到对应的变量中
+                    Trigger(self.session, id = 'tri_hpbrief', patterns = REGX_HPBRIEF, group = "sys", onSuccess = self.ontri_hpbrief),
+
+                    # ANSI触发器使用示例。如果要捕获文字中的颜色、闪烁等特性，则可以使用触发器的raw属性，即使用ANSI触发器。
+                    # 在长安爵位任务中，要同时判断路人身上的衣服和鞋子的颜色和类型时，可以使用如下触发：
+                    Trigger(self.session, patterns = REGX_WEAR, onSuccess = self.ontri_wear, raw = True)
+                ]
+
+                # 通过addObjects将所有触发器添加到会话
+                session.addObjects(self._trisList)   
+
+            def __unload__(self):
+                # 通过delObjects从会话中移除所有触发器
+                self.session.delObjects(self._trisList)    # delObjects 支持对象列表形式
+
+            # hpbrief触发器的成功回调调函数，该函数由系统自动调用，并传递别名的 id、键入的整行 line (多行触发模式下，会返回拼接的多行）， 匹配的结果数组 wildcards 作为参数
+            def ontri_hpbrief(self, id, line, wildcards):
+                "hpbrief自动保存属性变量参数"
+                self.session.setVariables(HP_KEYS, wildcards)
+
+            # 身上穿着look时的成功回调
+            def ontri_wear(self, name, line, wildcards):
+                buwei = wildcards[0]        # 身体部位，身/脚
+                color = wildcards[1]        # 颜色，30,31,34,35为深色，32,33,36,37为浅色
+                wear  = wildcards[2]        # 着装是布衣/丝绸衣服、凉鞋/靴子等等
+                # 对捕获结果的进一步判断，此处省略
+
+
+6.6.4 异步触发器
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    PyMUD的触发器同时支持同步模式和异步模式。异步触发器一般用在自定义的Command中。
+
+    - Trigger类的triggered方法是一个async定义的异步函数。可以直接使用await来异步等待触发器的执行。使用异步触发器时，可以不设置onSuccess同步回调函数。
+    - 使用异步触发器时，应该使用标准的Trigger类或自定义子类，而不要使用SimpleTrigger，因为其code代码的执行是包含在触发器类的定义中。
+    - 当一个触发器同时设置了 onSuccess 回调，并且也使用 await 来异步等待其结果时，其同步回调onSuccess一定在await异步返回之前发生。
+
+    以下以一个打坐触发的异步使用为示例说明异步触发器的用法。
+    在该示例中，dazuo/eat/drink代码不是放在Trigger的触发中的，而且该代码逻辑阅读简便，因为async/await是以同步思维进行的异步实现。
+    另外，此代码仅用来说明异步触发器的使用示例，若不通过Command进行实现的话，该代码事实上在实际过程中是无法被调用触发的
+
+    .. code:: Python
+
+        class Configuration:
+            def __init__(self, session):
+                self.session = session
+                self.session.addObject(Trigger(self.session, r"^[> ]*你运功完毕，深深吸了口气，站了起来。", id = "tri_dazuo"))
+
+            async def dazuo_always(self):
+                # 本函数仅用来说明异步触发器的使用示例，若不通过Command进行实现的话，该函数在实际过程中无法被调用触发
+                # 此处仅为了说明异步触发器的使用，假设气是无限的，可以无限打坐
+                # 目的是每打坐100次，吃干粮，喝酒袋
+                time = 0
+                while True:                                       # 永久循环
+                    self.session.writeline("dazuo 10")            # 发送打坐命令
+                    # 此处使用了几个技巧
+                    # 1. 使用 tris 快捷访问器 + 触发器 id 来实现获取触发器对象
+                    # 2. 使用 session.create_task而不是asyncio.create_task将触发器的异步触发包装成一个任务。好处时该任务会纳入会话的管理中
+                    # 使用任务包裹async函数，其目的是为了后续可以对任务进行取消，当没有取消需求，也不需要会话管理时，也可以不使用任务包裹
+                    # 即，下面代码也可直接写成：
+                    #    await self.session.tris.tri_dazuo.triggered()
+                    await self.session.create_task(self.session.tris.tri_dazuo.triggered())     # 等待dazuo触发
+                    times += 1
+                    if times > 100:
+                        self.session.writeline("eat liang")
+                        self.session.writeline("drink jiudai")
+                        times = 0
+
+6.7 GMCP触发器 (GMCPTrigger)
+--------------------------------
+
+6.7.1 GMCP触发器概览
+^^^^^^^^^^^^^^^^^^^^^
+
+    当要针对服务器的GMCP消息响应执行对应的操作，则要使用到GMCP触发器（GMCPTrigger）。PyMUD内置实现了 `GMCPTrigger`_ 来处理GMCP消息的响应。
+    GMCP触发器调用时通过其id来进行判断的，当存在与服务器数据相同id的GMCPTrigger时，该触发器会被执行。当没有找到匹配id的GMCPTrigger时，会调用默认的打印命令，将收到的GMCP数据打印到当前会话中。
+    为保持通用性和一致性，GMCPTrigger许多定义与触发器Trigger相同，比如回调函数接受的参数数量与类型相同，也支持异步模式 triggered 函数，可以在命令Command中统一使用。
+
+    要在会话中使用GMCP触发器，要做的两件事是：
+
+    - 创建一个GMCPTrigger类（或其子类）的实例, 并将其 id (参数名为 name) 指定为服务器的GMCP消息的标识（区分大小写）
+    - 将该实例通过 `session.addGMCP <references.html#pymud.Session.addGMCP>`_ 方法或 `session.addObject <references.html#pymud.Session.addObject>`_ 增加到会话的GMCP触发器清单中。
+    - 也可以通过 `session.addGMCPs <references.html#pymud.Session.addGMCPs>`_ 方法或 `session.addObjects <references.html#pymud.Session.addObjects>`_ 来同时添加多个GMCP触发器。
+
+6.7.2 类型定义与构造函数
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    `GMCPTrigger`_ 是GMCP触发器的基础类，继承自 `BaseObject`_ 类。 其构造函数如下：
+
+    .. code:: Python
+
+        class GMCPTrigger(BaseObject):
+            def __init__(self, session, name, *args, **kwargs):
+                pass
+
+    构造函数参数中，session 用于指定会话对象， name 指定该GMCP触发对应的服务器名称。
+    其余参数都通过命名参数在kwargs中指定。支持和使用的命名参数、默认值及其含义如下：
+
+    + group: GMCP触发器所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + enabled: 使能状态，默认为True。标识是否使能该定时器。
+    + onSuccess: 函数的引用，默认为空。当定时器超时时自动调用的函数，函数类型应为func(id, line, wildcards)形式。
+
+6.7.3 GMCP触发器使用示例
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    下列代码中展示了GMCPTrigger的用法，对北侠服务器中的 GMCP.Status 类型的GMCP数据进行处理。
+    北侠服务器 GMCP.Status 类型的GMCP原始数据大概是这样的：
+    GMCP.Status = {"is_busy":"false","is_fighting":"false","fighter_spirit":100,"int":18,"per":18,"dex":11,"potential":63206,"con":33,"str":30}
+
+    .. code:: Python
+
+        # examples for GMCPTrigger
+        from pymud import GMCPTrigger, Session
+
+        class Configuration:
+            def __init__(self, session):
+                self.session = session
+                self.session.addObject(GMCPTrigger(self.session, "GMCP.Status", group = "sys", onSuccess = self.ongmcp_status))
+
+                ### GMCP处理函数 ###
+                # 系统调用该函数时，会传递三个参数，id 为该GMCP的id, line 为GMCP收到的原始数据， wildcards 为经 eval处理后的数据。
+                # 比如，对应 GMCP.Status = {"is_busy":"false","is_fighting":"false","fighter_spirit":100,"int":18,"per":18,"dex":11,"potential":63206,"con":33,"str":30} 的这一行数据，三个参数为：
+                # id -> GMCP.Status , str 类型
+                # line -> {"is_busy":"false","is_fighting":"false","fighter_spirit":100,"int":18,"per":18,"dex":11,"potential":63206,"con":33,"str":30} , str类型
+                # wildcards -> {"is_busy":"false","is_fighting":"false","fighter_spirit":100,"int":18,"per":18,"dex":11,"potential":63206,"con":33,"str":30} , 此处会被解析成dict类型
+                def ongmcp_status(self, id, line, wildcards):
+                    # 自己的Status和敌人的Status均会使用GMCP.Status发送
+                    # 区别在于，敌人的Status会带有id属性。但登录首次自己也会发送id属性，但同时有很多属性，因此增加一个实战经验属性判定
+
+                    if isinstance(wildcards, dict):     # 正常情况下，GMCP.Status 应该是一个dict，但为保险起见，此处增加一个类型判断
+                        if ("id" in wildcards.keys()) and (not "combat_exp" in wildcards.keys()):
+                            # 说明是敌人的状态, 不进行处理
+                            pass
+
+                        else:
+                            # 说明个人状态是GMCP Status方式，此时hpbrief将不能使用，设置标识供其他地方判断使用
+                            self.session.setVariable("status_type", "GMCP")
+
+                            # 将收到的数据中的字符串 "true" 和 "false" 转换为布尔类型的 True 和 False，并将数据保存到会话变量中
+                            for key, value in wildcards.items():
+                                if value == "false": value = False
+                                elif value == "true": value = True
+                                self.session.setVariable(key, value)
+
+
+
+6.8 命令 (Command)
+------------------------
+
+6.8.1 命令概览
+^^^^^^^^^^^^^^^^^^^^^
+
+    命令是 PyMUD 的最大特色，也是PyMUD与其他MUD客户端的最大差异所在。它是一组归纳了同步/异步执行、等待响应、处理的集成对象。
+    可以这么理解，PyMUD的命令就是将MUD的命令输入、返回响应等封装在一起的一种对象。
+    基于命令可以实现从最基本的MUD命令响应，到最复杂的完整的任务辅助脚本。
+
+    `Command`_ 基类仅是提供了一个命令的框架，PyMUD应用基于该框架来在运行中调用和处理各类命令。
+
+    要在PyMUD中使用命令，不能直接使用 `Command`_ 类型，应总是设计自己的命令子类型，继承自 `Command`_ 基类，并覆盖基类的 `execute <references.html#pymud.Command.execute>`_ 方法。
+
+    当对继承Command的自定义命令足够熟悉后，对于某些特定应用场景，可以使用 `SimpleCommand`_ 子类来简化代码写法。
+    
+    要在会话中使用命令，要做的三件事是：
+
+    - 设计一个 Command 类型的子类类型。
+    - 创建一个该子类类型的实例的实例。
+    - 将该实例通过 `session.addCommand <references.html#pymud.Session.addCommand>`_ 方法或 `session.addObject <references.html#pymud.Session.addObject>`_ 增加到会话的命令清单中。
+    - 也可以通过 `session.addCommands <references.html#pymud.Session.addCommands>`_ 方法或 `session.addObjects <references.html#pymud.Session.addObjects>`_ 来同时添加多个命令。
+
+    此时，调用该命令，只需在命令行与输入该命令匹配模式（patterns) 匹配的文本即可，也可以在脚本中调用 session.exec 系列方法来调用该命令
+
+6.8.2 类型定义与常用方法
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    `Command`_ 也继承自 `MatchObject`_ 类。 其构造函数及使用的参数，与Alias完全相同，此处不再列举。
+
+    与Alias、Trigger的差异是，Command中包含几个新的会经常被使用的方法调用，如下。
+
+    - `create_task <references.html#pymud.Command.create_task>`_ : 实际是session.create_task的包装，在创建任务的同时，除将其加入了session的task清单外，也加入到本Command的Task清单，可以保证执行，也可以供后续操作使用
+    - `reset <references.html#pymud.Command.reset>`_ : 复位该任务。复位除了清除标识位之外，还会清除所有未完成的task。在Command的多次调用时，可以手动调用reset方法，以防止同一个命令被多次触发。
+    - `unload <references.html#pymud.Command.unload>`_ : 卸载方法，子类应该覆盖该方法并在其中清理命令自己添加的各类对象。该方法在Command从会话中移除时自动调用。
+    - `execute <references.html#pymud.Command.execute>`_ : async定义的异步方法，子类必须覆盖该方法。该方法在Command被执行时自动调用。
+
+6.8.3 命令使用示例一：CmdMove
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    以下代码设计了一个CmdMove命令，用来处理执行北侠游戏中的移动命令。该命令加入了移动重试功能，当由于某种原因导致行走失败时，可以自动重试5次。
+
+    .. code:: Python
+
+        import asyncio
+        from pymud import Session, Command, Trigger, GMCPTrigger
+
+        # 房间名匹配正则表达式
+        REGX_ROOMNAME = r'^[>]*(?:\s)?(\S.+)\s-\s*(?:杀戮场)?(?:\[(\S+)\]\s*)*(?:㊣\s*)?[★|☆|∞|\s]*$'
+
+        # 移动命令中的各种方位清单
+        DIRECTIONS = (
+            "n","s","w","e","ne","nw","se","sw",
+            "u","d","nu","su","wu","eu","nd","sd","wd","ed",
+            "north", "south", "west", "east", "northeast", "northwest", "southeast", "southwest", 
+            "up", "down","northup","southup","westup","eastup","northdown","southdown","westdown","eastdown",
+            "enter(\s\S+)?", "out", "zuan(\s\S+)?", "\d", "leave(\s\S+)?", "jump\s(jiang|out)", "climb(\s(ya|yafeng|up|west|wall|mount))?",
+            "sheshui", "tang", "act zuan to mao wu", "wander", "xiaolu", "cai\s(qinyun|tingxiang|yanziwu)", "row mantuo", "leave\s(\S+)"
+            )
+
+        # 移动失败（无法移动）的描述正则匹配清单
+        MOVE_FAIL = (
+            r'^[> ]*哎哟，你一头撞在墙上，才发现这个方向没有出路。$', 
+            r'^[> ]*这个方向没有出路。$',
+            r'^[> ]*守军拦住了你的去路，大声喝到：干什么的？要想通过先问问我们守将大人！$',
+        )
+
+        # 本次移动失败（但可以重新再走的）的描述正则匹配清单
+        MOVE_RETRY = (
+            r'^[> ]*你正忙着呢。$', 
+            r'^[> ]*你的动作还没有完成，不能移动。$', 
+            r'^[> ]*你还在山中跋涉，一时半会恐怕走不出这(六盘山|藏边群山|滇北群山|西南地绵绵群山)！$', 
+            r'^[> ]*你一脚深一脚浅地沿着(\S+)向着(\S+)方走去，虽然不快，但离目标越来越近了。',
+            r'^[> ]*你一脚深一脚浅地沿着(\S+)向着(\S+)方走去，跌跌撞撞，几乎在原地打转。',
+            r'^[> ]*你小心翼翼往前挪动，遇到艰险难行处，只好放慢脚步。$', 
+            r'^[> ]*山路难行，你不小心给拌了一跤。$', 
+            r'^[> ]*你忽然不辨方向，不知道该往哪里走了。',
+            r'^[> ]*走路太快，你没在意脚下，被.+绊了一下。$',
+            r'^[> ]*你不小心被什么东西绊了一下，差点摔个大跟头。$',
+            r'^[> ]*青海湖畔美不胜收，你不由停下脚步，欣赏起了风景。$', 
+            r'^[> ]*(荒路|沙石地|沙漠中)几乎没有路了，你走不了那么快。$', 
+            r'^[> ]*你小心翼翼往前挪动，生怕一不在意就跌落山下。$',
+        )
+
+        class CmdMove(Command):
+            MAX_RETRY = 5
+
+            def __init__(self, session: Session, *args, **kwargs):
+                # 将所有可能的行走命令组合成匹配模式
+                pattern = "^({0})$".format("|".join(DIRECTIONS))
+                super().__init__(session, pattern, *args, **kwargs)
+                self.session = Session
+                self.timeout = 10
+                self._executed_cmd = ""
+
+                self._objs = list()
+
+                # 此处使用的GMCPTrigger和Trigger全部使用异步模式，因此均无需指定onSuccess
+                self._objs.append(GMCPTrigger(self.session, "GMCP.Move"))
+                self._objs.append(Trigger(self.session, REGX_ROOMNAME, id = "tri_move_succ", group = "cmdmove", keepEval = True, enabled = False))
+
+                idx = 1
+                for s in MOVE_FAIL:
+                    self._objs.append(Trigger(self.session, patterns = s, id = f"tri_move_fail{idx}", group = "cmdmove", enabled = False"))
+                    idx += 1
+
+                idx = 1
+                for s in MOVE_RETRY:
+                    self._objs.append(Trigger(self.session, patterns = s, id = f"tri_move_retry{idx}", group = "cmdmove", enabled = False"))
+                    idx += 1
+
+                self.session.addObjects(self._objs)
+
+            def __unload__(self):
+                self.session.delObjects(self._objs)
+
+            async def execute(self, cmd, *args, **kwargs):
+                self.reset()
+
+                retry_times = 0
+                self.session.enableGroup('cmdmove')
+
+                while True:
+
+                    tasklist = list()
+                    for tr in self._objs:
+                        tasklist.append(self.create_task(tr.triggered()))
+
+                    done, pending = await self.session.waitfor(cmd, asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED"))
+
+                    for t in list(pending):
+                        self.remove_task(t)
+
+                    result = self.NOTSET
+                    tasks_done = list(done)
+                    if len(tasks_done) > 0:
+                        task = tasks_done[0]
+
+                        # 所有触发器在 onSuccess 时需要的参数，在此处都可以通过 task.result() 获取
+                        # result返回值与 await tri.triggered() 返回值完全相同
+                        # 这种返回值比onSuccess中多一个state参数，该参数在触发器中必定为 self.SUCCESS 值
+                        state, id, line, wildcards = task.result()
+                        
+                        # success
+                        if id == 'GMCP.Move':
+                            # GMCP.Move: [{"result":"true","dir":["west"],"short":"林间小屋"}]
+                            move_info = wildcards[0]
+                            if move_info["result"] == "true":
+                                roomname = move_info["short"]
+                                self.session.setVariable("roomname", roomname)
+                                result = self.SUCCESS
+                            elif move_info["result"] == "false":
+                                result = self.FAILURE
+                            
+                            break
+
+                        elif id == 'tri_move_succ':
+                            roomname = wildcards[0]
+                            self.session.setVariable("roomname", roomname)
+                            result = self.SUCCESS
+                            break
+
+                        elif id.startswith('tri_move_fail'):
+                            self.error(f'执行{cmd}，移动失败，错误信息为{line}', '移动')
+                            result = self.FAILURE
+                            break
+
+                        elif id.startswith('tri_move_retry'):
+                            retry_times += 1
+                            if retry_times > self.MAX_RETRY:
+                                result = self.FAILURE
+                                break
+
+                            await asyncio.sleep(2)
+
+                    else:
+                        self.warning(f'执行{cmd}超时{self.timeout}秒', '移动')  
+                        result = self.TIMEOUT
+                        break
+
+                self.session.enableGroup('cmdmove', False)
+                return result
+
+        class Configuration:
+            def __init__(self, session: Session):
+                self.session = session
+
+                # 创建一个CmdMove对象，并将其加入到会话中
+                self._objs = [CmdMove(session, id = 'cmd_move')]
+                
+                session.addObjects(self._objs)
+
+            def __unload__(self):
+                self.session.delObjects(self._objs)
+
+
+    这种命令设计方式能带来很多益处。
+    其中一个是，使用这种 Command 方式可以确保该命令被执行完成，而且还可以根据命令的返回值来判定下一步该执行操作。
+    另外，这种 Command 不需要额外记忆其他命令，直接使用MUD中的命令即可触发该 Command 对象。
+    在上述CmdMove命令创建完成之后，在命令行中键入任意方向（DIRECTIONS中列出的所有可能匹配项）行走，都会触发调用该命令的execute方法。
+    另外，在代码中也可以使用以下方式来调用该命令：
+
+    .. code:: Python
+        
+        # 方式一: 直接使用session方法同步调用。由于同步调用会立即返回，因此该调用方法无发获取返回值
+        self.session.exec('e')        
+        self.session.exec('s;e;s')               # 还可以在调用中同时指定多个命令。通过 CmdMove 设计中的重试机制，可以确保三步行走到对应的位置
+        
+        # 方式二: 直接使用session方法异步调用, 该调用方法可以获取返回值
+        result = await self.session.exec_async('e')       # 此处 e 会被匹配为 CmdMove 运行，因此其返回值即为 CmdMove 的 execute 方法运行的返回值。若未被匹配为某个 Command 对象，则返回 None
+        result = await self.session.exec_async('s;e;s')   # 异步调用中也可以同时指定多个命令，但此时返回值为最后一个命令的返回值。          
+        
+        # 方式三: 直接调用该命令的execute方法, 该调用方法也可以获取返回值
+        result = await self.session.cmds.cmd_move.execute('w;n;e') 
+
+        # 在确保命令执行完毕后，并根据返回结果判断下一步处置：
+        if result == self.SUCCESS:
+            # 成功后的代码
+            self.session.exec('buy jiudai')
+            pass
+        elif result == self.FAILURE:
+            # 失败后的代码
+            pass
+        elif result == self.TIMEOUT:
+            # 超时之后的代码
+            pass
+        
+
+6.8.4 命令使用示例二：CmdDazuoto
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    以下代码设计了一个CmdDazuoto命令，用来处理执行北侠游戏中的打坐有关的事项。
+    要使用该命令，也应该在创建一个命令的实例，并添加到会话中。有关代码此处省略。
+    之后，可以通过命令行键入 dzt xxx 来执行不同的打坐
+    并且，'dzt;e;s;n' 这种键入方式也可以确保移动是在打坐完成之后才进行。
+
+    .. code:: Python
+
+        import re, traceback, math
+        from pymud import Command, Session, Trigger
+
+        class CmdDazuoto(Command):
+            """
+            各种打坐的统一命令, 使用方法：
+            dzt 0 或 dzt always: 一直打坐
+            dzt 1 或 dzt once: 执行一次dazuo max
+            dzt 或 dzt max: 持续执行dazuo max，直到内力到达接近2*maxneili后停止
+            dzt dz: 使用dz命令一直dz
+            dzt stop: 安全终止一直打坐命令
+            """
+
+            def __init__(self, session, cmdEnable, cmdHpbrief, cmdLifeMisc, *args, **kwargs):
+                super().__init__(session, "^(dzt)(?:\s+(\S+))?$", *args, **kwargs)
+                # 此处引用了其他三个设计好的Command，分别用于处理 'jifa/enable'命令, 'hpbrief' 命令, 以及各类生活命令（吃、喝）
+                self._cmdEnable = cmdEnable
+                self._cmdHpbrief = cmdHpbrief
+                self._cmdLifeMisc = cmdLifeMisc
+                
+                self._triggers = {}
+                self._initTriggers()
+
+                self._force_level = 0   # 内功激发后有效等级
+                self._dazuo_point = 10  # 每次打坐点数，默认为10
+
+                self._halted = False
+
+            def _initTriggers(self):
+                self._triggers["tri_dz_done"]   = self.tri_dz_done      = Trigger(self.session, r'^[> ]*(..\.\.)*你运功完毕，深深吸了口气，站了起来。', id = "tri_dz_done", keepEval = True, group = "dazuoto")
+                self._triggers["tri_dz_noqi"]   = self.tri_dz_noqi      = Trigger(self.session, r'^[> ]*你现在的气太少了，无法产生内息运行全身经脉。|^[> ]*你现在气血严重不足，无法满足打坐最小要求。|^[> ]*你现在的气太少了，无法产生内息运行小周天。', id = "tri_dz_noqi", group = "dazuoto")
+                self._triggers["tri_dz_nojing"] = self.tri_dz_nojing    = Trigger(self.session, r'^[> ]*你现在精不够，无法控制内息的流动！', id = "tri_dz_nojing", group = "dazuoto")
+                self._triggers["tri_dz_wait"]   = self.tri_dz_wait      = Trigger(self.session, r'^[> ]*你正在运行内功加速全身气血恢复，无法静下心来搬运真气。', id = "tri_dz_wait", group = "dazuoto")
+                self._triggers["tri_dz_halt"]   = self.tri_dz_halt      = Trigger(self.session, r'^[> ]*你把正在运行的真气强行压回丹田，站了起来。', id = "tri_dz_halt", group = "dazuoto")
+                self._triggers["tri_dz_finish"] = self.tri_dz_finish    = Trigger(self.session, r'^[> ]*你现在内力接近圆满状态。', id = "tri_dz_finish", group = "dazuoto")
+                self._triggers["tri_dz_dz"]     = self.tri_dz_dz        = Trigger(self.session, r'^[> ]*你将运转于全身经脉间的内息收回丹田，深深吸了口气，站了起来。|^[> ]*你的内力增加了！！', id = "tri_dz_dz", group = "dazuoto")
+
+                self.session.addObjects(self._triggers)    
+
+            def __unload__(self):
+                self.session.delObjects(self._triggers)
+
+            # 各种打坐的具体逻辑处理
+            async def dazuo_to(self, to):
+                # 开始打坐
+                dazuo_times = 0             # 记录次数，用于到次数补充食物和水
+
+                self.tri_dz_done.enabled = True
+
+                # 首次执行时，调用 jifa命令以获取有效内功等级
+                if not self._force_level:
+                    await self._cmdEnable.execute("enable")
+                    force_info = self.session.getVariable("eff-force", ("none", 0))
+                    self._force_level = force_info[1]
+
+                # 根据有效内功等级，设置每次打坐的点数。具体为：有效等级-5后除以10圆整，最小为10
+                self._dazuo_point = (self._force_level - 5) // 10
+                if self._dazuo_point < 10:  self._dazuo_point = 10
+                
+                # 通过hpbrief命令获取当前的各种状态。若状态模式使用GMCP时，自动从GMCP中获取
+                if self.session.getVariable("status_type", "hpbrief") == "hpbrief":
+                    await self._cmdHpbrief.execute("hpbrief")
+
+                # 根据hpbrief命令或者自动从GMCP中获取的数据，取出当前内力、最大内力
+                neili = int(self.session.getVariable("neili", 0))
+                maxneili = int(self.session.getVariable("max_neili", 0))
+
+                # 设置触发器等待超时时间，一般情况下10秒，当执行dz 或者 dazuo max 时，需要等待的时间都可能超过10s，因此设置一个大值
+                TIMEOUT_DEFAULT = 10
+                TIMEOUT_MAX = 360
+
+                timeout = TIMEOUT_DEFAULT
+
+                # 根据不同参数，设置不同的相关命令和提示
+                if to == "dz":
+                    cmd_dazuo = "dz"
+                    timeout = TIMEOUT_MAX
+                    self.tri_dz_dz.enabled = True
+                    self.info('即将开始进行dz，以实现小周天循环', '打坐')
+
+                elif to == "max":
+                    cmd_dazuo = "dazuo max"
+                    timeout = TIMEOUT_MAX
+                    need = math.floor(1.90 * maxneili)
+                    self.info('当前内力：{}，需打坐到：{}，还需{}, 打坐命令{}'.format(neili, need, need - neili, cmd_dazuo), '打坐')
+
+                elif to == "once":
+                    cmd_dazuo = "dazuo max"
+                    timeout = TIMEOUT_MAX
+                    self.info('将打坐1次 {dazuo max}.', '打坐')
+
+                else:
+                    cmd_dazuo = f"dazuo {self._dazuo_point}"
+                    self.info('开始持续打坐, 打坐命令 {}'.format(cmd_dazuo), '打坐')
+
+                # 各类打坐命令的主循环
+                while (to == "dz") or (to == "always") or (neili / maxneili < 1.90):
+                    if self._halted:
+                        self.info("打坐任务已被手动中止。", '打坐')
+                        break
+            
+                    waited_tris = []
+                    waited_tris.append(self.create_task(self.tri_dz_done.triggered()))
+                    waited_tris.append(self.create_task(self.tri_dz_noqi.triggered()))
+                    waited_tris.append(self.create_task(self.tri_dz_nojing.triggered()))
+                    waited_tris.append(self.create_task(self.tri_dz_wait.triggered()))
+                    waited_tris.append(self.create_task(self.tri_dz_halt.triggered()))
+                    if to != "dz":
+                        waited_tris.append(self.create_task(self.tri_dz_finish.triggered()))
+                    else:
+                        waited_tris.append(self.create_task(self.tri_dz_dz.triggered()))
+
+                    done, pending = await self.session.waitfor(cmd_dazuo, asyncio.wait(waited_tris, timeout = timeout, return_when = "FIRST_COMPLETED"))
+
+                    for t in list(pending):
+                        self.remove_task(t)
+
+                    tasks_done = list(done)
+                    if len(tasks_done) == 0:
+                        # 这里表示超时了
+                        self.info('打坐中发生了超时问题，将会继续重新来过', '打坐')
+
+                    elif len(tasks_done) == 1:
+                        task = tasks_done[0]
+                        _, name, _, _ = task.result()
+                        
+                        # 若完成的触发器任务是 tri_dz_done 或者 tri_dz_dz， 根据to的不同判断如何进行后续
+                        if name in (self.tri_dz_done.id, self.tri_dz_dz.id):
+                            if (to == "always"):
+                                dazuo_times += 1
+                                if dazuo_times > 100:
+                                    # 此处，每打坐100次，补满水食物
+                                    self.info('该吃东西了', '打坐')
+                                    await self._cmdLifeMisc.execute("feed")
+                                    dazuo_times = 0
+
+                            elif (to == "dz"):
+                                dazuo_times += 1
+                                if dazuo_times > 50:
+                                    # 此处，每打坐50次，补满水食物
+                                    self.info('该吃东西了', '打坐')
+                                    await self._cmdLifeMisc.execute("feed")
+                                    dazuo_times = 0
+
+                            elif (to == "max"):
+                                # 当执行max后，如果有效内功大于161级，吸个气
+                                if self._force_level >= 161:
+                                    self.session.writeline("exert recover")
+                                    await asyncio.sleep(0.2)
+
+                            elif (to == "once"):
+                                self.info('打坐1次任务已成功完成.', '打坐')
+                                break
+
+                        # 若捕获到 noqi 的触发器（你的气不足），根据有效内功等级判断处理。当161以上使用正循环，即吸气后继续；当小于时，等待（发呆）15秒后继续打坐
+                        elif name == self.tri_dz_noqi.id:
+                            if self._force_level >= 161:
+                                await asyncio.sleep(0.1)
+                                self.session.writeline("exert recover")
+                                await asyncio.sleep(0.1)
+                            else:
+                                await asyncio.sleep(15)
+
+                        # 若捕获到 nojing 的触发器（你的精不足），直接吸气
+                        elif name == self.tri_dz_nojing.id:
+                            await asyncio.sleep(1)
+                            self.session.writeline("exert regenerate")
+                            await asyncio.sleep(1)
+
+                        # 若捕获触发器为 dz_wait （处于exert qi/exert jing过程中），等待5秒
+                        elif name == self.tri_dz_wait.id:
+                            await asyncio.sleep(5)
+
+                        # 若捕获到人工halt命令输入后，终止本循环
+                        elif name == self.tri_dz_halt.id:
+                            self.info("打坐已被手动halt中止。", '打坐')
+                            break
+
+                        # 若捕获到最大内力触发器，终止本循环
+                        elif name == self.tri_dz_finish.id:
+                            self.info("内力已最大，将停止打坐。", '打坐')
+                            break
+
+                self.info('已成功完成', '打坐')
+                self.tri_dz_done.enabled = False
+                self.tri_dz_dz.enabled = False
+                self._onSuccess()
+                return self.SUCCESS
+
+            async def execute(self, cmd, *args, **kwargs):
+                try:
+                    self.reset()
+                    if cmd:
+                        m = re.match(self.patterns, cmd)
+                        if m:
+                            cmd_type = m[1]
+                            param = m[2]
+                            self._halted = False
+
+                            if param == "stop":
+                                self._halted = True
+                                self.info('已被人工终止，即将在本次打坐完成后结束。', '打坐')
+                                return self.SUCCESS
+
+                            elif param in ("dz",):
+                                return await self.dazuo_to("dz")
+
+                            elif param in ("0", "always"):
+                                return await self.dazuo_to("always")
+
+                            elif param in ("1", "once"):
+                                return await self.dazuo_to("once")
+
+                            elif not param or param == "max":
+                                return await self.dazuo_to("max")
+                            
+                except Exception as e:
+                    self.error(f"异步执行中遇到异常, {e}, 类型为 {type(e)}")
+                    self.error(f"异常追踪为： {traceback.format_exc()}")
+
+
+6.8.5 SimpleCommand示例
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. _#mods: syscommand.html#modules
 .. _pymud.Session: references.html#pymud.Session
@@ -596,6 +1272,11 @@
 .. _MatchObject: references.html#pymud.objects.MatchObject
 .. _Alias: references.html#pymud.Alias
 .. _SimpleAlias: references.html#pymud.SimpleAlias
+.. _Trigger: references.html#pymud.Trigger
+.. _SimpleTrigger: references.html#pymud.SimpleTrigger
+.. _GMCPTrigger: references.html#pymud.GMCPTrigger
+.. _Command: references.html#pymud.Command
+.. _SimpleCommand: references.html#pymud.SimpleCommand
 .. _Timer: references.html#pymud.Timer
 .. _SimpleTimer: references.html#pymud.SimpleTimer
 .. _插件: plugins.html

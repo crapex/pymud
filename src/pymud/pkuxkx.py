@@ -17,9 +17,9 @@ class Configuration:
 
     # hpbrief long情况下的含义
     HP_KEYS = (
-        "exp", "pot", "maxneili", "neili", "maxjingli", "jingli", 
-        "maxqi", "effqi", "qi", "maxjing", "effjing", "jing", 
-        "zhenqi", "zhenyuan", "food", "water", "fighting", "busy"
+        "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli", 
+        "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing", 
+        "vigour/qi", "vigour/yuan", "food", "water", "fighting", "busy"
         )
 
     # 类的构造函数，传递参数session，是会话本身
@@ -54,7 +54,7 @@ class Configuration:
         
         # 1. fullme的链接对应的触发器，匹配URL
         # 当匹配成功后，调用ontri_webpage
-        self._triggers["tri_webpage"] = self.tri_webpage = Trigger(self.session, id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', group = "sys", onSuccess = self.ontri_webpage)
+        self._triggers["tri_webpage"] = self.tri_webpage = Trigger(self.session, id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', group = "sys", onSuccess =  lambda id, line, wildcards: webbrowser.open(line))
         # 2. fullme的链接对应的触发器，因为要进行多行匹配（3行），因此匹配模式pattern为3个正则表达式模式构成的元组（所有列表类型均可识别），无需像MushClient一样要指定multiline标识和linesToMatch数量
         # 当匹配成功后，调用ontri_hpbrief
         # 特别说明：此处的hpbrief触发匹配，需要set hpbrief long后才可以支持
@@ -129,9 +129,6 @@ class Configuration:
 
     def onTimer(self, name, *args, **kwargs):
         self.session.info("每2秒都会打印本信息", "定时器测试")
-
-    def ontri_webpage(self, name, line, wildcards):
-        webbrowser.open(line)
 
     def ontri_hpbrief(self, name, line, wildcards):
         self.session.setVariables(self.HP_KEYS, wildcards)

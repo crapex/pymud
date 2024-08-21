@@ -1,4 +1,4 @@
-import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig
+import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig, time
 from collections.abc import Iterable
 from collections import OrderedDict
 import logging, queue
@@ -140,6 +140,8 @@ class Session:
         self._line_count      = 0                           # 快速访问行数
         self._status_maker = None                           # 创建状态窗口的函数（属性）
         self.display_line  = ""
+
+        self._activetime = time.time()
 
         self.initialize()
 
@@ -295,6 +297,15 @@ class Session:
             dura = self._protocol.duration
 
         return dura
+
+    @property
+    def idletime(self) -> float:
+        "只读属性，返回当前会话空闲时间（即最后一次向服务器写入数据到现在的时间），以秒为单位。当服务器未连接时，返回-1"
+        idle = -1
+        if self._protocol and self._protocol.connected:
+            idle = time.time() - self._activetime
+
+        return idle
 
     @property
     def status_maker(self):
@@ -772,6 +783,8 @@ class Session:
 
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
+
+        self._activetime = time.time()
     
     async def waitfor(self, line: str, awaitable, wait_time = 0.05) -> None:
         """
@@ -831,11 +844,9 @@ class Session:
         name = name or self.name
         if name in self.application.sessions.keys():
             session = self.application.sessions[name]
-            await session.exec_command_async(cmd, *args, **kwargs)
+            return await session.exec_command_async(cmd, *args, **kwargs)
         else:
             self.error(f"不存在名称为{name}的会话")
-
-    
 
     def exec_code(self, cl: CodeLine, *args, **kwargs):
         """
@@ -910,6 +921,7 @@ class Session:
         :param args: 保留兼容与扩展性所需
         :param kwargs: 保留兼容与扩展性所需
         """
+
         if cl.length == 0:
             self.writeline("")
 
@@ -937,9 +949,9 @@ class Session:
                 else:
                     try:
                         cb = CodeBlock(sess_cmd)
-                        await cb.async_execute(session, *args, **kwargs)
+                        return await cb.async_execute(session, *args, **kwargs)
                     except Exception as e:
-                        await session.exec_command_async(sess_cmd)
+                        return await session.exec_command_async(sess_cmd)
             
             else:
                 if cmd in self._commands_alias.keys():
@@ -956,7 +968,7 @@ class Session:
 
         else:
             cmdtext, code = cl.expand(self, *args, **kwargs)
-            await self.exec_text_async(cmdtext)
+            return await self.exec_text_async(cmdtext)
             
     def exec_text(self, cmdtext: str):
         """
@@ -996,14 +1008,14 @@ class Session:
 
         异步调用时，该函数要等待对应的代码执行完毕后才会返回。可以用于确保命令执行完毕。
         """
-
+        result = None
         isNotCmd = True
         for command in self._commands.values():
             if isinstance(command, Command) and command.enabled:
                 state = command.match(cmdtext)
                 if state.result == Command.SUCCESS:
                     # 命令的任务名称采用命令id，以便于后续查错
-                    await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
+                    result = await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
                     isNotCmd = False
                     break
 
@@ -1020,6 +1032,8 @@ class Session:
             # 都不是则是普通命令，直接发送
             if notAlias:
                 self.writeline(cmdtext)
+
+        return result
 
     def exec_command(self, line: str, *args, **kwargs) -> None:
         """
@@ -1071,15 +1085,18 @@ class Session:
         """
 
         ## 以下为函数执行本体
+        result = None
         if (not "#" in line) and (not "@" in line) and (not "%" in line):
             cmds = line.split(self.seperator)
             for cmd in cmds:
-                await self.exec_text_async(cmd)
+                result = await self.exec_text_async(cmd)
                 if Settings.client["interval"] > 0:
                     await asyncio.sleep(Settings.client["interval"] / 1000.0)
         else:
             cb = CodeBlock(line)
-            await cb.async_execute(self)
+            result = await cb.async_execute(self)
+
+        return result
 
     def write_eof(self) -> None:
         """
@@ -1242,7 +1259,12 @@ class Session:
         if cls == Alias:
             self._aliases.pop(id, None)
         elif cls == Command:
-            self._commands.pop(id, None)
+            cmd = self._commands.pop(id, None)
+            if isinstance(cmd, Command):
+                cmd.reset()
+                cmd.unload()
+                cmd.__unload__()
+
         elif cls == Trigger:
             self._triggers.pop(id, None)
         elif cls == Timer:
@@ -1252,17 +1274,6 @@ class Session:
         elif cls == GMCPTrigger:
             self._gmcp.pop(id, None)
 
-    # def _delObject(self, obj):
-    #     if isinstance(obj, Alias):
-    #         self._aliases.pop(obj.id, None)
-    #     elif isinstance(obj, Command):
-    #         self._commands.pop(obj.id, None)
-    #     elif isinstance(obj, Trigger):
-    #         self._triggers.pop(obj.id, None)
-    #     elif isinstance(obj, Timer):
-    #         self._timers.pop(obj.id, None)
-    #     elif isinstance(obj, GMCPTrigger):
-    #         self._gmcp.pop(obj.id, None)
 
     def _delObjects(self, ids: Iterable, cls: type):
         "删除多个指定元素"
@@ -1282,14 +1293,14 @@ class Session:
                     def __init__(self, session):
                         self.session = session
 
-                        ali = Alias(session, "s", "south", id = "my_ali1")
+                        ali = SimpleAlias(session, r'^gta$', 'get all', id = 'my_ali1')
                         
                         # 以下几种方式均可将该别名添加到会话
                         session.addObject(ali)
                         session.addAlias(ali)
 
                         # 以下三种方式均可以删除该别名
-                        session.delObjec(ali)
+                        session.delObject(ali)
                         session.delAlias(ali)
                         session.delAlias("my_ali1")
 
@@ -1297,21 +1308,23 @@ class Session:
         if isinstance(obj, Alias):
             self._aliases.pop(obj.id, None)
         elif isinstance(obj, Command):
+            obj.reset()
+            obj.unload()
+            obj.__unload__()
             self._commands.pop(obj.id, None)
         elif isinstance(obj, Trigger):
             self._triggers.pop(obj.id, None)
         elif isinstance(obj, Timer):
-            timer = self._timers.pop(obj.id, None)
-            if isinstance(timer, Timer):
-                timer.enabled = False
+            obj.enabled = False
+            self._timers.pop(obj.id, None)
         elif isinstance(obj, GMCPTrigger):
             self._gmcp.pop(obj.id, None)
 
     def delObjects(self, objs):
         """
-        从会话中移除一组对象，可直接删除  Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
+        从会话中移除一组对象，可直接删除多个 Alias, Trigger, GMCPTrigger, Command, Timer
         
-        :param objs: 要删除的对象本身，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
+        :param objs: 要删除的一组对象的元组、列表或者字典(保持兼容性)，其中对象可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
 
         示例:
 
@@ -1340,7 +1353,7 @@ class Session:
 
         elif isinstance(objs, dict):
             for key, item in objs.items():
-                    self.delObject(item)
+                self.delObject(item)
 
     def addAliases(self, alis):
         """
@@ -2603,7 +2616,7 @@ class Session:
             self._unload_module(mod)
 
     def _unload_module(self, module_name):
-        "卸载指定名称模块。卸载支持需要模块的Configuration实现__del__方法"
+        "卸载指定名称模块。卸载支持需要模块的Configuration实现 __unload__ 或 unload 方法"
         if module_name in self._modules.keys():
             mod = self._modules[module_name]["module"]
             config = self._modules[module_name]["config"]

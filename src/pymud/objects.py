@@ -147,7 +147,7 @@ class CodeLine:
         return new_code_str, new_code
 
     async def async_execute(self, session, *args, **kwargs):           
-        await session.exec_code_async(self, *args, **kwargs)
+        return await session.exec_code_async(self, *args, **kwargs)
 
 class CodeBlock:
     """
@@ -277,14 +277,16 @@ class CodeBlock:
         """
         以异步方式执行该 CodeBlock。参数与 execute 相同。
         """
+        result = None
         for code in self.codes:
             if isinstance(code, CodeLine):
-                await code.async_execute(session, *args, **kwargs)
+                result = await code.async_execute(session, *args, **kwargs)
 
             if Settings.client["interval"] > 0:
                 await asyncio.sleep(Settings.client["interval"] / 1000.0)
 
         session.clean_finished_tasks()
+        return result
 
 class BaseObject:
     """
@@ -715,6 +717,20 @@ class Command(MatchObject):
     def __init__(self, session, patterns, *args, **kwargs):
         super().__init__(session, patterns, sync = False, *args, **kwargs)
         self._tasks = set()
+
+    def __unload__(self):
+        """
+        当从会话中移除任务时，会自动调用该函数。
+        可以将命令管理的各子类对象在此处清除。
+        该函数需要在子类中覆盖重写。
+        """
+        pass
+
+    def unload(self):
+        """
+        与__unload__方法相同，子类仅需覆盖一种方法就可以
+        """
+        pass
 
     def create_task(self, coro, *args, name = None):
         """
