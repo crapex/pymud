@@ -1,7 +1,7 @@
 # PyMUD - Python原生MUD客户端
 ## 简介
 
-### 帮助文件见北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
+### 北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
 ### 源代码地址: https://github.com/crapex/pymud
 ### 帮助文档地址： https://pymud.readthedocs.org
 ### PyPi项目地址： https://pypi.org/project/pymud
@@ -23,6 +23,12 @@
 + Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMud中支持
 + 我自己还在玩，所以本客户端会持续进行更新:)
 
+### 哪些人适合使用PyMUD
++ 比较熟悉Python语言，会使用Python写代码的 -> PyMUD是纯Python原生开发，不会有其他客户端对Python的支持能比得过PyMUD
++ 虽不太熟悉Python语言，但有想法想学习Python语言的 -> 正好使用PyMUD玩北侠写脚本的过程中学习Python语言
++ 觉得还有些功能现在所有客户端都没有的 -> 你有需求，我来增加，就是这么方便
++ 觉得也想自己整一个定制客户端玩玩的 -> PyMUD完全开源，且除ui框架外全部都是一行一行代码自己写的，可以直接参考PyMUD的设计
+
 ## 版本更新信息
 
 ## 0.20.0 (2024-08-XX)
@@ -37,10 +43,12 @@
 + 功能调整: 在没有session的时候，也可以执行#exit命令
 + 功能新增: #session 命令增加快捷创建会话功能，假如已有快捷菜单 世界->pkuxkx->newstart , 则可以通过 #session pkuxkx.newstart 直接创建该会话，效果等同于点击该菜单
 + 功能调整: 点击菜单创建会话时，若会话已存在，则将该会话切换为当前会话
-+ 问题修复: 修复原unload方法不能正确卸载的问题
-+ 功能新增: 主模块卸载现在既可以定义在__unload__方法中，也可以定义在unload方法中。可以根据自己喜好选择一个即可。
-+ 功能调整: 模块加载和重新加载前，会自动调用模块的__unload__方法或unload方法（若有）
++ 重大更新: 完全重写了模块的加载、卸载、重新加载方法，修复模块使用中的问题
++ 功能调整: 现在只要将一个类型继承 IConfig 接口，即被识别为配置类型。这种类型在模块加载时会自动创建其实例。当然，名称为Configuration的类型也同样被认为是配置类型，保持向前兼容性。唯一要求是，该类型的构造函数允许仅传递一个session对象。
++ 功能新增: 各类配置类型的卸载现在既可以定义在__unload__方法中，也可以定义在unload方法中。可以根据自己喜好选择一个即可。
++ 功能调整: 各配置类型加载和重新加载前，会自动调用模块的__unload__方法或unload方法（若有）
 + 功能新增: Command基类增加__unload__方法和unload方法，二者在从会话中移除该 Command 时均会自动调用。自定义的Command子类应覆盖这两种方法中的一种方法，并在其中增加清除类型自行创建的 Trigger, Alias 等会话对象。这样，模块卸载时只要移除命令本身，在命令中新建的其他关联对象将被一同移除。
++ 功能新增: 所有PyMUD基础对象类型及其子类型，包括 Alias, Trigger, Timer, Command, GMCPTrigger 及它们的子类型，在创建的时候会自动添加到会话中，无需再进行 addObject 等操作了
 + 问题修复: 修复部分正则表达式书写错误问题
 + 功能新增: Session类新增waitfor函数，用于执行一段代码后立即等待某个触发器的情况，简化原三行代码写法
 
@@ -86,6 +94,8 @@
 + 功能新增: Session的所有异步命令调用函数增加返回值，现在调用 session.exec_async, exec_command_async 等方法执行的内容若匹配为命令时，会返回最后最后一个 Command 对象的 execute 函数的返回值
     - 例如， result = await self.session.cmds.cmd_runto.execute('rt yz') 与 result = await self.session.exec_async('rt yz') 等价，返回值相同
     - 但     result = await self.session.exec_async('rt yz;dzt')，该返回的result 仅是 dzt 命令的 execute 的返回值。 rt yz 命令返回值被丢弃。
++ 功能新增: 增加临时变量概念，变量名以下划线开头的为临时变量，此类变量不会被保存到 .mud 文件中。
+
 
 ## 0.19.4 (2024-04-20)
 + 功能调整: info 现在 msg 恢复为可接受任何类型参数，不一定是 str

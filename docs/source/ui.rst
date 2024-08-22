@@ -169,3 +169,9 @@
     .. code:: 
 
         #session newstart mud.pkuxkx.net 8081
+
+    还可以使用 #session 命令快速调用菜单栏内容创建会话， 比如，已通过 pymud.cfg 配置好，在 pkuxkx 菜单下有一个 newstart 的子菜单项，则可以用以下命令快速创建会话
+
+    .. code::
+        
+        #session pkuxkx.newstart

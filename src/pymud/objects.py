@@ -2,7 +2,8 @@
 MUD会话(session)中, 支持的对象列表
 """
 
-import asyncio, logging, re
+import asyncio, logging, re, importlib
+from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Iterable
 from collections import namedtuple
 from typing import Any
@@ -342,6 +343,8 @@ class BaseObject:
 
         self.log.debug(f"对象实例 {self} 创建成功.")
 
+        self.session.addObject(self)
+
     @property
     def enabled(self):
         "可读写属性，使能或取消使能本对象"
@@ -477,7 +480,7 @@ class MatchObject(BaseObject):
         super().__init__(session, patterns = patterns, *args, **kwargs)
 
     def __del__(self):
-        self.reset()
+        pass
 
     @property
     def patterns(self):

@@ -8,6 +8,7 @@ from logging.handlers import QueueHandler, QueueListener
 from .logger import Logger
 from .extras import SessionBuffer, DotDict, Plugin
 from .protocol import MudClientProtocol
+from .modules import ModuleInfo
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
 from .settings import Settings
 
@@ -255,11 +256,6 @@ class Session:
         "断开到服务器的连接。"
         if self.connected:
             self.write_eof()
-
-            # 两次保存，删掉一次
-            # # 断开时自动保存变量数据
-            # if Settings.client["var_autosave"]:
-            #     self.handle_save()
 
     def onDisconnected(self, protocol):
         "当从服务器连接断开时执行的操作。包括保存变量(若设置)、打印断开时间、执行自定义事件(若设置)等。"
@@ -808,7 +804,7 @@ class Session:
         return await awaitable
 
     def exec(self, cmd: str, name = None, *args, **kwargs):
-        """
+        r"""
         在名称为name的会话中使用exec_command执行MUD命令。当不指定name时，在当前会话中执行。
 
         - exec 与 writeline 都会向服务器写入数据。其差异在于，exec执行的内容，会先经过Alias处理和Command处理，实际向远程发送内容与cmd可以不一致。
@@ -2151,7 +2147,7 @@ class Session:
                             self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
 
     def handle_alias(self, code: CodeLine = None, *args, **kwargs):
-        """
+        r"""
         嵌入命令 #alias / #ali 的执行函数，操作别名。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
 
@@ -2541,6 +2537,7 @@ class Session:
         self._variables.clear()
         self._tasks.clear()
 
+
     def load_module(self, module_names):
         """
         模块加载函数。
@@ -2564,33 +2561,12 @@ class Session:
         "加载指定名称模块"
         try:
             if module_name not in self._modules.keys():
-                mod = importlib.import_module(module_name)
-                if hasattr(mod, 'Configuration'):
-                    config = mod.Configuration(self)
-                    self._modules[module_name] = {"module": mod, "config": config}
-                    self.info(f"主配置模块 {module_name} 加载完成.")
-                else:
-                    self._modules[module_name] = {"module": mod, "config": None}
-                    self.info(f"子配置模块 {module_name} 加载完成.")
+                self._modules[module_name] = ModuleInfo(module_name, self)
 
             else:
-                mod = self._modules[module_name]["module"]
-                config = self._modules[module_name]["config"]
-                if config: 
-                    if hasattr(config, "__unload__") or hasattr(config, "unload"):
-                        unload = getattr(config, "__unload__", None) or getattr(config, "unload", None)
-                        if callable(unload):
-                            unload()
-
-                    del config
-                mod = importlib.reload(mod)
-                if hasattr(mod, 'Configuration'):
-                    config = mod.Configuration(self)
-                    self._modules[module_name] = {"module": mod, "config": config}
-                    self.info(f"主配置模块 {module_name} 重新加载完成.")
-                else:
-                    self._modules[module_name] = {"module": mod, "config": None}
-                    self.info(f"子配置模块 {module_name} 重新加载完成.")
+                mod = self._modules[module_name]
+                if isinstance(mod, ModuleInfo):
+                    mod.reload()
 
         except Exception as e:
             import traceback
@@ -2618,18 +2594,9 @@ class Session:
     def _unload_module(self, module_name):
         "卸载指定名称模块。卸载支持需要模块的Configuration实现 __unload__ 或 unload 方法"
         if module_name in self._modules.keys():
-            mod = self._modules[module_name]["module"]
-            config = self._modules[module_name]["config"]
-            if config: 
-                if hasattr(config, "__unload__") or hasattr(config, "unload"):
-                    unload = getattr(config, "__unload__", None) or getattr(config, "unload", None)
-                    if callable(unload):
-                        unload()
-
-                del config
-            del mod
-            self._modules.pop(module_name)
-            self.info(f"配置模块 {module_name} 已成功卸载.")
+            mod = self._modules.pop(module_name)
+            if isinstance(mod, ModuleInfo):
+                mod.unload()
 
         else:
             self.warning(f"指定模块名称 {module_name} 并未加载.")
@@ -2643,9 +2610,9 @@ class Session:
         :param module_names: 要重新加载的模块清单。为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块。当不指定时，重新加载所有已加载模块。
         """
         if module_names is None:
-            self.clean()
-            mods = list(self._modules.keys())
-            self.load_module(mods)
+            for name, module in self._modules.items():
+                if isinstance(module, ModuleInfo):
+                    module.reload()
 
             self.info(f"所有配置模块全部重新加载完成.")
 
@@ -2653,14 +2620,17 @@ class Session:
             for mod in module_names:
                 mod = mod.strip()
                 if mod in self._modules.keys():
-                    self.load_module(mod)
+                    module = self._modules[mod]
+                    if isinstance(module, ModuleInfo):
+                        module.reload()
                 else:
                     self.warning(f"指定模块名称 {mod} 并未加载，无法重新加载.")
 
         elif isinstance(module_names, str):
             if module_names in self._modules.keys():
-                mod = module_names.strip()
-                self.load_module(mod)
+                module = self._modules[module_names]
+                if isinstance(module, ModuleInfo):
+                    module.reload()
             else:
                 self.warning(f"指定模块名称 {module_names} 并未加载，无法重新加载.")
         
@@ -2798,12 +2768,29 @@ class Session:
             - #reload
         '''
 
-        count = len(self._modules.keys())
-        if count == 0:
-            self.info("当前会话并未加载任何模块。", "MODULES")
-        else:
-            self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
+        args = code.code[2:]
+        
+        if len(args) == 0:
+            count = len(self._modules.keys())
+            if count == 0:
+                self.info("当前会话并未加载任何模块。", "MODULES")
+            else:
+                self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
     
+        elif len(args) >= 1:
+            modules = ",".join(args).split(",")
+            for mod in modules:
+                if mod in self._modules.keys():
+                    module = self._modules[mod]
+                    if isinstance(module, ModuleInfo):
+                        if module.ismainmodule:
+                            self.info(f"模块 {module.name} 中包含的配置包括: {', '.join(module.config.keys())}")
+                        else:
+                            self.info(f"模块 {module.name} 为子模块，不包含配置。")
+
+                else:
+                    self.info(f"本会话中不存在指定名称 {mod} 的模块，可能是尚未加载到本会话中")
+
     def handle_reset(self, code: CodeLine = None, *args, **kwargs):
         '''
         嵌入命令 #reset 的执行函数，复位全部脚本。该命令不带参数。
@@ -2823,7 +2810,8 @@ class Session:
 
     def handle_save(self, code: CodeLine = None, *args, **kwargs):
         '''
-        嵌入命令 #save 的执行函数，保存当前会话变量（系统变量除外）至文件。该命令不带参数。
+        嵌入命令 #save 的执行函数，保存当前会话变量（系统变量和临时变量除外）至文件。该命令不带参数。
+        系统变量包括 %line, %copy 和 %raw 三个，临时变量是指变量名已下划线开头的变量
         该函数不应该在代码中直接调用。
 
         使用:
@@ -2844,10 +2832,10 @@ class Session:
         with open(file, "wb") as fp:
             saved = dict()
             saved.update(self._variables)
-            # keys = list(saved.keys())
-            # for key in keys:
-            #     if key.startswith("%"):
-            #         saved.pop(key)
+            keys = list(saved.keys())
+            for key in keys:
+                if key.startswith("_"):
+                    saved.pop(key)
             saved.pop("%line", None)
             saved.pop("%raw", None)
             saved.pop("%copy", None)
