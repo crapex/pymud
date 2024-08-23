@@ -1,9 +1,10 @@
-import os, re, datetime, threading
+import os, re, datetime, threading, pathlib
 from queue import SimpleQueue, Empty
+from pathlib import Path
 
 class Logger:
     """
-    PyMUD 的记录器类型，可用于会话中向文件记录数据
+    PyMUD 的记录器类型，可用于会话中向文件记录数据。记录文件保存在当前目录下的 log 子目录中
     
     :param name: 记录器名称，各记录器名称应保持唯一。记录器名称会作为记录文件名称的主要参数
     :param mode: 记录模式。可选模式包括 a, w, n 三种。
@@ -56,7 +57,12 @@ class Logger:
                     now = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
                     filename = f"{self.name}.{now}.log"
 
-                filename = os.path.abspath(filename)
+                logdir = Path.cwd().joinpath('log')
+                if not logdir.exists() or not logdir.is_dir():
+                    logdir.mkdir()
+
+                filename = logdir.joinpath(filename)
+                #filename = os.path.abspath(filename)
                 self._stream = open(filename, mode = mode, encoding = self._encoding, errors = self._errors)
                 self._thread = t = threading.Thread(target=self._monitor)
                 t.daemon = True

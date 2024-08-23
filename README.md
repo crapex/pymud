@@ -96,7 +96,6 @@
     - 但     result = await self.session.exec_async('rt yz;dzt')，该返回的result 仅是 dzt 命令的 execute 的返回值。 rt yz 命令返回值被丢弃。
 + 功能新增: 增加临时变量概念，变量名以下划线开头的为临时变量，此类变量不会被保存到 .mud 文件中。
 
-
 ## 0.19.4 (2024-04-20)
 + 功能调整: info 现在 msg 恢复为可接受任何类型参数，不一定是 str
 + 功能调整: #var, #global 指令中，现在可以使用参数扩展了，例如 #var max_qi @qi

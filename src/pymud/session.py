@@ -6,7 +6,7 @@ from logging import FileHandler
 from logging.handlers import QueueHandler, QueueListener
 
 from .logger import Logger
-from .extras import SessionBuffer, DotDict, Plugin
+from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
 from .modules import ModuleInfo
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
@@ -1280,6 +1280,8 @@ class Session:
         """
         从会话中移除一个对象，可直接删除 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类本身
         
+        ** 注 ** 现在 delObject 和 delObjects 使用结果相同，都可以清除单个对象、对个对象的list, tuple或dict, 可以有效防止代码写错
+
         :param obj: 要删除的多个特定对象组成的元组、列表或者字典，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
 
         示例:
@@ -1316,10 +1318,15 @@ class Session:
         elif isinstance(obj, GMCPTrigger):
             self._gmcp.pop(obj.id, None)
 
+        elif isinstance(obj, (list, tuple, dict)):
+            self.delObjects(obj)
+
     def delObjects(self, objs):
         """
         从会话中移除一组对象，可直接删除多个 Alias, Trigger, GMCPTrigger, Command, Timer
         
+        ** 注 ** 现在 delObject 和 delObjects 使用结果相同，都可以清除单个对象、对个对象的list, tuple或dict, 可以有效防止代码写错
+
         :param objs: 要删除的一组对象的元组、列表或者字典(保持兼容性)，其中对象可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
 
         示例:
@@ -1350,6 +1357,9 @@ class Session:
         elif isinstance(objs, dict):
             for key, item in objs.items():
                 self.delObject(item)
+
+        elif isinstance(objs, BaseObject):
+            self.delObject(objs)
 
     def addAliases(self, alis):
         """
@@ -2714,7 +2724,7 @@ class Session:
 
                 elif mod in self.plugins.keys():
                     self.application.reload_plugin(self.plugins[mod])
-
+                    self.info(f'插件 {mod} 重新加载完成！')
                 else:
                     self.warning(f"指定名称 {mod} 既未找到模块，也未找到插件，重新加载失败..")
 
@@ -3113,8 +3123,8 @@ class Session:
 
         示例:
             - ``#log`` : 在当前会话窗口列出所有记录器状态
-            - ``#log start`` : 启动本会话默认记录器（记录器名为会话名）。该记录器以纯文本模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 name.log 文件的后端
-            - ``#log start -r`` : 启动本会话默认记录器。该记录器以raw模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 name.log 文件的后端
+            - ``#log start`` : 启动本会话默认记录器（记录器名为会话名）。该记录器以纯文本模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 log 目录下 name.log 文件的后端
+            - ``#log start -r`` : 启动本会话默认记录器。该记录器以raw模式，将后续所有屏幕输出、键盘键入、命令输入等记录到 log 目录下 name.log 文件的后端
             - ``#log start chat`` : 启动名为 chat 的记录器。该记录器以纯文本模式，记录代码中调用过该记录器 .log 进行记录的信息
             - ``#log stop`` : 停止本会话默认记录器（记录器名为会话名）。
 
@@ -3172,8 +3182,19 @@ class Session:
             elif (args[0] == "show"):
                 if len(args) > 1 and not args[1].startswith('-'):
                     file = args[1]
-                    self.application.logFileShown = file
-                    self.application.showLogInTab()
+                    if os.path.exists(file):
+                        filepath = os.path.abspath(file)
+                        #self.info(f'file {filepath} exists, will be shown.')
+                        self.application.logFileShown = filepath
+                        self.application.showLogInTab()
+                    elif os.path.exists(os.path.join('./log', file)):
+                        filepath = os.path.abspath(os.path.join('./log', file))
+                        #self.info(f'file {filepath} exists, will be shown.')
+                        self.application.logFileShown = filepath
+                        self.application.showLogInTab()
+                    else:
+                        self.warning(f'指定记录文件 {file} 不存在！')
+                    
                 else:
                     self.application.show_logSelectDialog()
 

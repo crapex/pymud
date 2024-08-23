@@ -46,7 +46,13 @@
 .. autoclass:: pymud.DotDict
     :members:
 
-.. autoclass:: pymud.extras.Plugin
+.. autoclass:: pymud.modules.Plugin
+    :members:
+
+.. autoclass:: pymud.modules.IConfig
+    :members:
+
+.. autoclass:: pymud.modules.ModuleInfo
     :members:
 
 .. autoclass:: pymud.Logger

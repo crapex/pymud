@@ -1,8 +1,7 @@
 # External Libraries
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
-from typing import Any
-import time, datetime
+import time
 
 from typing import Iterable
 from prompt_toolkit import ANSI
@@ -1008,76 +1007,5 @@ class DotDict(dict):
     def __setstate__(self, state):
         self.update(state)
 
-import importlib
-import importlib.util
 
-class Plugin:
-    """
-    插件管理类。对加载的插件文件进行管理。该类型由PyMudApp进行管理，无需人工创建。
-
-    有关插件的详细信息，请参见 `插件 <plugins.html>`_
-
-    :param name: 插件的文件名, 如'myplugin.py'
-    :param location: 插件所在的目录。自动加载的插件包括PyMUD包目录下的plugins目录以及当前目录下的plugins目录
-
-    """
-    def __init__(self, name, location):
-        self._plugin_file = name
-        self._plugin_loc  = location
-
-        self.reload()
-
-    def reload(self):
-        "加载/重新加载插件对象"
-        #del self.modspec, self.mod
-        self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
-        self.mod     = importlib.util.module_from_spec(self.modspec)
-        self.modspec.loader.exec_module(self.mod)
-
-        self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
-        self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
-        self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
-        
-    @property
-    def name(self):
-        "插件名称，由插件文件中的 PLUGIN_NAME 常量定义"
-        return self.mod.__dict__["PLUGIN_NAME"]
-    
-    @property
-    def desc(self):
-        "插件描述，由插件文件中的 PLUGIN_DESC 常量定义"
-        return self.mod.__dict__["PLUGIN_DESC"]
-    
-    @property
-    def help(self):
-        "插件帮助，由插件文件中的文档字符串定义"
-        return self.mod.__doc__
-    
-    def onAppInit(self, app):
-        """
-        PyMUD应用启动时对插件执行的操作，由插件文件中的 PLUGIN_PYMUD_START 函数定义
-
-        :param app: 启动的 PyMudApp 对象实例
-        """
-        self._app_init(app)
-
-    def onSessionCreate(self, session):
-        """
-        新会话创建时对插件执行的操作，由插件文件中的 PLUGIN_SESSION_CREATE 函数定义
-
-        :param session: 新创建的会话对象实例
-        """
-        self._session_create(session)
-
-    def onSessionDestroy(self, session):
-        """
-        会话关闭时（注意不是断开）对插件执行的操作，由插件文件中的 PLUGIN_SESSION_DESTROY 函数定义
-
-        :param session: 所关闭的会话对象实例
-        """
-        self._session_destroy(session)
-
-    def __getattr__(self, __name: str) -> Any:
-        if hasattr(self.mod, __name):
-            return self.mod.__getattribute__(__name)
         

@@ -1,6 +1,6 @@
-import asyncio, functools, re, logging, math, json, os, webbrowser, threading
+import asyncio, functools, re, os, webbrowser, threading
 from datetime import datetime
-import importlib.util
+from pathlib import Path
 from prompt_toolkit.shortcuts import set_title, radiolist_dialog
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
@@ -36,7 +36,8 @@ from prompt_toolkit.layout.processors import (
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict, Plugin
+from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict
+from .modules import Plugin
 from .session import Session
 from .settings import Settings
 from .dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog, LogSelectionDialog
@@ -567,6 +568,7 @@ class PyMudApp:
             log_list = list()
             files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.log')]
             for file in files:
+                file = os.path.abspath(file)
                 filename = os.path.basename(file).ljust(20)
                 filesize = f"{os.path.getsize(file):,} Bytes".rjust(20)
                 # ctime   = datetime.fromtimestamp(os.path.getctime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
@@ -574,6 +576,19 @@ class PyMudApp:
                 
                 file_display_line = "{}{}{}".format(filename, filesize, mtime)
                 log_list.append((file, file_display_line))
+
+            logDir = os.path.abspath(os.path.join(os.curdir, 'log'))
+            if os.path.exists(logDir):
+                files = [f for f in os.listdir(logDir) if f.endswith('.log')]
+                for file in files:
+                    file = os.path.join(logDir, file)
+                    filename = ('log/' + os.path.basename(file)).ljust(20)
+                    filesize = f"{os.path.getsize(file):,} Bytes".rjust(20)
+                    # ctime   = datetime.fromtimestamp(os.path.getctime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                    mtime   = datetime.fromtimestamp(os.path.getmtime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                    
+                    file_display_line = "{}{}{}".format(filename, filesize, mtime)
+                    log_list.append((file, file_display_line))
             
             dialog = LogSelectionDialog(
                 text = head_line,
@@ -1138,8 +1153,8 @@ class PyMudApp:
         #asyncio.run(self.run_async())
 
     def get_width(self):
-        "获取ConsoleView的实际宽度，等于输出宽度-4,（左右线条宽度, 滚动条宽度，右边让出的1列）"
-        size = self.app.output.get_size().columns - 4
+        "获取ConsoleView的实际宽度，等于输出宽度,（已经没有左右线条和滚动条了）"
+        size = self.app.output.get_size().columns
         if Settings.client["status_display"] == 2:
             size = size - Settings.client["status_width"] - 1
         return size

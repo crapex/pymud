@@ -1,7 +1,7 @@
 import asyncio, webbrowser
 
 from prompt_toolkit.layout import AnyContainer, ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
-from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame, RadioList
+from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame, RadioList 
 from prompt_toolkit.layout.dimension import Dimension, D
 from prompt_toolkit import ANSI, HTML
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
@@ -133,12 +133,14 @@ class LogSelectionDialog(BasicDialog):
     def __init__(self, text, values, modal=True):
         self._header_text = text
         self._selection_values = values
-        self._radio_list = RadioList(values = self._selection_values)
+        self._itemsCount = len(values)
+        if len(values) > 0:
+            self._radio_list = RadioList(values = self._selection_values)
+        else:
+            self._radio_list = Label('无记录'.center(13))
         super().__init__('选择查看的记录', modal)
 
     def create_body(self) -> AnyContainer:
-        
-
         body=HSplit([
             Label(text = self._header_text, dont_extend_height=True), 
             self._radio_list
@@ -151,6 +153,9 @@ class LogSelectionDialog(BasicDialog):
         return [ok_button, cancel_button]
     
     def btn_ok_clicked(self):
-        result = self._radio_list.current_value
-        self.set_done(result)
+        if self._itemsCount:
+            result = self._radio_list.current_value
+            self.set_done(result)
+        else:
+            self.set_done(False)
     

@@ -898,7 +898,7 @@
                 # 将所有可能的行走命令组合成匹配模式
                 pattern = "^({0})$".format("|".join(DIRECTIONS))
                 # 给定一个默认id。用于自动创建该类型时的默认参数
-                id = kwargs.get("id", "cmd_move")
+                kwargs.setdefault("id", "cmd_move")
                 super().__init__(session, pattern, *args, **kwargs)
                 self.session = Session
                 self.timeout = 10
@@ -922,6 +922,8 @@
 
             def __unload__(self):
                 self.session.delObjects(self._objs)
+                # 注意：命令的 unload 方法中，无论是否继承IConfig，都无需包括删除命令自身的命令
+                #   self.session.delObject(self)  意味着这句话不需要（不能有，会导致递归调用）
 
             async def execute(self, cmd, *args, **kwargs):
                 self.reset()
@@ -1259,7 +1261,7 @@
     SimpleCommand 类型的构造函数如下：
 
     .. code:: Python
-        
+
         class SimpleCommand(Command)
             def __init__(self, session, patterns, succ_tri, *args, **kwargs):
                 pass
@@ -1293,6 +1295,7 @@
     状态栏是指命令行下面的灰色背景的栏目，其左边部分可以通过代码设置显示纯文本信息。设置代码为：
 
     .. code:: Python
+        
         session.application.set_status('您要显示的信息')
 
     可以通过 pymud.cfg 文件中的 status_display , status_width, status_height 的组合使用设置状态窗口的显示位置和尺寸，可以显示在下方、右方或不显示。
