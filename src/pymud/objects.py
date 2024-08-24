@@ -322,7 +322,12 @@ class BaseObject:
     "内部缩写代码前缀"
 
     def __init__(self, session, *args, **kwargs):
-        self.session    = session
+        from .session import Session
+        if isinstance(session, Session):
+            self.session    = session
+        else:
+            assert("session must be an instance of class Session!")
+            
         self._enabled   = True              # give a default value
         self.log        = logging.getLogger(f"pymud.{self.__class__.__name__}")
         self.id         = kwargs.get("id", session.getUniqueID(self.__class__.__abbr__))

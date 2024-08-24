@@ -32,8 +32,8 @@ class ModuleInfo:
             if isinstance(attr, type) and attr.__module__ == self._module.__name__:
                 if (attr_name == "Configuration") or issubclass(attr, IConfig):
                     try:
-                        self._config[f"{self.name}.{attr_name}"] = attr(self.session)
-                        self.session.info(f"配置对象 {self.name}.{attr_name} 创建成功.")
+                        self._config[f"{self.name}.{attr_name}"] = attr(self.session, reload = reload)
+                        self.session.info(f"配置对象 {self.name}.{attr_name} {'重新' if reload else ''}创建成功.")
                     except Exception as e:
                         result = False
                         self.session.error(f"配置对象 {self.name}.{attr_name} 创建失败. 错误信息为: {e}")
@@ -106,6 +106,9 @@ class IConfig(metaclass = ABCMeta):
     用于提示PyMUD应用是否自动创建该配置类型的基础类（模拟接口）。
     
     继承 IConfig 类型让应用自动管理该类型，唯一需要的是，构造函数中，仅存在一个必须指定的参数 Session。
+
+    在应用自动创建 IConfig 实例时，除 session 参数外，还会传递一个 reload 参数 （bool类型），表示是首次加载还是重新加载特性。
+    可以从kwargs 中获取该参数，并针对性的设计相应代码。例如，重新加载相关联的其他模块等。
     """
     def __init__(self, session, *args, **kwargs):
         self.session = session
@@ -113,7 +116,6 @@ class IConfig(metaclass = ABCMeta):
     def __unload__(self):
         if self.session:
             self.session.delObject(self)
-
 
 class Plugin:
     """
