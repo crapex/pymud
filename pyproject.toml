@@ -1,7 +1,7 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.20.0a5"  # Required
+version = "0.20.0"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.7"
@@ -19,8 +19,8 @@ classifiers = [  # Optional
   #   3 - Alpha
   #   4 - Beta
   #   5 - Production/Stable
-  # "Development Status :: 5 - Production/Stable",
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
+  # "Development Status :: 3 - Alpha",
   "Intended Audience :: End Users/Desktop",
   "Topic :: Games/Entertainment :: Multi-User Dungeons (MUD)",
   "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

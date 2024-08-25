@@ -31,7 +31,7 @@
 
 ## 版本更新信息
 
-## 0.20.0 (2024-08-XX)
+## 0.20.0 (2024-08-25)
 + 功能调整: 将模块主入口函数从__main__.py中移动到main.py中，以使可以在当前目录下，可直接使用pymud，也可使用python -m pymud启动
 + 功能调整: 使用argsparser标准模块来配置命令行，可以使用 pymud -h 查看命令行具体参数及说明
 + 功能新增: 命令行参数增加指定启动目录的功能，参数为 -s, --startup_dir。即可以从任意目录通过指定脚本目录方式启动PyMUD了。
@@ -68,11 +68,6 @@
     - 使用示例:
 
     ```Python
-        # 所有对象均可以使用 addObject 直接添加到会话中，而不用管是什么具体类型
-        session.addObject(Timer(...))
-        session.addObject(Trigger(...))
-        session.addObject(Alias(...))
-
         # 所有对象均可以使用 delObject 直接从会话中移除，会自动根据对象类型推断，无需通过函数名区分
         session.delObject(self.tri1)
         session.delObject(self.ali1)
@@ -86,7 +81,6 @@
             GMCPTrigger(session, xxx)
         ]
 
-        session.addObjects(objs)    # 可以直接将一个数组中所有对象添加到会话中，会自动判断各对象类别
         session.delObjects(objs)    # 可以直接从会话中移除一个数组中的所有对象，会自动判断对象类别
     ```
 
