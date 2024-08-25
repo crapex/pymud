@@ -1004,14 +1004,16 @@
         self.session.exec('e')        
         self.session.exec('s;e;s')               # 还可以在调用中同时指定多个命令。通过 CmdMove 设计中的重试机制，可以确保三步行走到对应的位置
         
-        # 方式二: 直接使用session方法异步调用, 该调用方法可以获取返回值
+        # 方式二: 直接使用session方法异步调用, 该调用方法可以获取返回值, 但这样使用由于需要搜索命令，因此会存在一些性能损失
         result = await self.session.exec_async('e')       # 此处 e 会被匹配为 CmdMove 运行，因此其返回值即为 CmdMove 的 execute 方法运行的返回值。若未被匹配为某个 Command 对象，则返回 None
         result = await self.session.exec_async('s;e;s')   # 异步调用中也可以同时指定多个命令，但此时返回值为最后一个命令的返回值。          
         
-        # 方式三: 直接调用该命令的execute方法, 该调用方法也可以获取返回值
-        result = await self.session.cmds.cmd_move.execute('w;n;e') 
+        # 方式三: 直接调用该命令的execute方法, 该调用方法也可以获取返回值，这种性能损失最小，并且也可以延迟到对象调用时刻再获取
+        #         这种方式下，execute 只能接受一条指令，不能像前面一样传入 "s;e;s" 这种连续指令。
+        result = await self.session.cmds.cmd_move.execute("w") 
+        result = await self.session.cmds["cmd_move"].execute("w")       # 与上面一行等价
 
-        # 上面建议使用方式二来进行命令调用，因为这种调用将获取命令对象实例延迟到调用的时刻。如果修改了模块配置需要 #reload 的时候，引用此命令的模块不需要重新 #reload
+        # 上面建议使用方式三来进行命令调用，因为这种调用将获取命令对象实例延迟到调用的时刻。如果修改了模块配置需要 #reload 的时候，引用此命令的模块不需要重新 #reload。方式二虽然有相同效果，但是方式二存在
 
         # 在确保命令执行完毕后，并根据返回结果判断下一步处置：
         if result == self.SUCCESS:

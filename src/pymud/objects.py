@@ -400,7 +400,8 @@ class BaseObject:
         return self.__detailed__()
     
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled}'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled}'
 
 class GMCPTrigger(BaseObject):
     """
@@ -450,7 +451,8 @@ class GMCPTrigger(BaseObject):
             self._onSuccess(self.id, value, value_exp)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" {group}enabled = {self.enabled} '
             
 class MatchObject(BaseObject):
     """
@@ -524,11 +526,11 @@ class MatchObject(BaseObject):
                 self._mline = 0
 
     def reset(self):
-        "复位事件，用于async执行未等待结果时，对事件的复位"
+        "复位事件，用于async执行未等待结果时，对事件的复位。仅异步有效。"
         self.event.clear()
 
     def set(self):
-        "设置事件标记，用于人工强制触发"
+        "设置事件标记，用于人工强制触发，仅异步有效。"
         self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
@@ -624,7 +626,8 @@ class MatchObject(BaseObject):
         return self.state
     
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}"'
 
 class Alias(MatchObject):
     """
@@ -654,7 +657,8 @@ class SimpleAlias(Alias):
         self._codeblock.execute(self.session, id = id, line = line, wildcards = wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -705,7 +709,8 @@ class SimpleTrigger(Trigger):
         self._codeblock.execute(self.session, id = id, line = line, raw = raw, wildcards = wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -991,7 +996,8 @@ class Timer(BaseObject):
             self.startTimer()
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout}'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} timeout = {self.timeout}'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -1013,5 +1019,6 @@ class SimpleTimer(Timer):
         self._codeblock.execute(self.session, id = id)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
 

@@ -95,6 +95,9 @@
     - 例如， result = await self.session.cmds.cmd_runto.execute('rt yz') 与 result = await self.session.exec_async('rt yz') 等价，返回值相同
     - 但     result = await self.session.exec_async('rt yz;dzt')，该返回的result 仅是 dzt 命令的 execute 的返回值。 rt yz 命令返回值被丢弃。
 + 功能新增: 增加临时变量概念，变量名以下划线开头的为临时变量，此类变量不会被保存到 .mud 文件中。
++ 功能新增: 为 BaseObject 基类的 self.session 增加了 Session 类型限定，现在自定义 Command 等时候，使用 self.session 时会有 IntelliSence 函数智能提示了，所有帮助说明已补全
++ 问题修复: 修复 #var 等命令中，若含有中文则等号位置不对齐的问题
++ 功能调整: 在 #tri 等命令中，当对象的 group 为空时，将不再显示 group 属性，减少无用信息
 
 ## 0.19.4 (2024-04-20)
 + 功能调整: info 现在 msg 恢复为可接受任何类型参数，不一定是 str

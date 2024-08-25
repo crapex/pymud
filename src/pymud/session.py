@@ -4,7 +4,7 @@ from collections import OrderedDict
 import logging, queue
 from logging import FileHandler
 from logging.handlers import QueueHandler, QueueListener
-
+from wcwidth import wcswidth, wcwidth
 from .logger import Logger
 from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
@@ -764,7 +764,7 @@ class Session:
             lines = line.split(self.seperator)
             for ln in lines:
                 if Settings.client["echo_input"]:
-                    self.writetobuffer(f"\x1b[32m{ln}\x1b[0m")
+                    self.writetobuffer(f"\x1b[32m{ln}\x1b[0m", True)
                 else:
                     self.log.log(f"\x1b[32m{ln}\x1b[0m\n")
 
@@ -773,7 +773,7 @@ class Session:
                 
         else:
             if Settings.client["echo_input"]:
-                self.writetobuffer(f"\x1b[32m{line}\x1b[0m")
+                self.writetobuffer(f"\x1b[32m{line}\x1b[0m", True)
             else:
                 self.log.log(f"\x1b[32m{line}\x1b[0m\n")
 
@@ -1962,7 +1962,7 @@ class Session:
                 else:
                     vars_simple[k] = v
 
-            width = self.application.get_width()
+            width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
             
             title = f"  VARIABLE LIST IN SESSION {self.name}  "
             left = (width - len(title)) // 2
@@ -1970,6 +1970,7 @@ class Session:
             self.writetobuffer("="*left + title + "="*right, newline = True)
             
             # print vars in simple, 每个变量占40格，一行可以多个变量
+            # 这里可以考虑调整一下，默认40, 但如果一个变量值太长，则选择占两个位置
             var_count = len(vars_simple)
             var_per_line = (width - 2) // 40
             lines = math.ceil(var_count / var_per_line)
@@ -1985,14 +1986,18 @@ class Session:
                 self.writetobuffer(" " * left_space)
                 line_vars = var_keys[start:end]
                 for var in line_vars:
-                    self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
+                    repr = vars_simple[var].__repr__()
+                    vwidth = 22 - (wcswidth(repr) - len(repr))
+                    self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
+                    #self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
 
                 self.writetobuffer("", newline = True)
 
             # print vars in complex, 每个变量占1行
-            for k, v in vars_complex.items():
+            var_keys = sorted(vars_complex.keys())
+            for key in var_keys:
                 self.writetobuffer(" " * left_space)
-                self.writetobuffer("{0:>18} = {1}".format(k, v.__repr__()), newline = True)
+                self.writetobuffer("{0:>20} = {1}".format(key, vars_complex[key].__repr__()), newline = True)
 
             self.writetobuffer("="*width, newline = True)
 
@@ -2045,7 +2050,7 @@ class Session:
                 else:
                     vars_simple[k] = v
 
-            width = self.application.get_width()
+            width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
             
             title = f" GLOBAL VARIABLES LIST "
             left = (width - len(title)) // 2
@@ -2068,21 +2073,23 @@ class Session:
                 self.writetobuffer(" " * left_space)
                 line_vars = var_keys[start:end]
                 for var in line_vars:
-                    self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
+                    repr = vars_simple[var].__repr__()
+                    vwidth = 22 - (wcswidth(repr) - len(repr))
+                    self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
 
                 self.writetobuffer("", newline = True)
 
             # print vars in complex, 每个变量占1行
             for k, v in vars_complex.items():
                 self.writetobuffer(" " * left_space)
-                self.writetobuffer("{0:>18} = {1}".format(k, v.__repr__()), newline = True)
+                self.writetobuffer("{0:>20} = {1}".format(k, v.__repr__()), newline = True)
 
             self.writetobuffer("="*width, newline = True)
 
         elif len(args) == 1:
             var = args[0]
             if var in self.application.globals.keys():
-                self.info("{0:>18} = {1:<19}".format(var, self.application.get_globals(var).__repr__()), "全局变量")
+                self.info("{0:>20} = {1:<22}".format(var, self.application.get_globals(var).__repr__()), "全局变量")
             else:
                 self.info("全局空间不存在名称为 {} 的变量".format(var), "全局变量")
             
@@ -2944,7 +2951,7 @@ class Session:
             if name in self.plugins.keys():
                 plugin = self.plugins[name]
                 self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
-                self.writetobuffer(plugin.help)
+                self.writetobuffer(plugin.help, True)
 
     def handle_replace(self, code: CodeLine = None, *args, **kwargs):
         '''
