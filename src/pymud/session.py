@@ -653,24 +653,25 @@ class Session:
         self.display_line = raw_line
 
         if not self._ignore:
-            all_tris = list(self._triggers.values())
+            # 修改实现，形成列表时即排除非使能状态触发器，加快响应速度
+            #all_tris = list(self._triggers.values())
+            all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
             all_tris.sort(key = lambda tri: tri.priority)
 
             for tri in all_tris:
-                if isinstance(tri, Trigger) and tri.enabled:
-                    if tri.raw:
-                        state = tri.match(raw_line, docallback = True)
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = True)
+                else:
+                    state = tri.match(tri_line, docallback = True)
+
+                if state.result == Trigger.SUCCESS:
+                    if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
+                        self._triggers.pop(tri.id)
+
+                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                        break
                     else:
-                        state = tri.match(tri_line, docallback = True)
-
-                    if state.result == Trigger.SUCCESS:
-                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                            self._triggers.pop(tri.id)
-
-                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            break
-                        else:
-                            pass
+                        pass
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
@@ -2896,28 +2897,39 @@ class Session:
             lines.append(line)
 
         for raw_line in lines:
-            #raw_line = "".join(args)
             tri_line = self.getPlainText(raw_line)
 
-            all_tris = list(self._triggers.values())
+            all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
+            all_tris.sort(key = lambda tri: tri.priority)
+            # all_tris = list(self._triggers.values())
+            # all_tris.sort(key = lambda tri: tri.priority)
+
+            for tri in all_tris:
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = True)
+                else:
+                    state = tri.match(tri_line, docallback = True)
+
+                if state.result == Trigger.SUCCESS:
+                    self.info(f"使能的 {tri.__detailed__()} 被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD TRIGGER TEST")
+                    
+                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                        break
+
+
+            all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and not tri.enabled]
             all_tris.sort(key = lambda tri: tri.priority)
 
             for tri in all_tris:
-                if isinstance(tri, Trigger) and tri.enabled:
-                    if tri.raw:
-                        state = tri.match(raw_line, docallback = True)
-                    else:
-                        state = tri.match(tri_line, docallback = True)
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = True)
+                else:
+                    state = tri.match(tri_line, docallback = True)
 
-                    if state.result == Trigger.SUCCESS:
-                        self.info(f"TRIGGER {tri.id} 被触发", "PYMUD TRIGGER TEST")
-                        if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
-                            self._triggers.pop(tri.id)
-
-                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            break
-                        else:
-                            pass
+                if state.result == Trigger.SUCCESS:
+                    self.info(f"未使能的 {tri.__detailed__()} 可以被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD TRIGGER TEST")
+                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                        break
 
             if len(raw_line) > 0:
                 self.info(raw_line, "PYMUD TRIGGER TEST")
