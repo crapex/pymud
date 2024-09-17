@@ -2896,13 +2896,18 @@ class Session:
             lines = []
             lines.append(line)
 
+        self.info("PYMUD 触发器测试 开始")
+
         for raw_line in lines:
             tri_line = self.getPlainText(raw_line)
+
+            self.info(raw_line, "PYMUD 触发器测试 - 使能状态")
 
             all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
             all_tris.sort(key = lambda tri: tri.priority)
             # all_tris = list(self._triggers.values())
             # all_tris.sort(key = lambda tri: tri.priority)
+            idx = 1
 
             for tri in all_tris:
                 if tri.raw:
@@ -2911,15 +2916,20 @@ class Session:
                     state = tri.match(tri_line, docallback = True)
 
                 if state.result == Trigger.SUCCESS:
-                    self.info(f"使能的 {tri.__detailed__()} 被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD TRIGGER TEST")
+                    self.info(f"[{idx}] 使能的 {tri.__detailed__()} 被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD 触发器测试 - 使能状态")
                     
                     if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        break
+                        #break
+                        self.info(f"[{idx}] 该触发器未开启 keepEval , 将会阻止后续其他匹配的触发器进行触发")
 
+                    idx += 1
+
+            self.info(raw_line, "PYMUD 触发器测试 - 未使能状态")
 
             all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and not tri.enabled]
             all_tris.sort(key = lambda tri: tri.priority)
-
+            
+            idx = 1
             for tri in all_tris:
                 if tri.raw:
                     state = tri.match(raw_line, docallback = True)
@@ -2927,12 +2937,12 @@ class Session:
                     state = tri.match(tri_line, docallback = True)
 
                 if state.result == Trigger.SUCCESS:
-                    self.info(f"未使能的 {tri.__detailed__()} 可以被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD TRIGGER TEST")
+                    self.info(f"[{idx}] 未使能的 {tri.__detailed__()} 可以被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD 触发器测试 - 未使能状态")
                     if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        break
-
-            if len(raw_line) > 0:
-                self.info(raw_line, "PYMUD TRIGGER TEST")
+                        #break
+                        self.info(f"[{idx}] 该触发器未开启 keepEval , 将会阻止后续其他匹配的触发器进行触发")
+                    idx += 1
+        self.info("PYMUD 触发器测试 完毕")
 
     def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
         '''
