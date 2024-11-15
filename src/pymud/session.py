@@ -558,7 +558,7 @@ class Session:
 
         半数的数量由 Settings.client['buffer_lines'] 确定，默认为5000行。
         """
-        if (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
+        if (Settings.client["buffer_lines"] > 0) and (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
             self._line_count = self.buffer.clear_half()
 
     def feed_data(self, data) -> None:
