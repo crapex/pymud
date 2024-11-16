@@ -1,17 +1,17 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.20.0"  # Required
+version = "0.20.1"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.7"
 license = {file = "LICENSE.txt"}
 keywords = ["MUD", "multi-user dungeon", "client"]  # Optional
 authors = [
-  {name = "newstart@pkuxkx", email = "crapex@crapex.cc" } # Optional
+  {name = "newstart@pkuxkx", email = "crapex@hotmail.com" } # Optional
 ]
 maintainers = [
-  {name = "newstart@pkuxkx", email = "crapex@crapex.cc" } # Optional
+  {name = "newstart@pkuxkx", email = "crapex@hotmail.com" } # Optional
 ]
 
 classifiers = [  # Optional
