@@ -108,7 +108,10 @@ class Session:
         self.loop = loop or asyncio.get_running_loop()    
         self.syslog = logging.getLogger("pymud.Session")
 
-        self.application = app
+        from .pymud import PyMudApp
+        if isinstance(app, PyMudApp):
+            self.application = app
+            
         self.name = name
         self._transport = None
         self._protocol  = None
