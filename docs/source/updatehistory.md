@@ -1,5 +1,10 @@
 # 附录: 更新历史
 
+### 0.20.1 (2024-11-16)
++ 功能调整: 会话中触发器匹配实现进行部分调整，减少循环次数以提高响应速度
++ 功能调整: #test / #show 触发器测试功能调整，现在会对使能的和未使能的触发器均进行匹配测试。其中，#show 命令仅测试，而 #test 命令会导致触发器真正响应。
++ 功能新增: pymud对象新增了一个持续运行的1s的周期定时任务。该任务中会刷新页面显示。可以使用 session.application.addTimerTickCallback 和 session.application.removeTimerTickCallback 来注册和解除定时器回调。
+
 ## 0.20.0 (2024-08-25)
 + 功能调整: 将模块主入口函数从__main__.py中移动到main.py中，以使可以在当前目录下，可直接使用pymud，也可使用python -m pymud启动
 + 功能调整: 使用argsparser标准模块来配置命令行，可以使用 pymud -h 查看命令行具体参数及说明

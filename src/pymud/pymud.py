@@ -93,6 +93,7 @@ class PyMudApp:
         self._mouse_support = True
         self._plugins  = DotDict()              # 增加 插件 字典
         self._globals  = DotDict()              # 增加所有session使用的全局变量
+        self._onTimerCallbacks = dict()
         self.sessions = {}
         self.current_session = None
         self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
@@ -149,6 +150,24 @@ class PyMudApp:
         self.logSessionBuffer.name = "LOGBUFFER"
 
         self.load_plugins()
+
+    async def onSystemTimerTick(self):
+        while True:
+            await asyncio.sleep(1)
+            self.app.invalidate()
+            for callback in self._onTimerCallbacks.values():
+                if callable(callback):
+                    callback()
+
+    def addTimerTickCallback(self, name, func):
+        '注册一个系统定时器回调，每1s触发一次。指定name为回调函数关键字，func为回调函数。'
+        if callable(func) and (not name in self._onTimerCallbacks.keys()):
+            self._onTimerCallbacks[name] = func
+
+    def removeTimerTickCallback(self, name):
+        '从系统定时器回调中移除一个回调函数。指定name为回调函数关键字。'
+        if name in self._onTimerCallbacks.keys():
+            self._onTimerCallbacks.pop(name)
 
     def initUI(self):
         """初始化UI界面"""
@@ -1145,12 +1164,13 @@ class PyMudApp:
 
     async def run_async(self):
         "以异步方式运行本程序"
-        await self.app.run_async()
+        asyncio.create_task(self.onSystemTimerTick())
+        await self.app.run_async(set_exception_handler = False)
 
     def run(self):
         "运行本程序"
-        self.app.run()
-        #asyncio.run(self.run_async())
+        #self.app.run(set_exception_handler = False)
+        asyncio.run(self.run_async())
 
     def get_width(self):
         "获取ConsoleView的实际宽度，等于输出宽度,（已经没有左右线条和滚动条了）"

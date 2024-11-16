@@ -100,6 +100,7 @@ class Session:
         "ig"  : "ignore",
         "t+"  : "ignore",
         "t-"  : "ignore",
+        "show": "test",
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, loop = None, **kwargs):
@@ -2873,19 +2874,26 @@ class Session:
 
     def handle_test(self, code: CodeLine = None, *args, **kwargs):
         '''
-        嵌入命令 #test 的执行函数，触发器测试命令。类似于zmud的#show命令。
+        嵌入命令 #test / #show 的执行函数，触发器测试命令。类似于zmud的#show命令。
         该函数不应该在代码中直接调用。
 
         使用:
-            - #test {some_text}: 测试服务器收到{some_text}时的触发器响应情况
+            - #test {some_text}: 测试服务器收到{some_text}时的触发器响应情况。此时，触发器不会真的响应。
+            - #tt {some_test}: 与#test 的差异是，若存在匹配的触发器，无论其是否被使能，该触发器均会实际响应。
 
         示例:
-            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试
+            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（仅显示触发测试情况）
             - ``#test %copy``: 复制一句话，模拟服务器再次收到复制的这句内容时的情况进行触发器测试
+            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（会实际导致触发器动作）
 
         注意:
-            - #test命令测试触发器时，enabled为False的触发器不会响应。
+            - #test命令测试触发器时，触发器不会真的响应。
+            - #tt命令测试触发器时，触发器无论是否使能，均会真的响应。
         '''
+        cmd = code.code[1].lower()
+        docallback = False
+        if cmd == "test":
+            docallback = True
 
         new_cmd_text, new_code = code.expand(self, *args, **kwargs)
         line = new_cmd_text[6:]       # 取出#test 之后的所有内容
@@ -2896,53 +2904,82 @@ class Session:
             lines = []
             lines.append(line)
 
-        self.info("PYMUD 触发器测试 开始")
+        info_all = []
+        info_enabled = []               # 组织好每一行显示的内容之后，统一输出，不逐行info
+        info_disabled = []
+        triggered = 0
+        triggered_enabled = 0
+        triggered_disabled = 0
 
+
+        tris_enabled = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
+        tris_enabled.sort(key = lambda tri: tri.priority)
+
+        tris_disabled = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and not tri.enabled]
+        tris_disabled.sort(key = lambda tri: tri.priority)
+        
         for raw_line in lines:
             tri_line = self.getPlainText(raw_line)
-
-            self.info(raw_line, "PYMUD 触发器测试 - 使能状态")
-
-            all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
-            all_tris.sort(key = lambda tri: tri.priority)
-            # all_tris = list(self._triggers.values())
-            # all_tris.sort(key = lambda tri: tri.priority)
-            idx = 1
-
-            for tri in all_tris:
-                if tri.raw:
-                    state = tri.match(raw_line, docallback = True)
-                else:
-                    state = tri.match(tri_line, docallback = True)
-
-                if state.result == Trigger.SUCCESS:
-                    self.info(f"[{idx}] 使能的 {tri.__detailed__()} 被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD 触发器测试 - 使能状态")
-                    
-                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        #break
-                        self.info(f"[{idx}] 该触发器未开启 keepEval , 将会阻止后续其他匹配的触发器进行触发")
-
-                    idx += 1
-
-            self.info(raw_line, "PYMUD 触发器测试 - 未使能状态")
-
-            all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and not tri.enabled]
-            all_tris.sort(key = lambda tri: tri.priority)
             
-            idx = 1
-            for tri in all_tris:
+            block = False
+            for tri in tris_enabled:
                 if tri.raw:
-                    state = tri.match(raw_line, docallback = True)
+                    state = tri.match(raw_line, docallback = docallback)
                 else:
-                    state = tri.match(tri_line, docallback = True)
+                    state = tri.match(tri_line, docallback = docallback)
 
                 if state.result == Trigger.SUCCESS:
-                    self.info(f"[{idx}] 未使能的 {tri.__detailed__()} 可以被触发。\n     id: {state.id}\n     wildcards: {state.wildcards}", "PYMUD 触发器测试 - 未使能状态")
-                    if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                        #break
-                        self.info(f"[{idx}] 该触发器未开启 keepEval , 将会阻止后续其他匹配的触发器进行触发")
-                    idx += 1
-        self.info("PYMUD 触发器测试 完毕")
+                    triggered_enabled += 1
+                    if not block: 
+                        triggered += 1
+                        info_enabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 正常触发。{Settings.CLR_STYLE}")
+                        info_enabled.append(f"    {Settings.INFO_STYLE}捕获：{state.wildcards}{Settings.CLR_STYLE}")
+                    
+                        if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
+                            info_enabled.append(f"    {Settings.WARN_STYLE}该触发器未开启keepEval, 会阻止后续触发器。{Settings.CLR_STYLE}")
+                            block = True
+                    else:
+                        info_enabled.append(f"  {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
+            
+            
+            for tri in tris_disabled:
+                if tri.raw:
+                    state = tri.match(raw_line, docallback = docallback)
+                else:
+                    state = tri.match(tri_line, docallback = docallback)
+
+                if state.result == Trigger.SUCCESS:
+                    triggered_disabled += 1
+                    info_disabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 可以匹配触发。{Settings.CLR_STYLE}")
+
+            if triggered_enabled + triggered_disabled == 0:
+                info_all.append("")
+
+        if triggered_enabled == 0:
+            info_enabled.insert(0, f"使能的触发器中，没有可以触发的。")
+        elif triggered < triggered_enabled:
+            info_enabled.insert(0, f"使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
+        else:
+            info_enabled.insert(0, f"使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
+
+        if triggered_disabled > 0:
+            info_disabled.insert(0, f"未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
+        else:
+            info_disabled.insert(0, f"未使能触发器，没有可以匹配的。")
+
+        if triggered_enabled + triggered_disabled == 0:
+            info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+            info_all.append(f"  测试内容: {line}")
+            info_all.append(f"  测试结果: 没有可以匹配的触发器。")
+        else:
+            info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+            info_all.append(f"  测试内容: {line}")
+            info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
+            info_all.extend(info_enabled)
+            info_all.extend(info_disabled)
+
+        self.info("\n".join(info_all), "PYMUD 触发器测试")
+        #self.info("PYMUD 触发器测试 完毕")
 
     def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -3084,16 +3121,17 @@ class Session:
         self.error(new_text[6:])
 
     def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
-        msg = f"{msg}"
+        # msg = f"{msg}"
 
-        if Settings.client["newline"] in msg:
-            new_lines = list()
-            msg_lines = msg.split(Settings.client["newline"])
-            for line in msg_lines:
-                new_lines.append("{}{}".format(style, line))
+        # if Settings.client["newline"] in msg:
+        #     new_lines = list()
+        #     msg_lines = msg.split(Settings.client["newline"])
+        #     for line in msg_lines:
+        #         new_lines.append("{}{}".format(style, line))
 
-            msg = Settings.client["newline"].join(new_lines)
-                
+        #     msg = Settings.client["newline"].join(new_lines)
+
+        # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理
         self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):

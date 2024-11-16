@@ -530,7 +530,7 @@ class MatchObject(BaseObject):
         self.event.clear()
 
     def set(self):
-        "设置事件标记，用于人工强制触发，仅异步有效。"
+        "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"
         self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
@@ -597,14 +597,16 @@ class MatchObject(BaseObject):
         state = BaseObject.State(result, self.id, "\n".join(self.lines), tuple(self.wildcards))
 
         # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
-        if self.sync and docallback:
-            if state.result == self.SUCCESS:
-                self._onSuccess(state.id, state.line, state.wildcards)
-                self.event.set()
-            elif state.result == self.FAILURE:
-                self._onFailure(state.id, state.line, state.wildcards)
-            elif state.result == self.TIMEOUT:
-                self._onTimeout(state.id, state.line, state.wildcards)
+        # 当docallback为真时，是真正的进行匹配和触发，为false时，仅返回匹配结果，不实际触发
+        if docallback:
+            self.event.set()
+            if self.sync:
+                if state.result == self.SUCCESS:
+                    self._onSuccess(state.id, state.line, state.wildcards)
+                elif state.result == self.FAILURE:
+                    self._onFailure(state.id, state.line, state.wildcards)
+                elif state.result == self.TIMEOUT:
+                    self._onTimeout(state.id, state.line, state.wildcards)
 
         self.state = state
         return state

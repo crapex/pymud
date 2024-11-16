@@ -1,7 +1,7 @@
 # External Libraries
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
-import time
+import time, re, logging
 
 from typing import Iterable
 from prompt_toolkit import ANSI
@@ -64,6 +64,10 @@ class MudFormatProcessor(Processor):
         self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
         self.SINGLE_LINES = set("┌└├┬┼┴╭╰─")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
+        self.START_COLOR_REGX  = re.compile(r"^\[[\d;]+m")
+        self.COLOR_REGX   = re.compile(r"\[[\d;]+m")
+        self._color_start = ""
+        self._color_correction = False
 
     def width_correction(self, line: str) -> str:
         new_str = []
@@ -87,11 +91,36 @@ class MudFormatProcessor(Processor):
     def tab_correction(self, line: str):
         return line.replace("\t", " " * Settings.client["tabstop"])
 
+    def color_correction(self, line: str):
+        # 注：发现processer处理并非自上而下逐行处理的，因此不能使用这种颜色校正方式。
+        if self._color_correction:
+            other = self.COLOR_REGX.findall(line)
+
+            line = f"{self._color_start}{line}"
+            logging.debug(f"已校正增加颜色标志 {self._color_start}: {line}")
+
+            if other:
+                self._color_correction = False
+                self._color_start = ""
+                logging.debug(f"颜色校正结束: {line}")
+        else:
+            color = self.START_COLOR_REGX.findall(line)
+            if color:
+                other = self.COLOR_REGX.findall(line)
+                if len(other) == 1:
+                    self._color_correction = True
+                    self._color_start = color[0]
+                    logging.debug(f"获取到一个颜色开头 {color[0]}: {line}")
+
+        return line
+
     def line_correction(self, line: str):
         # 处理\r符号（^M）
         line = self.return_correction(line)
         # 处理Tab(\r)符号（^I）
         line = self.tab_correction(line)
+        # 处理颜色跨行问题。发现processer处理并非自上而下逐行处理的，因此不能使用这种颜色校正方式。
+        # line = self.color_correction(line)
         # 美化（解决中文英文在Console中不对齐的问题）
         if Settings.client["beautify"]:
             line = self.width_correction(line)
@@ -429,9 +458,9 @@ class SessionBufferControl(BufferControl):
 
                     if double_click:
                         start = buffer.document.translate_row_col_to_index(position.y, 0)
-                        end = buffer.document.translate_row_col_to_index(position.y, 10000000)
+                        end = buffer.document.translate_row_col_to_index(position.y + 1, 0) - 1
                         buffer.cursor_position = start
-                        buffer.start_selection(selection_type=SelectionType.CHARACTERS)
+                        buffer.start_selection(selection_type=SelectionType.LINES)
                         buffer.cursor_position = end
 
                 else:
