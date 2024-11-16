@@ -599,7 +599,6 @@ class MatchObject(BaseObject):
         # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
         # 当docallback为真时，是真正的进行匹配和触发，为false时，仅返回匹配结果，不实际触发
         if docallback:
-            self.event.set()
             if self.sync:
                 if state.result == self.SUCCESS:
                     self._onSuccess(state.id, state.line, state.wildcards)
@@ -607,7 +606,10 @@ class MatchObject(BaseObject):
                     self._onFailure(state.id, state.line, state.wildcards)
                 elif state.result == self.TIMEOUT:
                     self._onTimeout(state.id, state.line, state.wildcards)
-
+            
+            if state.result == self.SUCCESS:
+                self.event.set()
+                
         self.state = state
         return state
     
