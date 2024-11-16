@@ -3121,17 +3121,17 @@ class Session:
         self.error(new_text[6:])
 
     def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
-        # msg = f"{msg}"
+        msg = f"{msg}"
 
-        # if Settings.client["newline"] in msg:
-        #     new_lines = list()
-        #     msg_lines = msg.split(Settings.client["newline"])
-        #     for line in msg_lines:
-        #         new_lines.append("{}{}".format(style, line))
+        if Settings.client["newline"] in msg:
+            new_lines = list()
+            msg_lines = msg.split(Settings.client["newline"])
+            for line in msg_lines:
+                new_lines.append("{}{}".format(style, line))
 
-        #     msg = Settings.client["newline"].join(new_lines)
+            msg = Settings.client["newline"].join(new_lines)
 
-        # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理
+        # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理(不行，还得恢复)
         self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
