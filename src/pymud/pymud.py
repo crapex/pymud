@@ -484,6 +484,7 @@ class PyMudApp:
 
         ``注意: 复制的内容仅存在于运行环境的剪贴板中。若使用ssh远程，该复制命令不能访问本地剪贴板。``
         """
+        
         b = self.consoleView.buffer
         if b.selection_state:
             cur1, cur2 = b.selection_state.original_cursor_position, b.document.cursor_position
@@ -501,7 +502,8 @@ class PyMudApp:
                     line = self.mudFormatProc.line_correction(b.document.current_line)
                     start = max(0, scol)
                     end = min(ecol, len(line))
-                    line_plain = re.sub(r"\x1b\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                    #line_plain = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                    line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
@@ -513,7 +515,8 @@ class PyMudApp:
                     lines = []
                     for row in range(srow, erow + 1):
                         line = b.document.lines[row]
-                        line_plain = re.sub(r"\x1b\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                        #line_plain = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                        line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
 
                     self.app.clipboard.set_text("\n".join(lines))

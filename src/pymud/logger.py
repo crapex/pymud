@@ -16,7 +16,7 @@ class Logger:
     :param raw: 记录带ANSI标记的原始内容，还是记录纯文本内容，默认为True，即记录带ANSI标记的原始内容。
     """
 
-    _esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
+    # _esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
     def __init__(self, name, mode = 'a', encoding = "utf-8", errors = "ignore", raw = False):
         self._name = name
@@ -147,7 +147,9 @@ class Logger:
                         newline = True
 
                     if not self._raw:
-                        data = self._esc_regx.sub("", data)
+                        from .session import Session
+                        data = Session.PLAIN_TEXT_REGX.sub("", data)
+                        #data = self._esc_regx.sub("", data)
 
                     self._stream.write(data)
 

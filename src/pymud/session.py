@@ -30,7 +30,8 @@ class Session:
 
     """
     #_esc_regx = re.compile("\x1b\\[[^mz]+[mz]")
-    _esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
+    #_esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
+    PLAIN_TEXT_REGX = re.compile("\x1b\\[[0-9;]*[a-zA-Z]", flags = re.IGNORECASE | re.ASCII)
 
     _sys_commands = (
         "help",
@@ -532,7 +533,7 @@ class Session:
         :return: 经处理后的纯文本字符串
         
         """
-        plainText = self._esc_regx.sub("", rawText)
+        plainText = Session.PLAIN_TEXT_REGX.sub("", rawText)
         if trim_newline:
             plainText = plainText.rstrip("\n").rstrip("\r")
 
