@@ -2038,7 +2038,7 @@ class Session:
                     line = " " * (left_margin + KEY_WIDTH + 4)
                     for k, v in value.items():
                         subvalue_dis = "{},".format(v.__repr__())
-                        allow_len_subvalue = allow_len - max_len - 2
+                        allow_len_subvalue = allow_len - max_len - 4
                         if wcswidth(subvalue_dis) > allow_len_subvalue:
                             subvalue_lines = self.splitByPrintableWidth(subvalue_dis, allow_len_subvalue)
                             line += "{0}: ".format(k.ljust(max_len))
@@ -2049,7 +2049,7 @@ class Session:
 
                             line = " " * (left_margin + KEY_WIDTH + 4)
                         else:
-                            val_line = "{0}: {1},".format(k.ljust(max_len), subvalue_dis)
+                            val_line = "{0}: {1}".format(k.ljust(max_len), subvalue_dis)
                             line += val_line
                             display_lines.append(line)
                             line = " " * (left_margin + KEY_WIDTH + 4)
