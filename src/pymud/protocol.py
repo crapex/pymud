@@ -475,7 +475,7 @@ class MudClientProtocol(Protocol):
                 self._mtts_index += 1
                 self.log.debug('回复第二次MTTS子协商: IAC SB TTYPE IS "XTERM" IAC SE')
             elif self._mtts_index == 2:
-                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置775（支持ANSI, VT100, UTF-8, TRUECOLOR, MNES），后续功能完善后再更改
+                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置783（支持ANSI, VT100, UTF-8, 256 COLORS, TRUECOLOR, MNES），后续功能完善后再更改
                 # 根据完善的终端模拟功能，修改终端标准
                 #       1 "ANSI"              Client supports all common ANSI color codes.
                 #       2 "VT100"             Client supports all common VT100 codes.
@@ -489,9 +489,9 @@ class MudClientProtocol(Protocol):
                 #     512 "MNES"              Client supports the Mud New Environment Standard for information exchange.
                 #    1024 "MSLP"              Client supports the Mud Server Link Protocol for clickable link handling.
                 #    2048 "SSL"               Client supports SSL for data encryption, preferably TLS 1.3 or higher.
-                self.session.write(IAC + SB + TTYPE + IS + b"MTTS 775" + IAC + SE)
+                self.session.write(IAC + SB + TTYPE + IS + b"MTTS 783" + IAC + SE)
                 self._mtts_index += 1
-                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 775" IAC SE')
+                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 783" IAC SE')
             else:
                 self.log.warning(f'收到第{self._mtts_index + 1}次(正常为3次)的MTTS子协商, 将不予应答')
         else:

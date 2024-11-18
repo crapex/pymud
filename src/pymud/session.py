@@ -1,4 +1,4 @@
-import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig, time
+import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig, time, dataclasses
 from collections.abc import Iterable
 from collections import OrderedDict
 import logging, queue
@@ -1930,6 +1930,82 @@ class Session:
 
         self.disconnect()
 
+    def buildDisplayLines(self, vars: DotDict, title: str):
+        VAR_WIDTH = 43
+        display_lines = []
+        vars_simple = {}
+        vars_complex = {}
+
+        for k, v in vars.items():
+            if k in ("%line", "%raw"):
+                continue
+
+            if dataclasses.is_dataclass(v) or (isinstance(v, Iterable) and not isinstance(v, str)):
+                vars_complex[k] = v
+            else:
+                vars_simple[k] = v
+
+        totalWidth = self.application.get_width() - 1
+
+        # draw title
+        left_margin = (totalWidth - len(title)) // 2
+        right_margin = totalWidth - len(title) - left_margin
+        title_line = "{}{}{}".format("=" * left_margin, title, "=" * right_margin)
+        display_lines.append(title_line)
+
+        # draw simple vars
+        vars_per_line = totalWidth // VAR_WIDTH
+        left_margin   = (totalWidth - vars_per_line * VAR_WIDTH) // 2
+        if left_margin > 4: left_margin = 4
+
+        line = " " * left_margin
+        cursor = left_margin
+        var_count = 0
+
+        var_keys = sorted(vars_simple.keys())
+        for key in var_keys:
+            if len(key) < 20:
+                name = key.rjust(20)
+            else:
+                name = key.rjust(20 + VAR_WIDTH)
+
+            value = vars_simple[key].__repr__()
+            var_display = "{} = {}".format(name, value)
+            
+            if (cursor + wcswidth(var_display) > totalWidth) or (var_count >= vars_per_line):
+                display_lines.append(line)
+
+                line = " " * left_margin
+                cursor = left_margin
+                var_count = 0
+
+            line += var_display
+            cursor += wcswidth(var_display)
+            var_count += 1
+
+            # 下一处判定
+            for x in range(vars_per_line, 0, -1):
+                next_start = left_margin + (vars_per_line - x) * VAR_WIDTH
+                if cursor < next_start:
+                    line += " " * (next_start - cursor)
+                    cursor = next_start
+
+                    if (vars_per_line - x) > var_count:
+                        var_count = (vars_per_line - x)
+                    break
+
+        if cursor > left_margin:
+            display_lines.append(line)
+
+        var_keys = sorted(vars_complex.keys())
+        for key in var_keys:
+            line = "{0}{1:>20} = {2}".format(" " * left_margin, key, vars_complex[key].__repr__())
+            display_lines.append(line)
+                                            
+        display_lines.append("=" * totalWidth)
+
+        return display_lines
+            
     def handle_variable(self, code: CodeLine = None, *args, **kwargs):
         '''
         嵌入命令 #variable / #var 的执行函数，操作会话变量。
@@ -1955,57 +2031,62 @@ class Session:
         #args = code.code[2:]
 
         if len(args) == 0:
-            vars = self._variables
-            vars_simple = {}
-            vars_complex = {}
-            for k, v in vars.items():
-                # 不显示line, raw两个系统变量
-                if k in ("%line", "%raw"):
-                    continue
+            # vars = self._variables
+            # vars_simple = {}
+            # vars_complex = {}
+            # for k, v in vars.items():
+            #     # 不显示line, raw两个系统变量
+            #     if k in ("%line", "%raw"):
+            #         continue
 
-                if isinstance(v, Iterable) and not isinstance(v, str):
-                    vars_complex[k] = v
-                else:
-                    vars_simple[k] = v
+            #     if isinstance(v, Iterable) and not isinstance(v, str):
+            #         vars_complex[k] = v
+            #     else:
+            #         vars_simple[k] = v
 
-            width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
+            # width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
             
-            title = f"  VARIABLE LIST IN SESSION {self.name}  "
-            left = (width - len(title)) // 2
-            right = width - len(title) - left
-            self.writetobuffer("="*left + title + "="*right, newline = True)
+            # title = f"  VARIABLE LIST IN SESSION {self.name}  "
+            # left = (width - len(title)) // 2
+            # right = width - len(title) - left
+            # self.writetobuffer("="*left + title + "="*right, newline = True)
             
-            # print vars in simple, 每个变量占40格，一行可以多个变量
-            # 这里可以考虑调整一下，默认40, 但如果一个变量值太长，则选择占两个位置
-            var_count = len(vars_simple)
-            var_per_line = (width - 2) // 40
-            lines = math.ceil(var_count / var_per_line)
-            left_space = (width - var_per_line * 40) // 2
-            if left_space > 4:  left_space = 4
+            # # print vars in simple, 每个变量占40格，一行可以多个变量
+            # # 这里可以考虑调整一下，默认40, 但如果一个变量值太长，则选择占两个位置
+            # var_count = len(vars_simple)
+            # var_per_line = (width - 2) // 40
+            # lines = math.ceil(var_count / var_per_line)
+            # left_space = (width - var_per_line * 40) // 2
+            # if left_space > 4:  left_space = 4
             
-            var_keys = sorted(vars_simple.keys())
+            # var_keys = sorted(vars_simple.keys())
 
-            for idx in range(0, lines):
-                start = idx * var_per_line
-                end   = (idx + 1) * var_per_line
-                if end > var_count: end = var_count
-                self.writetobuffer(" " * left_space)
-                line_vars = var_keys[start:end]
-                for var in line_vars:
-                    repr = vars_simple[var].__repr__()
-                    vwidth = 22 - (wcswidth(repr) - len(repr))
-                    self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
-                    #self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
+            # for idx in range(0, lines):
+            #     start = idx * var_per_line
+            #     end   = (idx + 1) * var_per_line
+            #     if end > var_count: end = var_count
+            #     self.writetobuffer(" " * left_space)
+            #     line_vars = var_keys[start:end]
+            #     for var in line_vars:
+            #         repr = vars_simple[var].__repr__()
+            #         vwidth = 22 - (wcswidth(repr) - len(repr))
+            #         self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
+            #         #self.writetobuffer("{0:>18} = {1:<19}".format(var, vars_simple[var].__repr__()))
 
-                self.writetobuffer("", newline = True)
+            #     self.writetobuffer("", newline = True)
 
-            # print vars in complex, 每个变量占1行
-            var_keys = sorted(vars_complex.keys())
-            for key in var_keys:
-                self.writetobuffer(" " * left_space)
-                self.writetobuffer("{0:>20} = {1}".format(key, vars_complex[key].__repr__()), newline = True)
+            # # print vars in complex, 每个变量占1行
+            # var_keys = sorted(vars_complex.keys())
+            # for key in var_keys:
+            #     self.writetobuffer(" " * left_space)
+            #     self.writetobuffer("{0:>20} = {1}".format(key, vars_complex[key].__repr__()), newline = True)
 
-            self.writetobuffer("="*width, newline = True)
+            # self.writetobuffer("="*width, newline = True)
+            
+            lines = self.buildDisplayLines(self._variables, f"  VARIABLE LIST IN SESSION {self.name}  ")
+            
+            for line in lines:
+                self.writetobuffer(line, newline = True)
 
         elif len(args) == 1:
             if args[0] in self._variables.keys():
@@ -2047,50 +2128,55 @@ class Session:
         #args = code.code[2:]
 
         if len(args) == 0:
-            vars = self.application.globals
-            vars_simple = {}
-            vars_complex = {}
-            for k, v in vars.items():
-                if isinstance(v, Iterable) and not isinstance(v, str):
-                    vars_complex[k] = v
-                else:
-                    vars_simple[k] = v
+            # vars = self.application.globals
+            # vars_simple = {}
+            # vars_complex = {}
+            # for k, v in vars.items():
+            #     if isinstance(v, Iterable) and not isinstance(v, str):
+            #         vars_complex[k] = v
+            #     else:
+            #         vars_simple[k] = v
 
-            width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
+            # width = self.application.get_width() - 2        # 保留2个字符，防止 > 导致换行
             
-            title = f" GLOBAL VARIABLES LIST "
-            left = (width - len(title)) // 2
-            right = width - len(title) - left
-            self.writetobuffer("="*left + title + "="*right, newline = True)
+            # title = f" GLOBAL VARIABLES LIST "
+            # left = (width - len(title)) // 2
+            # right = width - len(title) - left
+            # self.writetobuffer("="*left + title + "="*right, newline = True)
             
-            # print vars in simple, 每个变量占40格，一行可以多个变量
-            var_count = len(vars_simple)
-            var_per_line = (width - 2) // 40
-            lines = math.ceil(var_count / var_per_line)
-            left_space = (width - var_per_line * 40) // 2
-            if left_space > 4:  left_space = 4
+            # # print vars in simple, 每个变量占40格，一行可以多个变量
+            # var_count = len(vars_simple)
+            # var_per_line = (width - 2) // 40
+            # lines = math.ceil(var_count / var_per_line)
+            # left_space = (width - var_per_line * 40) // 2
+            # if left_space > 4:  left_space = 4
             
-            var_keys = sorted(vars_simple.keys())
+            # var_keys = sorted(vars_simple.keys())
 
-            for idx in range(0, lines):
-                start = idx * var_per_line
-                end   = (idx + 1) * var_per_line
-                if end > var_count: end = var_count
-                self.writetobuffer(" " * left_space)
-                line_vars = var_keys[start:end]
-                for var in line_vars:
-                    repr = vars_simple[var].__repr__()
-                    vwidth = 22 - (wcswidth(repr) - len(repr))
-                    self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
+            # for idx in range(0, lines):
+            #     start = idx * var_per_line
+            #     end   = (idx + 1) * var_per_line
+            #     if end > var_count: end = var_count
+            #     self.writetobuffer(" " * left_space)
+            #     line_vars = var_keys[start:end]
+            #     for var in line_vars:
+            #         repr = vars_simple[var].__repr__()
+            #         vwidth = 22 - (wcswidth(repr) - len(repr))
+            #         self.writetobuffer("{0} = {1}".format(var.rjust(20), repr.ljust(vwidth)))
 
-                self.writetobuffer("", newline = True)
+            #     self.writetobuffer("", newline = True)
 
-            # print vars in complex, 每个变量占1行
-            for k, v in vars_complex.items():
-                self.writetobuffer(" " * left_space)
-                self.writetobuffer("{0:>20} = {1}".format(k, v.__repr__()), newline = True)
+            # # print vars in complex, 每个变量占1行
+            # for k, v in vars_complex.items():
+            #     self.writetobuffer(" " * left_space)
+            #     self.writetobuffer("{0:>20} = {1}".format(k, v.__repr__()), newline = True)
 
-            self.writetobuffer("="*width, newline = True)
+            # self.writetobuffer("="*width, newline = True)
+
+            lines = self.buildDisplayLines(self.application.globals, f" GLOBAL VARIABLES LIST ")
+            
+            for line in lines:
+                self.writetobuffer(line, newline = True)
 
         elif len(args) == 1:
             var = args[0]
