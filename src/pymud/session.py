@@ -1962,7 +1962,7 @@ class Session:
         vars_complex = {}
 
         for k, v in vars.items():
-            if k in ("%line", "%raw"):
+            if k in ("%line", "%raw", "%copy"):
                 continue
 
             if dataclasses.is_dataclass(v) or (isinstance(v, Iterable) and not isinstance(v, str)):
@@ -1996,8 +1996,8 @@ class Session:
             else:
                 name = key.rjust(KEY_WIDTH + VAR_WIDTH)
 
-            value_dis = vars_simple[key].__repr__()
-            var_display = "{} = {}".format(name, value_dis)
+            #value_dis = vars_simple[key].__repr__()
+            var_display = "{0} = {1}".format(name, vars_simple[key])
             
             if (cursor + wcswidth(var_display) > totalWidth) or (var_count >= vars_per_line):
                 display_lines.append(line)
