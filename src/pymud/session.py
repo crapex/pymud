@@ -1930,8 +1930,33 @@ class Session:
 
         self.disconnect()
 
+    def getMaxLength(self, iter: Iterable):
+        return wcswidth(sorted(iter, key = lambda s: wcswidth(s), reverse = True)[0])
+
+    def splitByPrintableWidth(self, str, printable_length):
+        strlist = []
+        startindex = 0
+        remain = False
+        split_str = ""
+        for idx in range(1, len(str)):
+            remain = True
+            split_str = str[startindex:idx]
+            if wcswidth(split_str) >= printable_length:
+                strlist.append(split_str)
+                startindex = idx
+                remain = False
+
+        if remain:
+            strlist.append(str[startindex:])
+
+        #self.info(f"原: {str}, 分隔为 {printable_length}, 结果为 {strlist}")
+        return strlist
+
     def buildDisplayLines(self, vars: DotDict, title: str):
-        VAR_WIDTH = 43
+        MIN_MARGIN = 4
+        KEY_WIDTH = (self.getMaxLength(vars.keys()) // 4) * 4 + 4
+        VALUE_WIDTH = 20
+        VAR_WIDTH = KEY_WIDTH + 3 + VALUE_WIDTH
         display_lines = []
         vars_simple = {}
         vars_complex = {}
@@ -1945,7 +1970,7 @@ class Session:
             else:
                 vars_simple[k] = v
 
-        totalWidth = self.application.get_width() - 1
+        totalWidth = self.application.get_width() - 2
 
         # draw title
         left_margin = (totalWidth - len(title)) // 2
@@ -1956,7 +1981,9 @@ class Session:
         # draw simple vars
         vars_per_line = totalWidth // VAR_WIDTH
         left_margin   = (totalWidth - vars_per_line * VAR_WIDTH) // 2
-        if left_margin > 4: left_margin = 4
+        left_margin = min(MIN_MARGIN, left_margin)
+        right_margin = totalWidth - vars_per_line * VAR_WIDTH - left_margin
+        right_margin = min(left_margin, right_margin)
 
         line = " " * left_margin
         cursor = left_margin
@@ -1964,13 +1991,13 @@ class Session:
 
         var_keys = sorted(vars_simple.keys())
         for key in var_keys:
-            if len(key) < 20:
-                name = key.rjust(20)
+            if len(key) < KEY_WIDTH:
+                name = key.rjust(KEY_WIDTH)
             else:
-                name = key.rjust(20 + VAR_WIDTH)
+                name = key.rjust(KEY_WIDTH + VAR_WIDTH)
 
-            value = vars_simple[key].__repr__()
-            var_display = "{} = {}".format(name, value)
+            value_dis = vars_simple[key].__repr__()
+            var_display = "{} = {}".format(name, value_dis)
             
             if (cursor + wcswidth(var_display) > totalWidth) or (var_count >= vars_per_line):
                 display_lines.append(line)
@@ -1999,8 +2026,40 @@ class Session:
 
         var_keys = sorted(vars_complex.keys())
         for key in var_keys:
-            line = "{0}{1:>20} = {2}".format(" " * left_margin, key, vars_complex[key].__repr__())
-            display_lines.append(line)
+            name = key.rjust(KEY_WIDTH)
+            value_dis = vars_complex[key].__repr__()
+            allow_len = totalWidth - left_margin - KEY_WIDTH - 3 - right_margin
+            line = "{0}{1} = ".format(" " * left_margin, name.rjust(KEY_WIDTH))
+            if wcswidth(value_dis) > allow_len:
+                value = vars_complex[key]
+                if isinstance(value, dict):
+                    max_len = self.getMaxLength(value.keys())
+                    line += '{'
+                    for k, v in value.items():
+                        val_line = "{0}: {1},".format(k.ljust(max_len), v)
+                        line += val_line
+                        display_lines.append(line)
+                        line = " " * (left_margin + KEY_WIDTH + 4)
+                    line = line[:-1] + '}'
+                    display_lines.append(line)
+                elif isinstance(value, list):
+                    line += '['
+                    for v in value:
+                        val_line = "{0},".format(v)
+                        line += val_line
+                        display_lines.append(line)
+                        line = " " * (left_margin + KEY_WIDTH + 4)
+                    line = line[:-1] + ']'
+                    display_lines.append(line)
+                else:
+                    value_lines = self.splitByPrintableWidth(value_dis, allow_len)
+                    for val_line in value_lines:
+                        line += val_line
+                        display_lines.append(line)
+                        line = " " * (left_margin + KEY_WIDTH + 3)
+            else:   
+                line = "{0}{1} = {2}".format(" " * left_margin, key.rjust(KEY_WIDTH), vars_complex[key].__repr__())
+                display_lines.append(line)
                                             
         display_lines.append("=" * totalWidth)
 
@@ -2082,7 +2141,10 @@ class Session:
             #     self.writetobuffer("{0:>20} = {1}".format(key, vars_complex[key].__repr__()), newline = True)
 
             # self.writetobuffer("="*width, newline = True)
-            
+            # row, col = self.buffer.document.translate_index_to_position(len(self.buffer.text))
+            # if col:
+            #     self.writetobuffer("", newline = True)
+
             lines = self.buildDisplayLines(self._variables, f"  VARIABLE LIST IN SESSION {self.name}  ")
             
             for line in lines:
