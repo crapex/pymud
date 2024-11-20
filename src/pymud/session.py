@@ -3010,14 +3010,18 @@ class Session:
                     triggered_enabled += 1
                     if not block: 
                         triggered += 1
-                        info_enabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 正常触发。{Settings.CLR_STYLE}")
-                        info_enabled.append(f"    {Settings.INFO_STYLE}捕获：{state.wildcards}{Settings.CLR_STYLE}")
+                        # info_enabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 正常触发。{Settings.CLR_STYLE}")
+                        # info_enabled.append(f"    {Settings.INFO_STYLE}捕获：{state.wildcards}{Settings.CLR_STYLE}")
+                        info_enabled.append(f"    {tri.__detailed__()} 正常触发。")
+                        info_enabled.append(f"      捕获：{state.wildcards}")
                     
                         if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            info_enabled.append(f"    {Settings.WARN_STYLE}该触发器未开启keepEval, 会阻止后续触发器。{Settings.CLR_STYLE}")
+                            info_enabled.append(f"      {Settings.WARN_STYLE}该触发器未开启keepEval, 会阻止后续触发器。{Settings.CLR_STYLE}")
+                            #info_enabled.append(f"    该触发器未开启keepEval, 会阻止后续触发器。")
                             block = True
                     else:
-                        info_enabled.append(f"  {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
+                        info_enabled.append(f"    {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
+                        #info_enabled.append(f"  {tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。")
             
             
             for tri in tris_disabled:
@@ -3028,35 +3032,38 @@ class Session:
 
                 if state.result == Trigger.SUCCESS:
                     triggered_disabled += 1
-                    info_disabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 可以匹配触发。{Settings.CLR_STYLE}")
+                    # info_disabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 可以匹配触发。{Settings.CLR_STYLE}")
+                    info_disabled.append(f"    {tri.__detailed__()} 可以匹配触发。")
 
             if triggered_enabled + triggered_disabled == 0:
                 info_all.append("")
 
         if triggered_enabled == 0:
-            info_enabled.insert(0, f"使能的触发器中，没有可以触发的。")
+            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，没有可以触发的。")
         elif triggered < triggered_enabled:
-            info_enabled.insert(0, f"使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
+            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
         else:
-            info_enabled.insert(0, f"使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
+            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
 
         if triggered_disabled > 0:
-            info_disabled.insert(0, f"未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
+            info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
         else:
-            info_disabled.insert(0, f"未使能触发器，没有可以匹配的。")
-
+            info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能触发器，没有可以匹配的。")
+        
+        info_all.append("")
         if triggered_enabled + triggered_disabled == 0:
-            info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+            #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
             info_all.append(f"  测试内容: {line}")
             info_all.append(f"  测试结果: 没有可以匹配的触发器。")
         else:
-            info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+            #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
             info_all.append(f"  测试内容: {line}")
             info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
             info_all.extend(info_enabled)
             info_all.extend(info_disabled)
-
-        self.info("\n".join(info_all), "PYMUD 触发器测试")
+        
+        title = f"触发器测试 - {'响应模式' if docallback else '测试模式'}"
+        self.info("\n".join(info_all), title)
         #self.info("PYMUD 触发器测试 完毕")
 
     def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
@@ -3180,7 +3187,7 @@ class Session:
         '''
         
         new_text, new_code = code.expand(self, *args, **kwargs)
-        self.warning(new_text[6:])
+        self.warning(new_text[9:])
 
     def handle_error(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -3196,23 +3203,23 @@ class Session:
         '''
         
         new_text, new_code = code.expand(self, *args, **kwargs)
-        self.error(new_text[6:])
+        self.error(new_text[7:])
 
-    def info2(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+    def info2(self, msg, title = "消息", style = Settings.INFO_STYLE):
         msg = f"{msg}"
 
-        if Settings.client["newline"] in msg:
-            new_lines = list()
-            msg_lines = msg.split(Settings.client["newline"])
-            for line in msg_lines:
-                new_lines.append("{}{}".format(style, line))
+        # if Settings.client["newline"] in msg:
+        #     new_lines = list()
+        #     msg_lines = msg.split(Settings.client["newline"])
+        #     for line in msg_lines:
+        #         new_lines.append("{}{}".format(style, line))
 
-            msg = Settings.client["newline"].join(new_lines)
+        #     msg = Settings.client["newline"].join(new_lines)
 
         # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理(不行，还得恢复)
-        self.writetobuffer("{}[{}] {}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
+        self.writetobuffer("{}〔{}〕{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
-    def info(self, msg, title = "PYMUD INFO", style = Settings.INFO_STYLE):
+    def info(self, msg, title = "提示", style = Settings.INFO_STYLE):
         """
         使用默认的INFO_STYLE（绿色）输出信息，并自动换行。信息格式类似 [title] msg
         
@@ -3222,7 +3229,7 @@ class Session:
         """
         self.info2(msg, title, style)
 
-    def warning(self, msg, title = "PYMUD WARNING", style = Settings.WARN_STYLE):
+    def warning(self, msg, title = "警告", style = Settings.WARN_STYLE):
         """
         使用默认的WARN_STYLE（黄色）输出信息，并自动换行。信息格式类似 [title] msg
         
@@ -3232,7 +3239,7 @@ class Session:
         """
         self.info2(msg, title, style)
 
-    def error(self, msg, title = "PYMUD ERROR", style = Settings.ERR_STYLE):
+    def error(self, msg, title = "错误", style = Settings.ERR_STYLE):
         """
         使用默认的ERR_STYLE（红色）输出信息，并自动换行。信息格式类似 [title] msg
         

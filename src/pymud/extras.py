@@ -40,6 +40,8 @@ from prompt_toolkit.layout.controls import (
 )
 from prompt_toolkit.layout.processors import (
     Processor,
+    TransformationInput,
+    Transformation
 )
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
@@ -64,10 +66,11 @@ class MudFormatProcessor(Processor):
         self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
         self.SINGLE_LINES = set("┌└├┬┼┴╭╰─")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
-        self.START_COLOR_REGX  = re.compile(r"^\[[\d;]+m")
-        self.COLOR_REGX   = re.compile(r"\[[\d;]+m")
+        #self.START_COLOR_REGX  = re.compile(r"^\[[\d;]+m")
+        self.COLOR_REGX   = re.compile(r"(?:\[[\d;]+m)+(?!$)")
         self._color_start = ""
         self._color_correction = False
+        self._color_line_index = 0
 
     def width_correction(self, line: str) -> str:
         new_str = []
@@ -91,48 +94,48 @@ class MudFormatProcessor(Processor):
     def tab_correction(self, line: str):
         return line.replace("\t", " " * Settings.client["tabstop"])
 
-    def color_correction(self, line: str):
-        # 注：发现processer处理并非自上而下逐行处理的，因此不能使用这种颜色校正方式。
-        if self._color_correction:
-            other = self.COLOR_REGX.findall(line)
-
-            line = f"{self._color_start}{line}"
-            logging.debug(f"已校正增加颜色标志 {self._color_start}: {line}")
-
-            if other:
-                self._color_correction = False
-                self._color_start = ""
-                logging.debug(f"颜色校正结束: {line}")
-        else:
-            color = self.START_COLOR_REGX.findall(line)
-            if color:
-                other = self.COLOR_REGX.findall(line)
-                if len(other) == 1:
-                    self._color_correction = True
-                    self._color_start = color[0]
-                    logging.debug(f"获取到一个颜色开头 {color[0]}: {line}")
-
-        return line
-
     def line_correction(self, line: str):
         # 处理\r符号（^M）
         line = self.return_correction(line)
         # 处理Tab(\r)符号（^I）
         line = self.tab_correction(line)
-        # 处理颜色跨行问题。发现processer处理并非自上而下逐行处理的，因此不能使用这种颜色校正方式。
-        # line = self.color_correction(line)
+        
         # 美化（解决中文英文在Console中不对齐的问题）
         if Settings.client["beautify"]:
             line = self.width_correction(line)
 
         return line
 
-    def apply_transformation(self, transformation_input):
+    def apply_transformation(self, transformation_input: TransformationInput):
         # 准备（先还原为str）
         line = fragment_list_to_text(transformation_input.fragments)
+
+        # 颜色校正
+        thislinecolors = len(self.COLOR_REGX.findall(line))
+        if thislinecolors == 0:
+            lineno = transformation_input.lineno - 1
+            while lineno > 0:
+                lastline = transformation_input.document.lines[lineno]
+                # color = self.START_COLOR_REGX.findall(lastline)
+                # if color:
+                colors = self.COLOR_REGX.findall(lastline)
+                
+                if len(colors) == 0:
+                    lineno = lineno -1
+
+                elif len(colors) == 1:
+                    line = f"{colors[0]}{line}"
+                    break
+
+                else:
+                    break
+
+        # 其他校正
         line = self.line_correction(line)
+
         # 处理ANSI标记（生成FormmatedText）
         fragments = to_formatted_text(ANSI(line))
+
         return Transformation(fragments)
 
 class SessionBuffer(Buffer):

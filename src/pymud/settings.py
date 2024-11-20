@@ -174,8 +174,8 @@ class Settings:
         "value"     : "fg:green",
     }
 
-    INFO_STYLE     = "\x1b[32m"     #"\x1b[38;2;0;128;255m"
-    WARN_STYLE     = "\x1b[33m"
-    ERR_STYLE      = "\x1b[31m"
+    INFO_STYLE     = "\x1b[48;5;22m\x1b[38;5;252m"     #"\x1b[38;2;0;128;255m"
+    WARN_STYLE     = "\x1b[48;5;220m\x1b[38;5;238m"
+    ERR_STYLE      = "\x1b[48;5;160m\x1b[38;5;252m"
     CLR_STYLE      = "\x1b[0m"
 
