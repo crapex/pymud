@@ -66,8 +66,8 @@ class MudFormatProcessor(Processor):
         self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
         self.SINGLE_LINES = set("┌└├┬┼┴╭╰─")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
-        #self.START_COLOR_REGX  = re.compile(r"^\[[\d;]+m")
-        self.COLOR_REGX   = re.compile(r"(?:\[[\d;]+m)+(?!$)")
+        self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
+        self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
         self._color_start = ""
         self._color_correction = False
         self._color_line_index = 0
@@ -111,21 +111,25 @@ class MudFormatProcessor(Processor):
         line = fragment_list_to_text(transformation_input.fragments)
 
         # 颜色校正
-        thislinecolors = len(self.COLOR_REGX.findall(line))
+        thislinecolors = len(self.AVAI_COLOR_REGX.findall(line))
         if thislinecolors == 0:
             lineno = transformation_input.lineno - 1
             while lineno > 0:
                 lastline = transformation_input.document.lines[lineno]
-                # color = self.START_COLOR_REGX.findall(lastline)
-                # if color:
-                colors = self.COLOR_REGX.findall(lastline)
+                allcolors = self.ALL_COLOR_REGX.findall(lastline)
                 
-                if len(colors) == 0:
-                    lineno = lineno -1
+                if len(allcolors) == 0:
+                    lineno = lineno - 1
 
-                elif len(colors) == 1:
-                    line = f"{colors[0]}{line}"
-                    break
+                elif len(allcolors) == 1:
+                    colors = self.AVAI_COLOR_REGX.findall(lastline)
+                    
+                    if len(colors) == 1:
+                        line = f"{colors[0]}{line}"
+                        break
+
+                    else:
+                        break
 
                 else:
                     break
