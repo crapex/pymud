@@ -3217,7 +3217,7 @@ class Session:
         #     msg = Settings.client["newline"].join(new_lines)
 
         # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理(不行，还得恢复)
-        self.writetobuffer("{}〔{}〕{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
+        self.writetobuffer("{}〔{}〕{}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "提示", style = Settings.INFO_STYLE):
         """
