@@ -13,7 +13,7 @@ class Settings:
     "APP 简要描述"
     __version__   = "0.20.2"
     "APP 当前版本"
-    __release__   = "2024-11-18"
+    __release__   = "2024-11-25"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -69,6 +69,7 @@ class Settings:
         "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
         
+        "status_divider"    : True,                 # 是否显示状态栏的分隔线
         "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         "status_width"      : 30,                   # 右侧状态栏的宽度
         "status_height"     : 6,                    # 下侧状态栏的高度
@@ -84,6 +85,7 @@ class Settings:
         "session"           : "会话",
         "connect"           : "连接/重新连接",
         "disconnect"        : "断开连接",
+        "beautify"          : "打开/关闭美化显示",
         "echoinput"         : "显示/隐藏输入指令",
         "nosplit"           : "取消分屏",
         "copy"              : "复制(纯文本)",

@@ -229,7 +229,8 @@ class PyMudApp:
             content = HSplit(
                 [
                     self.console,
-                    Window(char = "—", height = 1),
+                    ConditionalContainer(content = Window(char = "—", height = 1), filter = Settings.client["status_divider"]),
+                    #Window(char = "—", height = 1),
                     Window(content = self.statusView, height = Settings.client["status_height"]),
                 ]
             ),
@@ -241,7 +242,7 @@ class PyMudApp:
             content = VSplit(
                 [
                     self.console,
-                    Window(char = "|", width = 1),
+                    ConditionalContainer(content = Window(char = "|", width = 1), filter = Settings.client["status_divider"]),
                     Window(content = self.statusView, width = Settings.client["status_width"]),
                 ]
             ),
@@ -311,12 +312,14 @@ class PyMudApp:
                         MenuItem(Settings.text["closesession"], handler = self.act_close_session),
                         MenuItem(Settings.text["autoreconnect"], handler = self.act_autoreconnect),
                         MenuItem("-", disabled=True),
-                        MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
                         MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
+                        MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
+                        MenuItem(Settings.text["beautify"], handler = self.act_beautify),
                         MenuItem(Settings.text["copy"], handler = self.act_copy),
                         MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
                         MenuItem(Settings.text["clearsession"], handler = self.act_clearsession),
                         MenuItem("-", disabled=True),
+                        
                         MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
                     ]
                 ),
@@ -736,6 +739,13 @@ class PyMudApp:
                 new_sess = list(self.sessions.keys())[0]
                 self.activate_session(new_sess)
 
+    def act_beautify(self):
+        "菜单: 打开/关闭美化显示"
+        val = not Settings.client["beautify"]
+        Settings.client["beautify"] = val
+        if self.current_session:
+            self.current_session.info(f"显示美化已{'打开' if val else '关闭'}!")
+
     def act_echoinput(self):
         "菜单: 显示/隐藏输入指令"
         val = not Settings.client["echo_input"]
@@ -882,7 +892,10 @@ class PyMudApp:
     
     def get_statusbar_right_text(self):
         "状态栏右侧内容"
-        con_str, mouse_support, tri_status = "", "", ""
+        con_str, mouse_support, tri_status, beautify = "", "", "", ""
+        if not Settings.client["beautify"]:
+            beautify = "美化已关闭 "
+
         if not self._mouse_support:
             mouse_support = "鼠标已禁用 "
 
@@ -912,13 +925,17 @@ class PyMudApp:
                 else:
                     con_str = "已连接：{:.0f}秒".format(sec)
 
-        return "{}{}{} {} {} ".format(mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
+        return "{}{}{}{} {} {} ".format(beautify, mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
     def get_statuswindow_text(self):
         "状态窗口: status_maker 的内容"
         text = ""
-        if self.current_session:
-            text = self.current_session.get_status()
+
+        try:
+            if self.current_session:
+                text = self.current_session.get_status()
+        except Exception as e:
+            text = f"{e}"
 
         return text
 
