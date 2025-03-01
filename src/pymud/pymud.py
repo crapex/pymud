@@ -108,6 +108,8 @@ class PyMudApp:
         self.keybindings.add(Keys.Backspace)(self.delete_selection)
         self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
         self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
+        self.keybindings.add(Keys.ShiftLeft, is_global = True)(self.change_session)    # Shift-左右箭头切换当前会话
+        self.keybindings.add(Keys.ShiftRight, is_global = True)(self.change_session)   # 适配 MacOS系统
         self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
         self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
 
@@ -443,14 +445,14 @@ class PyMudApp:
             b.cursor_right()
 
     def change_session(self, event: KeyPressEvent):
-        """快捷键Ctrl+左右箭头: 切换会话"""
+        """快捷键Ctrl/Shift+左右箭头: 切换会话"""
         if self.current_session:
             current = self.current_session.name
             keys = list(self.sessions.keys())
             idx = keys.index(current)
             count = len(keys)
 
-            if event.key_sequence[-1].key == Keys.ControlRight:
+            if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
                 if idx < count - 1:
                     new_key = keys[idx+1]
                     self.activate_session(new_key)
@@ -458,14 +460,14 @@ class PyMudApp:
                 elif (idx == count -1) and self.showLog:
                     self.showLogInTab()
 
-            elif event.key_sequence[-1].key == Keys.ControlLeft:
+            elif (event.key_sequence[-1].key == Keys.ControlLeft) or (event.key_sequence[-1].key == Keys.ShiftLeft):
                 if idx > 0:
                     new_key = keys[idx-1]
                     self.activate_session(new_key)
 
         else:
             if self.showLog:
-                if event.key_sequence[-1].key == Keys.ControlLeft:
+                if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
                     keys = list(self.sessions.keys())
                     if len(keys) > 0:
                         new_key = keys[-1]
