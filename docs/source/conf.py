@@ -19,9 +19,9 @@ source_suffix = ['.rst', '.md']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'PyMUD 帮助文档'
-copyright = '2023-2024, crapex@crapex.cc'
+copyright = '2023-2025, crapex@crapex.cc'
 author = 'crapex'
-release = '0.20.2'
+release = '0.20.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

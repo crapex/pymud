@@ -669,8 +669,13 @@ class PyMudApp:
                         self.current_session.disconnect()
 
                         # 增加延时等待确保会话关闭
+                        wait_time = 0
                         while self.current_session.connected:
                             await asyncio.sleep(0.1)
+                            wait_time += 1
+                            if wait_time > 100:
+                                self.current_session.onDisconnected(None)
+                                break
                             
                     else:
                         return
@@ -811,8 +816,13 @@ class PyMudApp:
                         ss.disconnect()
 
                         # 增加延时等待确保会话关闭
+                        wait_time = 0
                         while ss.connected:
                             await asyncio.sleep(0.1)
+                            wait_time += 1
+                            if wait_time > 100:
+                                ss.onDisconnected(None)
+                                break
 
                         for plugin in self._plugins.values():
                             if isinstance(plugin, Plugin):
