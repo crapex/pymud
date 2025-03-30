@@ -24,7 +24,7 @@ PyMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境
 
     pip install pymud                                       # 安装
     pip install --upgrade pymud                             # 更新
-    pip install --upgrade pymud==0.19.1                     # 指定版本  
+    pip install --upgrade pymud==0.20.0                     # 指定版本  
     pip install --upgrade pymud==0.20.0a1 -i https://pypi.org/simple  # 指定pypi官方源。由于镜像同步需要时间，所以有时候刚发布更新时，需指定到pypi官方源     
 
 

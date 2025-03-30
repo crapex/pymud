@@ -1196,8 +1196,18 @@ class PyMudApp:
 
     async def run_async(self):
         "以异步方式运行本程序"
+        # 运行插件启动应用，放在此处，确保插件初始化在event_loop创建完成之后运行
+        for plugin in self._plugins.values():
+            if isinstance(plugin, Plugin):
+                plugin.onAppInit(self)
+                
         asyncio.create_task(self.onSystemTimerTick())
         await self.app.run_async(set_exception_handler = False)
+
+        # 当应用退出时，运行插件销毁应用
+        for plugin in self._plugins.values():
+            if isinstance(plugin, Plugin):
+                plugin.onAppDestroy(self)
 
     def run(self):
         "运行本程序"
@@ -1235,7 +1245,7 @@ class PyMudApp:
                         file_name = file[:-3]
                         plugin = Plugin(file_name, file_path)
                         self._plugins[plugin.name] = plugin
-                        plugin.onAppInit(self)
+                        # plugin.onAppInit(self)
                     except Exception as e:
                         self.set_status(f"文件: {plugins_dir}\\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
         

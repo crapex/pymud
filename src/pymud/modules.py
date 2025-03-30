@@ -139,11 +139,29 @@ class Plugin:
         self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
         self.mod     = importlib.util.module_from_spec(self.modspec)
         self.modspec.loader.exec_module(self.mod)
-
-        self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
-        self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
-        self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
         
+        # self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
+        # self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
+        # self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
+        # self._app_destroy = self.mod.__dict__["PLUGIN_PYMUD_DESTROY"]
+        self._app_init = self._load_mod_function("PLUGIN_PYMUD_START")
+        self._session_create = self._load_mod_function("PLUGIN_SESSION_CREATE")
+        self._session_destroy = self._load_mod_function("PLUGIN_SESSION_DESTROY")
+        self._app_destroy = self._load_mod_function("PLUGIN_PYMUD_DESTROY")
+        
+    def _load_mod_function(self, func_name):
+        # 定义一个默认函数，当插件文件中未定义指定名称的函数时，返回该函数
+        # 该函数接受任意数量的位置参数和关键字参数，但不执行任何操作
+        def default_func(*args, **kwargs):
+            pass
+
+        result = default_func
+        if func_name in self.mod.__dict__:
+            func = self.mod.__dict__[func_name]
+            if callable(func):
+                result = func
+        return result
+
     @property
     def name(self):
         "插件名称，由插件文件中的 PLUGIN_NAME 常量定义"
@@ -182,6 +200,13 @@ class Plugin:
         :param session: 所关闭的会话对象实例
         """
         self._session_destroy(session)
+
+    def onAppDestroy(self, app):
+        """
+        PyMUD应用关闭时对插件执行的操作，由插件文件中的 PLUGIN_PYMUD_DESTROY 函数定义
+        :param app: 关闭的 PyMudApp 对象实例
+        """
+        self._app_destroy(app)
 
     def __getattr__(self, __name: str) -> Any:
         if hasattr(self.mod, __name):

@@ -11,6 +11,7 @@
     - 一个在应用启动时读取到本插件是调用的函数，应为 `def PLUGIN_PYMUD_START(app: PyMudApp):` 这种形式，其中 app 为传递的应用程序实例
     - 一个在每一个会话创建时调用的函数，应为 `def PLUGIN_SESSION_CREATE(session: Session):` 这种形式，其中 session 为传递的创建的会话实例
     - 一个在某一个会话被销毁（关闭）时调用的函数，应为 `def PLUGIN_SESSION_DESTROY(session: Session):` 这种形式，其中 session 为传递的销毁的会话实例
+    - 一个在应用程序关闭时调用的函数，应为 `def PLUGIN_PYMUD_DESTROY(app: PyMudApp):` 这种形式，其中 app 为传递的应用程序实例
 
     下面给出一个我使用的用于与群晖Synology Chat进行双向通信的插件，供参考插件制作：
 
@@ -331,6 +332,8 @@
             "PYMUD自动读取并加载插件时自动调用的函数， app为APP本体。该函数仅会在程序运行时，自动加载一次"
             chathook = ChatHook(app)
             app.set_status(f"插件{PLUGIN_NAME}已加载!")
+            # 可以设置为全局变量，以供销毁时使用
+            app.set_globals("chathook", chathook)
 
         def PLUGIN_SESSION_CREATE(session: Session):
             "在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次"
@@ -342,4 +345,15 @@
 
         def PLUGIN_SESSION_DESTROY(session: Session):
             "在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。"
-            pass
+            # 此处清除本会话添加的Alias和Command
+            session.delAlias("ali_starthook")
+            session.delAlias("ali_stophook")
+            session.delAlias("ali_sendmsg")
+            session.delCommand("cmd_hook")
+
+        def PLUGIN_PYMUD_DESTROY(app: PyMudApp):
+            "在应用程序关闭时自动调用的函数， app为应用程序本体。"
+            # 如果有需要销毁的对象，比如相关线程资源等，可以在此处销毁
+            chathook = app.get_globals("chathook", None)
+            if isinstance(chathook, ChatHook):
+                chathook.stop_webhook()
