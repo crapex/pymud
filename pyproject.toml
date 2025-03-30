@@ -5,7 +5,10 @@ version = "0.20.4"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.7"
-license = {file = "LICENSE.txt"}
+# license = {file = "LICENSE.txt"}
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
+
 keywords = ["MUD", "multi-user dungeon", "client"]  # Optional
 authors = [
   {name = "newstart@pkuxkx", email = "crapex@hotmail.com" } # Optional
@@ -23,7 +26,7 @@ classifiers = [  # Optional
   # "Development Status :: 3 - Alpha",
   "Intended Audience :: End Users/Desktop",
   "Topic :: Games/Entertainment :: Multi-User Dungeons (MUD)",
-  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  # "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.7",
   "Programming Language :: Python :: 3.8",
