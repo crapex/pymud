@@ -1,0 +1,31 @@
+# internationalization (i18n)
+import os
+def i18n_ListAvailableLanguages():
+    """
+    List all available languages.
+
+    This function checks all files in the `lang` directory for files starting with `i18n.` and ending with `.py`.
+    These files represent internationalization configurations for different languages. The default language is Simplified Chinese ("chs").
+
+    Returns:
+        list: A list containing all available language codes.
+    """
+    # Define the default language list, here the default language is Simplified Chinese
+    languages = ["chs"]  
+    # Define the directory where the language files are located
+    lang_dir = "lang"
+
+    # Check if the language directory exists. If it doesn't, return the default language list directly
+    if not os.path.exists(lang_dir):
+        return languages
+
+    # Iterate through all files in the language directory
+    for filename in os.listdir(lang_dir):
+        # Check if the file starts with "i18n.", ends with ".py", and is not the default Simplified Chinese file
+        if filename.startswith("i18n.") and filename.endswith(".py") and filename != "chs.py":
+            # Extract the language code from the filename, removing "i18n." and ".py"
+            language = filename[5:-3]  
+            # Add the extracted language code to the list of available languages
+            languages.append(language)
+
+    return languages
