@@ -3,6 +3,7 @@ import importlib, importlib.util
 from abc import ABC, ABCMeta
 from typing import Any
 from .objects import BaseObject, Command
+from .settings import Settings
 
 class ModuleInfo:
     """
@@ -33,10 +34,14 @@ class ModuleInfo:
                 if (attr_name == "Configuration") or issubclass(attr, IConfig):
                     try:
                         self._config[f"{self.name}.{attr_name}"] = attr(self.session, reload = reload)
-                        self.session.info(f"配置对象 {self.name}.{attr_name} {'重新' if reload else ''}创建成功.")
+                        if not reload:
+                            self.session.info(Settings.gettext("configuration_created").format(self.name, attr_name))
+                        else:
+                            self.session.info(Settings.gettext("configuration_recreated").format(self.name, attr_name))
+
                     except Exception as e:
                         result = False
-                        self.session.error(f"配置对象 {self.name}.{attr_name} 创建失败. 错误信息为: {e}")
+                        self.session.error(Settings.gettext("configuration_fail").format(self.name, attr_name, e))
         self._ismainmodule = (self._config != {})
         return result
     
@@ -65,21 +70,21 @@ class ModuleInfo:
     def load(self):
         "加载模块内容"
         if self._load():
-            self.session.info(f"{'主' if self.ismainmodule else '从'}配置模块 {self.name} 加载完成.")
+            self.session.info(f"{Settings.gettext('entity_module' if self.ismainmodule else 'non_entity_module')} {self.name} {Settings.gettext('load_ok')}")
         else:
-            self.session.error(f"{'主' if self.ismainmodule else '从'}配置模块 {self.name} 加载失败.")
+            self.session.info(f"{Settings.gettext('entity_module' if self.ismainmodule else 'non_entity_module')} {self.name} {Settings.gettext('load_fail')}")
 
     def unload(self):
         "卸载模块内容"
         self._unload()
         self._loaded = False
-        self.session.info(f"{'主' if self.ismainmodule else '从'}配置模块 {self.name} 卸载完成.")
+        self.session.info(f"{Settings.gettext('entity_module' if self.ismainmodule else 'non_entity_module')} {self.name} {Settings.gettext('unload_ok')}")
 
     def reload(self):
         "模块文件更新后调用，重新加载已加载的模块内容"
         self._unload()
         self._load(reload = True)
-        self.session.info(f"{'主' if self.ismainmodule else '从'}配置模块 {self.name} 重新加载完成.")
+        self.session.info(f"{Settings.gettext('entity_module' if self.ismainmodule else 'non_entity_module')} {self.name} {Settings.gettext('reload_ok')}")
 
     @property
     def name(self):

@@ -26,10 +26,10 @@ class BasicDialog:
         self.future.set_result(result)
 
     def create_body(self) -> AnyContainer:
-        return HSplit([Label(text="basic dialog")])
+        return HSplit([Label(text=Settings.gettext("basic_dialog"))])
 
     def create_buttons(self):
-        ok_button = EasternButton(text="确定", handler=(lambda: self.set_done()))
+        ok_button = EasternButton(text=Settings.gettext("ok"), handler=(lambda: self.set_done()))
         return [ok_button]
 
     def set_exception(self, exc):
@@ -55,17 +55,17 @@ class QueryDialog(BasicDialog):
         return HSplit([Label(text=self.message)])
     
     def create_buttons(self):
-        ok_button = EasternButton(text="确定", handler=(lambda: self.set_done(True)))
-        cancel_button = EasternButton(text="取消", handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(text=Settings.gettext("ok"), handler=(lambda: self.set_done(True)))
+        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
         return [ok_button, cancel_button]
 
 class WelcomeDialog(BasicDialog):
     def __init__(self, modal=True):
         self.website = FormattedText(
-            [('', '访问 '),
+            [('', f'{Settings.gettext("visit")} '),
              #('class:b', 'GitHub:'), 
-             ('', 'https://pymud.readthedocs.org/', self.open_url),
-             ('', ' 以查看最新帮助文档')]
+             ('', Settings.__website__, self.open_url),
+             ('', f' {Settings.gettext("displayhelp")}')]
              )
         super().__init__("PYMUD", modal)
         
@@ -77,10 +77,10 @@ class WelcomeDialog(BasicDialog):
         import platform, sys
         body = HSplit([
             Window(height=1),
-            Label(HTML('<b fg="red">PYMUD {0}</b> - a MUD Client Written in Python'.format(Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
-            Label(HTML('作者: <b>{0}</b> <b>E-mail</b>: <u>{1}</u>'.format(Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
+            Label(HTML(Settings.gettext("appinfo").format(Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
+            Label(HTML(Settings.gettext("author").format(Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
             Label(self.website, align=WindowAlign.CENTER),
-            Label('系统:{} {}   Python版本:{}'.format(platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
+            Label(Settings.gettext("sysversion").format(platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
 
             Window(height=1),
         ])
@@ -89,25 +89,25 @@ class WelcomeDialog(BasicDialog):
 
 class NewSessionDialog(BasicDialog):
     def __init__(self):
-        super().__init__("创建新会话", True)
+        super().__init__(Settings.gettext("new_session"), True)
     
     def create_body(self) -> AnyContainer:
         body = HSplit([
             VSplit([
                 HSplit([
-                    Label(" 会话名称:"),
+                    Label(f" {Settings.gettext("sessionname")}:"),
                     Frame(body=TextArea(name = "session", text="session", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=10), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(" 服务器地址:"),
+                    Label(f" {Settings.gettext("host")}:"),
                     Frame(body=TextArea(name = "host", text="mud.pkuxkx.net", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=20), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(" 端口:"),
+                    Label(f" {Settings.gettext("port")}:"),
                     Frame(body=TextArea(name = "port", text="8081", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(" 编码:"),
+                    Label(f" {Settings.gettext("encoding")}:"),
                     Frame(body=TextArea(name = "encoding", text="utf8", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
                 ]),
             ])
@@ -116,8 +116,8 @@ class NewSessionDialog(BasicDialog):
         return body
 
     def create_buttons(self):
-        ok_button = EasternButton(text="确定", handler=self.btn_ok_clicked)
-        cancel_button = EasternButton(text="取消", handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(text=Settings.gettext("ok"), handler=self.btn_ok_clicked)
+        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
         return [ok_button, cancel_button]
     
     def btn_ok_clicked(self):
@@ -137,8 +137,8 @@ class LogSelectionDialog(BasicDialog):
         if len(values) > 0:
             self._radio_list = RadioList(values = self._selection_values)
         else:
-            self._radio_list = Label('无记录'.center(13))
-        super().__init__('选择查看的记录', modal)
+            self._radio_list = Label(Settings.gettext("nolog").center(13))
+        super().__init__(Settings.gettext("chooselog"), modal)
 
     def create_body(self) -> AnyContainer:
         body=HSplit([
@@ -148,8 +148,8 @@ class LogSelectionDialog(BasicDialog):
         return body
     
     def create_buttons(self):
-        ok_button = EasternButton(text="确定", handler=self.btn_ok_clicked)
-        cancel_button = EasternButton(text="取消", handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(text=Settings.gettext("ok"), handler=self.btn_ok_clicked)
+        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
         return [ok_button, cancel_button]
     
     def btn_ok_clicked(self):

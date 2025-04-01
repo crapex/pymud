@@ -75,7 +75,18 @@ class PyMudApp:
         构造PyMudApp对象实例，并加载替代配置。
         """
 
+        from .i18n import i18n_LoadLanguage, i18n_ListAvailableLanguages
+        # 加载默认chs语言内容，以防翻译不完整时，默认使用中文替代
+        i18n_LoadLanguage("chs")
+
         if cfg_data and isinstance(cfg_data, dict):
+            # load language from 
+            language = Settings.language
+            if "language" in cfg_data.keys():
+                if cfg_data["language"] in i18n_ListAvailableLanguages() and cfg_data["language"] != "chs":
+                    language = cfg_data["language"]
+                    i18n_LoadLanguage(language)
+            
             for key in cfg_data.keys():
                 if key == "sessions":
                     Settings.sessions = cfg_data[key]
@@ -89,6 +100,8 @@ class PyMudApp:
                     Settings.styles.update(cfg_data[key])
                 elif key == "keys":
                     Settings.keys.update(cfg_data[key])
+                elif key == "language":
+                    Settings.language = cfg_data[key]
 
         self._mouse_support = True
         self._plugins  = DotDict()              # 增加 插件 字典
@@ -359,7 +372,7 @@ class PyMudApp:
     def create_world_menus(self):
         "创建世界子菜单，其中根据本地pymud.cfg中的有关配置创建会话有关子菜单"
         menus = []
-        menus.append(MenuItem(Settings.text["new_session"], handler = self.act_new))
+        menus.append(MenuItem(f'{Settings.gettext("new_session")}...', handler = self.act_new))
         menus.append(MenuItem("-", disabled=True))
 
         ss = Settings.sessions

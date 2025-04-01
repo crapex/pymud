@@ -22,6 +22,8 @@ class Settings:
     __website__     = "https://pymud.readthedocs.io/"
     "帮助文档发布网址"
 
+    language = "en"
+
     server = {
         "default_encoding"  : "utf-8",              # 服务器默认编码
         "encoding_errors"   : "ignore",             # 默认编码转换失效时错误处理
@@ -181,3 +183,6 @@ class Settings:
     ERR_STYLE      = "\x1b[48;5;160m\x1b[38;5;252m"
     CLR_STYLE      = "\x1b[0m"
 
+    @classmethod
+    def gettext(cls, text: str):
+        return cls.text[text] if text in cls.text else text

@@ -37,7 +37,7 @@ class CodeLine:
                 elif ch == "}":
                     brace_count -= 1
                     if brace_count < 0:
-                        raise Exception("错误的代码块，大括号数量不匹配")
+                        raise Exception(Settings.gettext("excpetion_brace_not_matched"))
                     arg += ch
                 elif ch == "'":
                     if single_quote == 0:
@@ -60,7 +60,7 @@ class CodeLine:
                     arg += ch
 
             if (single_quote > 0) or (double_quote > 0):
-                raise Exception("引号的数量不匹配")
+                raise Exception(Settings.gettext("exception_quote_not_matched"))
             
             if arg:
                 code_params.append(arg)
@@ -178,7 +178,7 @@ class CodeBlock:
             elif ch == "}":
                 brace_count -= 1
                 if brace_count < 0:
-                    raise Exception("错误的代码块，大括号数量不匹配")
+                    raise Exception(Settings.gettext("excpetion_brace_not_matched"))
                 line += ch
             elif ch == ";":
                 if brace_count == 0:
@@ -264,7 +264,7 @@ class CodeBlock:
             elif self.syncmode == "sync":
                 sync = True
             elif self.syncmode == "conflict":
-                session.warning("该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将失效。")
+                session.warning(Settings.gettext("exception_forced_async"))
                 sync = False
 
         if sync:
@@ -326,7 +326,7 @@ class BaseObject:
         if isinstance(session, Session):
             self.session    = session
         else:
-            assert("session must be an instance of class Session!")
+            assert(Settings.gettext("exception_session_type_fail"))
             
         self._enabled   = True              # give a default value
         self.log        = logging.getLogger(f"pymud.{self.__class__.__name__}")
@@ -625,7 +625,7 @@ class MatchObject(BaseObject):
             await self.event.wait()
             self.reset()
         except Exception as e:
-            self.error(f"异步执行中遇到异常, {e}")
+            self.error(Settings.gettext("exception_in_async").format(e))
 
         return self.state
     

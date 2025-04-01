@@ -1,9 +1,10 @@
-import os, sys, json, platform, shutil, logging, argparse
+import os, sys, json, platform, shutil, logging, argparse, locale
 from pathlib import Path
 from .pymud import PyMudApp
 from .settings import Settings
 
 CFG_TEMPLATE = {
+    "language" : "chs",                             # 语言设置，默认为简体中文
     "client": {
         "buffer_lines"      : 5000,                 # 保留缓冲行数
 
@@ -41,50 +42,114 @@ CFG_TEMPLATE = {
     }
 }
 
+def detect_system_language():
+    """
+    检测系统语言，返回中文或英文"
+    """
+    lang = "chs"
+    try:
+        value = locale.getlocale()[0]
+        if value and (value.lower().startswith("zh") or value.lower().startswith("chinese")):  # 中文
+            lang = "chs"
+        else:
+            lang = "eng"
+    except Exception as e:
+        # default is chs
+        pass
+
+    return lang
+
 def init_pymud_env(args):
-    print(f"欢迎使用PyMUD, 版本{Settings.__version__}. 使用PyMUD时, 建议建立一个新目录（任意位置），并将自己的脚本以及配置文件放到该目录下.")
-    print("即将开始为首次运行初始化环境...")
-    
-    dir = args.dir
-    if dir:
-        print(f"你已经指定了创建脚本的目录为 {args.dir}")
-        dir = Path(dir)
+    lang = detect_system_language()
+    if lang == "chs":
+        print(f"欢迎使用PyMUD, 版本{Settings.__version__}. 使用PyMUD时, 建议建立一个新目录（任意位置），并将自己的脚本以及配置文件放到该目录下.")
+        print("即将开始为首次运行初始化环境...")
+        
+        dir = args.dir
+        if dir:
+            print(f"你已经指定了创建脚本的目录为 {args.dir}")
+            dir = Path(dir)
+        else:
+            dir = Path.home().joinpath('pkuxkx')
+
+            system = platform.system().lower()
+            dir_enter = input(f"检测到当前系统为 {system}, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值 [{dir}]:")
+            if dir_enter:
+                dir = Path(dir_enter)
+                        
+        if dir.exists() and dir.is_dir():
+            print(f'检测到给定目录 {dir} 已存在，切换至此目录...')
+        else:
+            print(f'检测到给定目录 {dir} 不存在，正在创建并切换至目录...')
+            dir.mkdir()
+        
+        os.chdir(dir)
+
+        if os.path.exists('pymud.cfg'):
+            print(f'检测到脚本目录下已存在pymud.cfg文件，将直接使用此文件进入PyMUD...')
+        else:
+            print(f'检测到脚本目录下不存在pymud.cfg文件，将使用默认内容创建该配置文件...')
+            with open('pymud.cfg', mode = 'x') as fp:
+                fp.writelines(json.dumps(CFG_TEMPLATE, indent = 4))
+
+        if not os.path.exists('examples.py'):
+            from pymud import pkuxkx
+            module_dir = pkuxkx.__file__
+            shutil.copyfile(module_dir, 'examples.py')
+            print(f'已将样例脚本拷贝至脚本目录，并加入默认配置文件')
+
+        print(f"后续可自行修改 {dir} 目录下的 pymud.cfg 文件以进行配置。")
+        if system == "windows":
+            print(f"后续运行PyMUD， 请在 {dir} 目录下键入命令： python -m pymud，或直接使用快捷命令 pymud")
+        else:
+            print(f"后续运行PyMUD， 请在 {dir} 目录下键入命令： python3 -m pymud，或直接使用快捷命令 pymud")
+
+        input('所有内容已初始化完毕, 请按回车进入PyMUD.')
+
     else:
-        dir = Path.home().joinpath('pkuxkx')
+        print(f"Welcome to PyMUD, version {Settings.__version__}. When using pymud, it is suggested that a new folder should be created (in any place), and the cfg configuration and all the scripts have been placed in the directory.")
+        print("Starting to initialize the environment for the first time...")
+        dir = args.dir
+        if dir:
+            print(f"You have specified the directory to create the script as {args.dir}")
+            dir = Path(dir)
+        else:
+            dir = Path.home().joinpath('pkuxkx')
 
-        system = platform.system().lower()
-        dir_enter = input(f"检测到当前系统为 {system}, 请指定游戏脚本的目录（若目录不存在会自动创建），直接回车表示使用默认值 [{dir}]:")
-        if dir_enter:
-            dir = Path(dir_enter)
-                      
-    if dir.exists() and dir.is_dir():
-        print(f'检测到给定目录 {dir} 已存在，切换至此目录...')
-    else:
-        print(f'检测到给定目录 {dir} 不存在，正在创建并切换至目录...')
-        dir.mkdir()
-    
-    os.chdir(dir)
+            system = platform.system().lower()
+            dir_enter = input(f"Detected the current system is {system}, please specify the directory of the game script (if the directory does not exist, it will be automatically created), press Enter to use the default value [{dir}]:")
+            if dir_enter:
+                dir = Path(dir_enter)
+                        
+        if dir.exists() and dir.is_dir():
+            print(f'Detected that the given directory {dir} already exists, switching to this directory...')
+        else:
+            print(f'Detected that the given directory {dir} does not exist, creating and switching to the directory...')
+            dir.mkdir()
+        
+        os.chdir(dir)
 
-    if os.path.exists('pymud.cfg'):
-        print(f'检测到脚本目录下已存在pymud.cfg文件，将直接使用此文件进入PyMUD...')
-    else:
-        print(f'检测到脚本目录下不存在pymud.cfg文件，将使用默认内容创建该配置文件...')
-        with open('pymud.cfg', mode = 'x') as fp:
-            fp.writelines(json.dumps(CFG_TEMPLATE, indent = 4))
+        if os.path.exists('pymud.cfg'):
+            print(f'Detected that the pymud.cfg file already exists in the script directory, entering PyMUD directly using this file...')
+        else:
+            print(f'Detected that the pymud.cfg file does not exist in the script directory, creating the configuration file using the default content...')
+            with open('pymud.cfg', mode = 'x') as fp:
+                CFG_TEMPLATE["language"] = "eng"
+                fp.writelines(json.dumps(CFG_TEMPLATE, indent = 4))
 
-    if not os.path.exists('examples.py'):
-        from pymud import pkuxkx
-        module_dir = pkuxkx.__file__
-        shutil.copyfile(module_dir, 'examples.py')
-        print(f'已将样例脚本拷贝至脚本目录，并加入默认配置文件')
+        if not os.path.exists('examples.py'):
+            from pymud import pkuxkx
+            module_dir = pkuxkx.__file__
+            shutil.copyfile(module_dir, 'examples.py')
+            print(f'The sample script has been copied to the script directory and added to the default configuration file')
 
-    print(f"后续可自行修改 {dir} 目录下的 pymud.cfg 文件以进行配置。")
-    if system == "windows":
-        print(f"后续运行PyMUD， 请在 {dir} 目录下键入命令： python -m pymud")
-    else:
-        print(f"后续运行PyMUD， 请在 {dir} 目录下键入命令： python3 -m pymud")
+        print(f"Afterwards, you can modify the pymud.cfg file in the {dir} directory for configuration.")
+        if system == "windows":
+            print(f"Afterwards, please type the command 'python -m pymud' in the {dir} directory to run PyMUD, or use the shortcut command pymud")
+        else:
+            print(f"Afterwards, please type the command 'python3 -m pymud' in the {dir} directory to run PyMUD, or use the shortcut command pymud")
 
-    input('所有内容已初始化完毕, 请按回车进入PyMUD.')
+        input('Press Enter to enter PyMUD.')
 
     startApp(args)
 
