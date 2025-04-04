@@ -34,6 +34,7 @@ from prompt_toolkit.layout.processors import (
     HighlightSelectionProcessor,
 )
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from wcwidth import wcwidth, wcswidth
 
 from .objects import CodeBlock
 from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict
@@ -316,26 +317,26 @@ class PyMudApp:
             body = self.body,
             menu_items=[
                 MenuItem(
-                    Settings.text["world"],
+                    Settings.gettext("world"),
                     children=self.create_world_menus(),
                 ),
                 MenuItem(
-                    Settings.text["session"],
+                    Settings.gettext("session"),
                     children=[
-                        MenuItem(Settings.text["connect"], handler = self.act_connect),
-                        MenuItem(Settings.text["disconnect"], handler = self.act_discon),
-                        MenuItem(Settings.text["closesession"], handler = self.act_close_session),
-                        MenuItem(Settings.text["autoreconnect"], handler = self.act_autoreconnect),
+                        MenuItem(Settings.gettext("disconnect"), handler = self.act_discon),
+                        MenuItem(Settings.gettext("connect"), handler = self.act_connect),
+                        MenuItem(Settings.gettext("closesession"), handler = self.act_close_session),
+                        MenuItem(Settings.gettext("autoreconnect"), handler = self.act_autoreconnect),
                         MenuItem("-", disabled=True),
-                        MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
-                        MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
-                        MenuItem(Settings.text["beautify"], handler = self.act_beautify),
-                        MenuItem(Settings.text["copy"], handler = self.act_copy),
-                        MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
-                        MenuItem(Settings.text["clearsession"], handler = self.act_clearsession),
+                        MenuItem(Settings.gettext("nosplit"), handler = self.act_nosplit),
+                        MenuItem(Settings.gettext("echoinput"), handler = self.act_echoinput),
+                        MenuItem(Settings.gettext("beautify"), handler = self.act_beautify),
+                        MenuItem(Settings.gettext("copy"), handler = self.act_copy),
+                        MenuItem(Settings.gettext("copyraw"), handler = self.act_copyraw),
+                        MenuItem(Settings.gettext("clearsession"), handler = self.act_clearsession),
                         MenuItem("-", disabled=True),
                         
-                        MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
+                        MenuItem(Settings.gettext("reloadconfig"), handler = self.act_reload),
                     ]
                 ),
 
@@ -349,9 +350,9 @@ class PyMudApp:
                 # ),
 
                 MenuItem(
-                    Settings.text["help"],
+                    Settings.gettext("help"),
                     children=[
-                        MenuItem(Settings.text["about"], handler = self.act_about)
+                        MenuItem(Settings.gettext("about"), handler = self.act_about)
                     ]
                 ),
 
@@ -385,9 +386,9 @@ class PyMudApp:
             menus.append(menu)
 
         menus.append(MenuItem("-", disabled=True))
-        menus.append(MenuItem(Settings.text["show_log"], handler = self.show_logSelectDialog))
+        menus.append(MenuItem(Settings.gettext("show_log"), handler = self.show_logSelectDialog))
         menus.append(MenuItem("-", disabled=True))
-        menus.append(MenuItem(Settings.text["exit"], handler=self.act_exit))
+        menus.append(MenuItem(Settings.gettext("exit"), handler=self.act_exit))
 
         return menus
 
@@ -520,12 +521,10 @@ class PyMudApp:
                     line = self.mudFormatProc.line_correction(b.document.current_line)
                     start = max(0, scol)
                     end = min(ecol, len(line))
-                    #line_plain = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
                     line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
-                    #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
-                    self.set_status("已复制：{}".format(selection))
+                    self.set_status(Settings.gettext("msg_copy").format(selection))
                     if self.current_session:
                         self.current_session.setVariable("%copy", selection)
                 else:
@@ -533,12 +532,11 @@ class PyMudApp:
                     lines = []
                     for row in range(srow, erow + 1):
                         line = b.document.lines[row]
-                        #line_plain = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
                         line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
 
                     self.app.clipboard.set_text("\n".join(lines))
-                    self.set_status("已复制：行数{}".format(1 + erow - srow))
+                    self.set_status(Settings.gettext("msg_copylines").format(1 + erow - srow))
                     
                     if self.current_session:
                         self.current_session.setVariable("%copy", "\n".join(lines))
@@ -548,7 +546,7 @@ class PyMudApp:
                 if srow == erow:
                     line = b.document.current_line
                     self.app.clipboard.set_text(line)
-                    self.set_status("已复制：{}".format(line))
+                    self.set_status(Settings.gettext("msg_copy").format(line))
                     
                     if self.current_session:
                         self.current_session.setVariable("%copy", line)
@@ -557,18 +555,13 @@ class PyMudApp:
                     lines = b.document.lines[srow:erow+1]
                     copy_raw_text = "".join(lines)
                     self.app.clipboard.set_text(copy_raw_text)
-                    self.set_status("已复制：行数{}".format(1 + erow - srow))
+                    self.set_status(Settings.gettext("msg_copylines").format(1 + erow - srow))
 
                     if self.current_session:
                         self.current_session.setVariable("%copy", copy_raw_text)
 
-                # data = self.consoleView.buffer.copy_selection()
-                # self.app.clipboard.set_data(data)
-                # self.set_status("已复制：{}".format(data.text))
-
-                # self.current_session.setVariable("%copy", data.text)
         else:
-            self.set_status("未选中任何内容...")
+            self.set_status(Settings.gettext("msg_no_selection"))
 
     def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None, userid = None):
         """
@@ -597,13 +590,19 @@ class PyMudApp:
 
             result = True
         else:
-            self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
+            self.set_status(Settings.gettext("msg_session_exists").format(name))
 
         return result
 
     def show_logSelectDialog(self):
+        def correction_align_width(text, width):
+            "修正文本对齐宽度，防止ljust和rjust方法产生的中文宽度不对齐问题"
+            return width - wcswidth(text) + len(text)
         async def coroutine():
-            head_line = "   {}{}{}".format('记录文件名'.ljust(15), '文件大小'.rjust(16), '最后修改时间'.center(17))
+            title_filename = Settings.gettext("logfile_name").ljust(correction_align_width(Settings.gettext("logfile_name"), 20))
+            title_filesize = Settings.gettext("logfile_size").rjust(correction_align_width(Settings.gettext("logfile_size"), 20))
+            title_modified = Settings.gettext("logfile_modified").center(correction_align_width(Settings.gettext("logfile_modified"), 23))
+            head_line = "   {}{}{}".format(title_filename, title_filesize, title_modified)
             
             log_list = list()
             files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.log')]
@@ -676,7 +675,7 @@ class PyMudApp:
         async def coroutine():
             if self.current_session:
                 if self.current_session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="red">警告</b>'), HTML('<style fg="red">当前会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt")}</style>'.format(self.current_session.name)))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         self.current_session.disconnect()
@@ -764,21 +763,21 @@ class PyMudApp:
         val = not Settings.client["beautify"]
         Settings.client["beautify"] = val
         if self.current_session:
-            self.current_session.info(f"显示美化已{'打开' if val else '关闭'}!")
+            self.current_session.info(f'{Settings.gettext("msg_beautify")}{Settings.gettext("open") if val else Settings.gettext("close")}!')
 
     def act_echoinput(self):
         "菜单: 显示/隐藏输入指令"
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
         if self.current_session:
-            self.current_session.info(f"回显输入命令被设置为：{'打开' if val else '关闭'}")
+            self.current_session.info(f'{Settings.gettext("msg_echoinput")}{Settings.gettext("open") if val else Settings.gettext("close")}!')
 
     def act_autoreconnect(self):
         "菜单: 打开/关闭自动重连"
         val = not Settings.client["auto_reconnect"]
         Settings.client["auto_reconnect"] = val
         if self.current_session:
-            self.current_session.info(f"自动重连被设置为：{'打开' if val else '关闭'}")
+            self.current_session.info(f'{Settings.gettext("msg_autoreconnect")}{Settings.gettext("open") if val else Settings.gettext("close")}')
 
     def act_copy(self):
         "菜单: 复制纯文本"
@@ -821,7 +820,7 @@ class PyMudApp:
                     con_sessions.append(session.name)
 
             if len(con_sessions) > 0:
-                dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">尚有 {0} 个会话 {1} 还处于连接状态，确认要关闭？</style>'.format(len(con_sessions), ", ".join(con_sessions))))
+                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext('warning_exit')}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt")}</style>'.format(len(con_sessions), ", ".join(con_sessions))))
                 result = await self.show_dialog_as_float(dlgQuery)
                 if result:
                     for ss_name in con_sessions:
@@ -857,7 +856,7 @@ class PyMudApp:
 
     def get_input_prompt(self):
         "命令输入行提示符"
-        return HTML(Settings.text["input_prompt"])
+        return HTML(Settings.gettext("input_prompt"))
 
     def btn_title_clicked(self, name, mouse_event: MouseEvent):
         "顶部会话标签点击切换鼠标事件"
@@ -919,17 +918,17 @@ class PyMudApp:
         "状态栏右侧内容"
         con_str, mouse_support, tri_status, beautify = "", "", "", ""
         if not Settings.client["beautify"]:
-            beautify = "美化已关闭 "
+            beautify = Settings.gettext("status_nobeautify") + " "
 
         if not self._mouse_support:
-            mouse_support = "鼠标已禁用 "
+            mouse_support = Settings.gettext("status_mouseinh") + " "
 
         if self.current_session:
             if self.current_session._ignore:
-                tri_status = "全局禁用 "
+                tri_status = Settings.gettext("status_ignore") + " "
 
             if not self.current_session.connected:
-                con_str = "未连接"
+                con_str = Settings.gettext("status_notconnect")
             else:
                 dura = self.current_session.duration
                 DAY, HOUR, MINUTE = 86400, 3600, 60
@@ -942,13 +941,13 @@ class PyMudApp:
                 sec = dura - mins * MINUTE
 
                 if days > 0:
-                    con_str = "已连接：{:.0f}天{:.0f}小时{:.0f}分{:.0f}秒".format(days, hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}天{:.0f}小时{:.0f}分{:.0f}秒".format(days, hours, mins, sec)
                 elif hours > 0:
-                    con_str = "已连接：{:.0f}小时{:.0f}分{:.0f}秒".format(hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}小时{:.0f}分{:.0f}秒".format(hours, mins, sec)
                 elif mins > 0:
-                    con_str = "已连接：{:.0f}分{:.0f}秒".format(mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}分{:.0f}秒".format(mins, sec)
                 else:
-                    con_str = "已连接：{:.0f}秒".format(sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}秒".format(sec)
 
         return "{}{}{}{} {} {} ".format(beautify, mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
@@ -1069,7 +1068,7 @@ class PyMudApp:
                 nothandle = not self._quickHandleSession(group, name)
 
             else:
-                errmsg = f'通过单一参数快速创建会话时，要使用 group.name 形式，如 #session pkuxkx.newstart'
+                errmsg = Settings.gettext("msg_cmd_session_error")
 
         elif len(args) >= 3:
             session_name = args[0]
@@ -1109,7 +1108,7 @@ class PyMudApp:
                     self.current_session.writeline("")
                 else:
                     try:
-                        self.current_session.log.log(f"命令行键入: {cmd_line}\n")
+                        self.current_session.log.log(f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n")
 
                         cb = CodeBlock(cmd_line)
                         cb.execute(self.current_session)
@@ -1122,7 +1121,7 @@ class PyMudApp:
                 elif (cmd_line == "#close") and self.showLog:
                     self.act_close_session()
                 else:
-                    self.set_status("当前没有正在运行的session.")
+                    self.set_status(Settings.gettext("msg_no_session"))
 
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:
@@ -1260,7 +1259,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         # plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
+                        self.set_status(Settings.gettext("msg_plugin_load_error").format(file, e))
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -1275,7 +1274,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\\{file} 不是一个合法的插件文件. 加载错误，信息为: {e}")
+                        self.set_status(Settings.gettext("msg_plugin_load_error").format(file, e))
 
     def reload_plugin(self, plugin: Plugin):
         "重新加载指定插件"

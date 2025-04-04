@@ -20,3 +20,5 @@ debug/
 # docs build is build test directory
 docs/build
 docs/build/
+update
+update.bat
