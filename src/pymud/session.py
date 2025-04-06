@@ -159,11 +159,6 @@ class Session:
         self.encoding = encoding or self.encoding
         self.after_connect = after_connect
 
-        # 插件处置移动到 pymud.py 2024-3-22
-        # for plugin in app.plugins.values():
-        #     if isinstance(plugin, Plugin):
-        #         plugin.onSessionCreate(self)
-
         self._modules = OrderedDict()
 
         # 将变量加载和脚本加载调整到会话创建时刻
@@ -174,13 +169,13 @@ class Session:
                         try:
                             vars = pickle.load(fp)
                             self._variables.update(vars)
-                            self.info(f"自动从{file}中加载保存变量成功")
+                            self.info(Settings.gettext("msg_var_autoload_success").format(file))
                         except Exception as e:
-                            self.warning(f"自动从{file}中加载变量失败，错误消息为： {e}")
+                            self.warning(Settings.gettext("msg_var_autoload_fail").format(file, e))
 
         
         if self._auto_script:
-            self.info(f"即将自动加载以下模块:{self._auto_script}")
+            self.info(Settings.gettext("msg_auto_script").format(self._auto_script))
             self.load_module(self._auto_script)
 
         if Settings.client["auto_connect"]:
@@ -229,7 +224,7 @@ class Session:
 
         except Exception as exc:
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.error(f"创建连接过程中发生错误, 错误发生时刻 {now}, 错误信息为 {exc}, ")
+            self.error(Settings.gettext("msg_connection_fail", now, exec))
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
@@ -242,14 +237,14 @@ class Session:
         
         :param timeout: 重连之前的等待时间，默认15s，可由 `Settings.client['reconnect_wait']` 设置所覆盖
         """
-        self.info(f"{timeout}秒之后将自动重新连接...")
+        self.info(Settings.gettext("msg_auto_reconnect").format(timeout))
         await asyncio.sleep(timeout)
         await self.create_task(self.connect())
 
     def onConnected(self):
         "当连接到服务器之后执行的操作。包括打印连接时间，执行自定义事件(若设置)等。"
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.info(f"{now}: 已成功连接到服务器")
+        self.info(Settings.gettext("msg_connected").format(now))
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
 
@@ -270,7 +265,7 @@ class Session:
         
         self.clean()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.info(f"{now}: 与服务器连接已断开")
+        self.info(Settings.gettext("msg_disconnected").format(now))
 
         event_disconnected = self._events["disconnected"]
         if callable(event_disconnected):
@@ -386,7 +381,7 @@ class Session:
 
         else:
             if name not in self._loggers.keys():
-                self.warning(f"其它会话中已存在一个名为 {name} 的记录器，将直接返回该记录器")
+                self.warning(Settings.gettext("msg_duplicate_logname", name))
 
             logger = self.application.loggers[name]
             logger.mode = mode
@@ -517,7 +512,7 @@ class Session:
 
     def get_status(self):
         "返回状态窗口内容的真实函数。 **脚本中无需调用。**"
-        text = f"这是一个默认的状态窗口信息\n会话: {self.name} 连接状态: {self.connected}"
+        text = Settings.gettext("msg_default_statuswindow", self.name, self.connected)
         if callable(self._status_maker):
             text = self._status_maker()
             
@@ -646,7 +641,7 @@ class Session:
                 self.write(b"\x1b[1z<SUPPORTS>")
             else:
                 #self.write(b"\x1b[0z")
-                self.warning("MXP支持尚未开发，请暂时不要打开MXP支持设置")
+                self.warning(Settings.gettext("msg_mxp_not_support"))
     
         # 全局变量%line
         self.setVariable("%line", tri_line)
@@ -689,7 +684,7 @@ class Session:
 
         :param exc: 异常对象
         """
-        self.error(f"连接过程中发生异常，异常信息为： {exc}")
+        self.error(Settings.gettext("msg_connection_fail", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), exc))
 
 
     def create_task(self, coro, *args, name: str = None) -> asyncio.Task:
@@ -833,7 +828,7 @@ class Session:
             session = self.application.sessions[name]
             session.exec_command(cmd, *args, **kwargs)
         else:
-            self.error(f"不存在名称为{name}的会话")
+            self.error(Settings.gettext("msg_no_session", name))
 
     async def exec_async(self, cmd: str, name = None, *args, **kwargs):
         """
@@ -848,7 +843,7 @@ class Session:
             session = self.application.sessions[name]
             return await session.exec_command_async(cmd, *args, **kwargs)
         else:
-            self.error(f"不存在名称为{name}的会话")
+            self.error(Settings.gettext("msg_no_session", name))
 
     def exec_code(self, cl: CodeLine, *args, **kwargs):
         """
@@ -876,7 +871,7 @@ class Session:
                 if times > 0:
                     self.create_task(self.handle_num(times, code = cl, *args, **kwargs))
                 else:
-                    self.warning("#{num} {cmd}只能支持正整数!")
+                    self.warning(Settings.gettext("msg_num_positive"))
             
             elif cmd in self.application.sessions.keys():
                 name = cmd
@@ -905,7 +900,7 @@ class Session:
                     else:
                         handler(code = cl, *args, **kwargs)
                 else:
-                    self.warning(f"未识别的命令: {cl.commandText}")
+                    self.warning(Settings.gettext("msg_cmd_not_recognized", cl.commandText))
 
         else:
             cmdtext, code = cl.expand(self, *args, **kwargs)
@@ -940,7 +935,7 @@ class Session:
                 if times > 0:
                     await self.handle_num(times, code = cl, *args, **kwargs)
                 else:
-                    self.warning("#{num} {cmd}只能支持正整数!")
+                    self.warning(Settings.gettext("msg_num_positive"))
             
             elif cmd in self.application.sessions.keys():
                 name = cmd
@@ -966,7 +961,7 @@ class Session:
                     else:
                         handler(code = cl, *args, **kwargs)
                 else:
-                    self.warning(f"未识别的命令: {cl.commandText}")
+                    self.warning(Settings.gettext("msg_cmd_not_recognized", cl.commandText))
 
         else:
             cmdtext, code = cl.expand(self, *args, **kwargs)
@@ -1162,18 +1157,6 @@ class Session:
 
         return counts
 
-    # def _addObjects(self, objs: dict, cls: type):
-    #     if cls == Alias:
-    #         self._aliases.update(objs)
-    #     elif cls == Command:
-    #         self._commands.update(objs)
-    #     elif cls == Trigger:
-    #         self._triggers.update(objs)
-    #     elif cls == Timer:
-    #         self._timers.update(objs)
-    #     elif cls == GMCPTrigger:
-    #         self._gmcp.update(objs)
-
     def _addObjects(self, objs):
         if isinstance(objs, list) or isinstance(objs, tuple):
             for item in objs:
@@ -1183,23 +1166,9 @@ class Session:
             for key, item in objs.items():
                 if isinstance(item, BaseObject):
                     if key != item.id:
-                        self.warning(f'对象 {item} 字典键值 {key} 与其id {item.id} 不一致，将丢弃键值，以其id添加到会话中...')
+                        self.warning(Settings.gettext("msg_id_not_consistent", item, key, item.id))
 
                     self._addObject(item)
-
-    # def _addObject(self, obj, cls: type):
-    #     #if type(obj) == cls:
-    #     if isinstance(obj, cls):
-    #         if cls == Alias:
-    #             self._aliases[obj.id] = obj
-    #         elif cls == Command:
-    #             self._commands[obj.id] = obj
-    #         elif cls == Trigger:
-    #             self._triggers[obj.id] = obj
-    #         elif cls == Timer:
-    #             self._timers[obj.id] = obj
-    #         elif cls == GMCPTrigger:
-    #             self._gmcp[obj.id] = obj
 
     def _addObject(self, obj):
         if isinstance(obj, Alias):
@@ -1620,7 +1589,7 @@ class Session:
         
         :param name: 变量名
         """
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         if name in self._variables.keys():
             self._variables.pop(name)
 
@@ -1638,7 +1607,7 @@ class Session:
                 session.setVariable("myvar1", "the value")
                 session.vars.myvar1 = "the value"
         """
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self._variables[name] = value
 
     def getVariable(self, name, default = None):
@@ -1657,7 +1626,7 @@ class Session:
                 myvar = session.vars.myvar1
         """
         """获取一个变量的值. 当name指定的变量不存在时，返回default"""
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         return self._variables.get(name, default)
     
     def setVariables(self, names, values):
@@ -1675,9 +1644,9 @@ class Session:
 
                 session.setVariables(hp_key, hp_value)
         """
-        assert isinstance(names, tuple) or isinstance(names, list), "names命名应为元组或列表，不接受其他类型"
-        assert isinstance(values, tuple) or isinstance(values, list), "values值应为元组或列表，不接受其他类型"
-        assert (len(names) > 0) and (len(values) > 0) and (len(names) == len(values)), "names与values应不为空，且长度相等"
+        assert isinstance(names, tuple) or isinstance(names, list), Settings.gettext("msg_shall_be_list_or_tuple", "names")
+        assert isinstance(values, tuple) or isinstance(values, list), Settings.gettext("msg_shall_be_list_or_tuple", "values")
+        assert (len(names) > 0) and (len(values) > 0) and (len(names) == len(values)), Settings.gettext("msg_names_and_values")
         for index in range(0, len(names)):
             name  = names[index]
             value = values[index]
@@ -1695,8 +1664,8 @@ class Session:
 
                 qi, jing, neili, jingli = session.getVariables(["qi", "jing", "neili", "jingli"])
         """
-        assert isinstance(names, tuple) or isinstance(names, list), "names命名应为元组或列表，不接受其他类型"
-        assert len(names) > 0, "names应不为空"
+        assert isinstance(names, tuple) or isinstance(names, list), Settings.gettext("msg_shall_be_list_or_tuple", "names")
+        assert len(names) > 0, Settings.gettext("msg_not_null", "names")
         values = list()
         for name in names:
             value = self.getVariable(name)
@@ -1728,7 +1697,7 @@ class Session:
 
         :param name: 全局变量的名称
         """
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self.application.del_globals(name)
 
     def setGlobal(self, name, value):
@@ -1738,7 +1707,7 @@ class Session:
         :param name: 全局变量的名称
         :param value: 全局变量的值
         """
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self.application.set_globals(name, value)
 
     def getGlobal(self, name, default = None):
@@ -1750,7 +1719,7 @@ class Session:
         :return: 全局变量的值，或者 default
         """
 
-        assert isinstance(name, str), "name必须是一个字符串"
+        assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         return self.application.get_globals(name, default)
 
     ## ###################
@@ -1832,7 +1801,7 @@ class Session:
             elif topic in self._sys_commands:
                 docstring = self._cmds_handler[topic].__doc__
             else:
-                docstring = f"未找到主题{topic}, 请确认输入是否正确."
+                docstring = Settings.gettext("msg_topic_not_found", topic)
             
             self.writetobuffer(docstring, True)
 
@@ -1911,12 +1880,12 @@ class Session:
             sec  = duration % 60
             time_msg = ""
             if hour > 0:
-                time_msg += f"{hour} 小时"
+                time_msg += f"{hour} {Settings.gettext('Hour')}"
             if min > 0:
-                time_msg += f"{min} 分"
-            time_msg += f"{math.ceil(sec)} 秒"
+                time_msg += f"{min} {Settings.gettext('Minute')}"
+            time_msg += f"{math.ceil(sec)} {Settings.gettext('Second')}"
 
-            self.info("已经与服务器连接了 {}".format(time_msg))
+            self.info(Settings.gettext("msg_connection_duration",time_msg))
 
     def handle_disconnect(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2118,7 +2087,7 @@ class Session:
                     self.writetobuffer(line, newline = True)
                     
             else:
-                self.warning(f"当前session中不存在名称为 {args[0]} 的变量")
+                self.warning(Settings.gettext("msg_no_object", args[0], Settings.gettext("variable")))
             
         elif len(args) == 2:
             val = None
@@ -2128,7 +2097,7 @@ class Session:
                 val = args[1]
 
             self.setVariable(args[0], val)
-            self.info(f"成功设置变量 {args[0]} 值为 {val}")
+            self.info(Settings.gettext("msg_object_value_setted", Settings.gettext("variable"), args[0], val.__repr__()))
 
     def handle_global(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2170,7 +2139,7 @@ class Session:
                 for line in lines:
                     self.writetobuffer(line, newline = True)
             else:
-                self.info("全局空间不存在名称为 {} 的变量".format(var), "全局变量")
+                self.warning(Settings.gettext("msg_no_global_object", var, Settings.gettext("variable")))
             
         elif len(args) == 2:
             val = None
@@ -2179,7 +2148,7 @@ class Session:
             except:
                 val = args[1]
             self.application.set_globals(args[0], val)
-            self.info(f"成功设置全局变量 {args[0]} 值为 {val}")
+            self.info(Settings.gettext("msg_object_value_setted", Settings.gettext("globalvar"), args[0], val.__repr__()))
 
     def _handle_objs(self, name: str, objs: dict, *args):
         if len(args) == 0:
@@ -2200,7 +2169,7 @@ class Session:
                 obj = objs[args[0]]
                 self.info(obj.__detailed__())
             else:
-                self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
+                self.warning(Settings.gettext("msg_object_not_exists", args[0], name))
 
         elif len(args) == 2:
             # 当第一个参数为对象obj名称时，对对象进行处理
@@ -2208,20 +2177,18 @@ class Session:
                 obj = objs[args[0]]
                 if args[1] == "on":
                     obj.enabled = True
-                    self.info(f"对象 {obj} 的使能状态已打开.")
+                    self.info(Settings.gettext("msg_object_enabled", obj.__repr__()))
                 elif args[1] == "off":
                     obj.enabled = False
-                    self.info(f"对象 {obj} 的使能状态已禁用.")
+                    self.info(Settings.gettext("msg_object_disabled", obj.__repr__()))
                 elif args[1] == "del":
                     obj.enabled = False
                     objs.pop(args[0])
-                    self.info(f"对象 {obj} 已从会话中删除.")
+                    self.info(Settings.gettext("msg_object_deleted", obj.__repr__()))
                 else:
-                    self.error(f"#{name.lower()}命令的第二个参数仅能接受on/off/del")
+                    self.error(Settings.gettext("msg_invalid_param", name.lower()))
             
-            # 当第一个参数为不是对象obj名称时，创建新对象 (此处还有BUG，调试中)
             else:
-                #self.warning(f"当前session中不存在key为 {args[0]} 的 {name}, 请确认后重试.")
                 pattern, code = args[0], args[1]
                 if (len(pattern)>=2) and (pattern[0] == '{') and (pattern[-1] == '}'):
                     pattern = pattern[1:-1]
@@ -2432,26 +2399,26 @@ class Session:
         if cmd in ("ig", "ignore"):
             self._ignore = not self._ignore
             if self._ignore:
-                self.info("所有触发器使能已全局禁用。")
+                self.info(Settings.gettext("msg_ignore_on"))
             else:
-                self.info("不再全局禁用所有触发器使能。")
+                self.info(Settings.gettext("msg_ignore_off"))
         elif cmd == "t+":
             if code.length <= 2:
-                self.warning("#T+使能组使用不正确，正确使用示例: #t+ mygroup \n请使用#help ignore进行查询。")
+                self.warning(Settings.gettext("msg_T_plus_incorrect"))
                 return
             
             groupname = code.code[2]
             cnts = self.enableGroup(groupname)
-            self.info(f"组 {groupname} 中的 {cnts[0]} 个别名，{cnts[1]} 个触发器，{cnts[2]} 个命令，{cnts[3]} 个定时器，{cnts[4]} 个GMCP触发器均已使能。")
+            self.info(Settings.gettext("msg_group_enabled", groupname, *cnts))
 
         elif cmd == "t-":
             if code.length <= 2:
-                self.warning("#T-禁用组使用不正确，正确使用示例: #t+ mygroup \n请使用#help ignore进行查询。")
+                self.warning(Settings.gettext("msg_T_minus_incorrect"))
                 return
             
             groupname = code.code[2]
             cnts = self.enableGroup(groupname, False)
-            self.info(f"组 {groupname} 中的 {cnts[0]} 个别名，{cnts[1]} 个触发器，{cnts[2]} 个命令，{cnts[3]} 个定时器，{cnts[4]} 个GMCP触发器均已禁用。")
+            self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
 
     def handle_repeat(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2468,7 +2435,7 @@ class Session:
         if self.connected and self.last_command:
             self.exec_command(self.last_command)
         else:
-            self.info("当前会话没有连接或没有键入过指令，repeat无效")
+            self.info(Settings.gettext("msg_repeat_invalid"))
 
     async def handle_num(self, times, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2547,7 +2514,7 @@ class Session:
             - ``#mess %line`` : 使用弹出窗口显示系统变量%line的值
         '''
 
-        title = "来自会话 {} 的消息".format(self.name)
+        title = Settings.gettext("msg_window_title", self.name)
 
         new_cmd_text, new_code = code.expand(self, *args, **kwargs)  
         index = new_cmd_text.find(" ")
@@ -2667,8 +2634,8 @@ class Session:
 
         except Exception as e:
             import traceback
-            self.error(f"模块 {module_name} 加载失败，异常为 {e}, 类型为 {type(e)}.")
-            self.error(f"异常追踪为： {traceback.format_exc()}")
+            self.error(Settings.gettext("msg_module_load_fail", module_name, e, type(e)))
+            self.error(Settings.gettext("msg_exception_traceback", traceback.format_exc()))
 
     def unload_module(self, module_names):
         """
@@ -2696,7 +2663,7 @@ class Session:
                 mod.unload()
 
         else:
-            self.warning(f"指定模块名称 {module_name} 并未加载.")
+            self.warning(Settings.gettext("msg_module_not_loaded", module_name))
 
     def reload_module(self, module_names = None):
         """
@@ -2711,7 +2678,7 @@ class Session:
                 if isinstance(module, ModuleInfo):
                     module.reload()
 
-            self.info(f"所有配置模块全部重新加载完成.")
+            self.info(Settings.gettext("msg_all_module_reloaded"))
 
         elif isinstance(module_names, (list, tuple)):
             for mod in module_names:
@@ -2721,7 +2688,7 @@ class Session:
                     if isinstance(module, ModuleInfo):
                         module.reload()
                 else:
-                    self.warning(f"指定模块名称 {mod} 并未加载，无法重新加载.")
+                    self.warning(Settings.gettext("msg_module_not_loaded", mod))
 
         elif isinstance(module_names, str):
             if module_names in self._modules.keys():
@@ -2729,7 +2696,7 @@ class Session:
                 if isinstance(module, ModuleInfo):
                     module.reload()
             else:
-                self.warning(f"指定模块名称 {module_names} 并未加载，无法重新加载.")
+                self.warning(Settings.gettext("msg_module_not_loaded", module_names))
         
 
     def handle_load(self, code: CodeLine = None, *args, **kwargs):
@@ -2811,9 +2778,9 @@ class Session:
 
                 elif mod in self.plugins.keys():
                     self.application.reload_plugin(self.plugins[mod])
-                    self.info(f'插件 {mod} 重新加载完成！')
+                    self.info(Settings.gettext("msg_plugin_reloaded", mod))
                 else:
-                    self.warning(f"指定名称 {mod} 既未找到模块，也未找到插件，重新加载失败..")
+                    self.warning(Settings.gettext("msg_name_not_found", mod))
 
     def handle_unload(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2870,9 +2837,9 @@ class Session:
         if len(args) == 0:
             count = len(self._modules.keys())
             if count == 0:
-                self.info("当前会话并未加载任何模块。", "MODULES")
+                self.info(Settings.gettext("msg_no_module"), "MODULES")
             else:
-                self.info(f"当前会话已加载 {count} 个模块，包括（按加载顺序排列）：{list(self._modules.keys())}", "MODULES")
+                self.info(Settings.gettext("msg_module_list", count, list(self._modules.keys()).__repr__()))
     
         elif len(args) >= 1:
             modules = ",".join(args).split(",")
@@ -2881,12 +2848,12 @@ class Session:
                     module = self._modules[mod]
                     if isinstance(module, ModuleInfo):
                         if module.ismainmodule:
-                            self.info(f"模块 {module.name} 中包含的配置包括: {', '.join(module.config.keys())}")
+                            self.info(Settings.gettext("msg_module_configurations", module.name, ",".join(module.config.keys())))
                         else:
-                            self.info(f"模块 {module.name} 为子模块，不包含配置。")
+                            self.info(Settings.gettext("msg_submodule_no_config"))
 
                 else:
-                    self.info(f"本会话中不存在指定名称 {mod} 的模块，可能是尚未加载到本会话中")
+                    self.info(Settings.gettext("msg_module_not_loaded", mod))
 
     def handle_reset(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -2937,7 +2904,7 @@ class Session:
             saved.pop("%raw", None)
             saved.pop("%copy", None)
             pickle.dump(saved, fp)
-            self.info(f"会话变量信息已保存到{file}")
+            self.info(Settings.gettext("msg_variables_saved", file))
 
     def handle_clear(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -3010,8 +2977,6 @@ class Session:
                     triggered_enabled += 1
                     if not block: 
                         triggered += 1
-                        # info_enabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 正常触发。{Settings.CLR_STYLE}")
-                        # info_enabled.append(f"    {Settings.INFO_STYLE}捕获：{state.wildcards}{Settings.CLR_STYLE}")
                         info_enabled.append(f"    {tri.__detailed__()} 正常触发。")
                         info_enabled.append(f"      捕获：{state.wildcards}")
                     
@@ -3208,15 +3173,6 @@ class Session:
     def info2(self, msg, title = "消息", style = Settings.INFO_STYLE):
         msg = f"{msg}"
 
-        # if Settings.client["newline"] in msg:
-        #     new_lines = list()
-        #     msg_lines = msg.split(Settings.client["newline"])
-        #     for line in msg_lines:
-        #         new_lines.append("{}{}".format(style, line))
-
-        #     msg = Settings.client["newline"].join(new_lines)
-
-        # 将颜色跨行显示移动到了MudFormatProcessor中，此处无需再处理(不行，还得恢复)
         self.writetobuffer("{}〔{}〕{}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = "提示", style = Settings.INFO_STYLE):

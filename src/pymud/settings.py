@@ -186,3 +186,6 @@ class Settings:
     @classmethod
     def gettext(cls, text: str):
         return cls.text[text] if text in cls.text else text
+    @classmethod
+    def gettext(self, text: str, *args, **kwargs):
+        return self.text[text].format(*args, **kwargs) if text in self.text else text.format(*args, **kwargs)
