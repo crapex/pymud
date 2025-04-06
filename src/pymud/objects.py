@@ -625,7 +625,7 @@ class MatchObject(BaseObject):
             await self.event.wait()
             self.reset()
         except Exception as e:
-            self.error(Settings.gettext("exception_in_async").format(e))
+            self.error(Settings.gettext("exception_in_async", e))
 
         return self.state
     

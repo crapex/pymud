@@ -77,10 +77,10 @@ class WelcomeDialog(BasicDialog):
         import platform, sys
         body = HSplit([
             Window(height=1),
-            Label(HTML(Settings.gettext("appinfo").format(Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
-            Label(HTML(Settings.gettext("author").format(Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
+            Label(HTML(Settings.gettext("appinfo", Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
+            Label(HTML(Settings.gettext("author", Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
             Label(self.website, align=WindowAlign.CENTER),
-            Label(Settings.gettext("sysversion").format(platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
+            Label(Settings.gettext("sysversion", platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
 
             Window(height=1),
         ])

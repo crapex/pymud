@@ -96,8 +96,8 @@ TRANSLATION = {
 
 
         # text display in session.py
-        "msg_var_autoload_success"      : "自动从 {0} 中加载保存变量成功",
-        "msg_var_autoload_fail"         : "自动从 {0} 中加载变量失败，错误消息为： {1}",
+        "msg_var_autoload_success"      : "自动从 {0} 中加载保存变量成功。",
+        "msg_var_autoload_fail"         : "自动从 {0} 中加载变量失败，错误消息为： {1}。",
         "msg_auto_script"               : "即将自动加载以下模块: {0}",
         "msg_connection_fail"           : "创建连接过程中发生错误, 错误发生时刻 {0}, 错误信息为 {1}。",
         "msg_auto_reconnect"            : "{0} 秒之后将自动重新连接...",

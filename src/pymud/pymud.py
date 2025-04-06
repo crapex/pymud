@@ -524,7 +524,7 @@ class PyMudApp:
                     line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
-                    self.set_status(Settings.gettext("msg_copy").format(selection))
+                    self.set_status(Settings.gettext("msg_copy", selection))
                     if self.current_session:
                         self.current_session.setVariable("%copy", selection)
                 else:
@@ -536,7 +536,7 @@ class PyMudApp:
                         lines.append(line_plain)
 
                     self.app.clipboard.set_text("\n".join(lines))
-                    self.set_status(Settings.gettext("msg_copylines").format(1 + erow - srow))
+                    self.set_status(Settings.gettext("msg_copylines", 1 + erow - srow))
                     
                     if self.current_session:
                         self.current_session.setVariable("%copy", "\n".join(lines))
@@ -546,7 +546,7 @@ class PyMudApp:
                 if srow == erow:
                     line = b.document.current_line
                     self.app.clipboard.set_text(line)
-                    self.set_status(Settings.gettext("msg_copy").format(line))
+                    self.set_status(Settings.gettext("msg_copy", line))
                     
                     if self.current_session:
                         self.current_session.setVariable("%copy", line)
@@ -555,7 +555,7 @@ class PyMudApp:
                     lines = b.document.lines[srow:erow+1]
                     copy_raw_text = "".join(lines)
                     self.app.clipboard.set_text(copy_raw_text)
-                    self.set_status(Settings.gettext("msg_copylines").format(1 + erow - srow))
+                    self.set_status(Settings.gettext("msg_copylines", 1 + erow - srow))
 
                     if self.current_session:
                         self.current_session.setVariable("%copy", copy_raw_text)
@@ -590,7 +590,7 @@ class PyMudApp:
 
             result = True
         else:
-            self.set_status(Settings.gettext("msg_session_exists").format(name))
+            self.set_status(Settings.gettext("msg_session_exists", name))
 
         return result
 
@@ -1259,7 +1259,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         # plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(Settings.gettext("msg_plugin_load_error").format(file, e))
+                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -1274,7 +1274,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(Settings.gettext("msg_plugin_load_error").format(file, e))
+                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
 
     def reload_plugin(self, plugin: Plugin):
         "重新加载指定插件"

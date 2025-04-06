@@ -169,13 +169,13 @@ class Session:
                         try:
                             vars = pickle.load(fp)
                             self._variables.update(vars)
-                            self.info(Settings.gettext("msg_var_autoload_success").format(file))
+                            self.info(Settings.gettext("msg_var_autoload_success", file))
                         except Exception as e:
-                            self.warning(Settings.gettext("msg_var_autoload_fail").format(file, e))
+                            self.warning(Settings.gettext("msg_var_autoload_fail", file, e))
 
         
         if self._auto_script:
-            self.info(Settings.gettext("msg_auto_script").format(self._auto_script))
+            self.info(Settings.gettext("msg_auto_script", self._auto_script))
             self.load_module(self._auto_script)
 
         if Settings.client["auto_connect"]:
@@ -237,14 +237,14 @@ class Session:
         
         :param timeout: 重连之前的等待时间，默认15s，可由 `Settings.client['reconnect_wait']` 设置所覆盖
         """
-        self.info(Settings.gettext("msg_auto_reconnect").format(timeout))
+        self.info(Settings.gettext("msg_auto_reconnect", timeout))
         await asyncio.sleep(timeout)
         await self.create_task(self.connect())
 
     def onConnected(self):
         "当连接到服务器之后执行的操作。包括打印连接时间，执行自定义事件(若设置)等。"
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.info(Settings.gettext("msg_connected").format(now))
+        self.info(Settings.gettext("msg_connected", now))
         if isinstance(self.after_connect, str):
             self.writeline(self.after_connect)
 
@@ -265,7 +265,7 @@ class Session:
         
         self.clean()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.info(Settings.gettext("msg_disconnected").format(now))
+        self.info(Settings.gettext("msg_disconnected", now))
 
         event_disconnected = self._events["disconnected"]
         if callable(event_disconnected):

@@ -10,7 +10,8 @@
             "type": "debugpy",
             "request": "launch",
             "module": "pymud",
-            "args": ["-s", "~/prog/newpkuxkx/"]
+            "args": ["-s", "~/prog/newpkuxkx/"],
+            "justMyCode": false
         }
     ]
 }

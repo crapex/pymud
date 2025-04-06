@@ -20,5 +20,8 @@ debug/
 # docs build is build test directory
 docs/build
 docs/build/
+
+# my update file for debugging
 update
 update.bat
+.vscode/

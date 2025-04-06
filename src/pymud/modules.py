@@ -35,13 +35,13 @@ class ModuleInfo:
                     try:
                         self._config[f"{self.name}.{attr_name}"] = attr(self.session, reload = reload)
                         if not reload:
-                            self.session.info(Settings.gettext("configuration_created").format(self.name, attr_name))
+                            self.session.info(Settings.gettext("configuration_created", self.name, attr_name))
                         else:
-                            self.session.info(Settings.gettext("configuration_recreated").format(self.name, attr_name))
+                            self.session.info(Settings.gettext("configuration_recreated", self.name, attr_name))
 
                     except Exception as e:
                         result = False
-                        self.session.error(Settings.gettext("configuration_fail").format(self.name, attr_name, e))
+                        self.session.error(Settings.gettext("configuration_fail", self.name, attr_name, e))
         self._ismainmodule = (self._config != {})
         return result
     
