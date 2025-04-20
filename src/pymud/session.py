@@ -2197,18 +2197,18 @@ class Session:
                 if name == "alias":
                     ali = SimpleAlias(self, pattern, code)
                     self.addAlias(ali)
-                    self.info("创建Alias {} 成功: {}".format(ali.id, ali.__repr__()))
+                    self.info(Settings.gettext("msg_alias_created", ali.id, ali.__repr__()))
                 elif name == "trigger":
                     tri = SimpleTrigger(self, pattern, code)
                     self.addTrigger(tri)
-                    self.info("创建Trigger {} 成功: {}".format(tri.id, tri.__repr__()))
+                    self.info(Settings.gettext("msg_trigger_created", tri.id, tri.__repr__()))
                 elif name == "timer":
                     if pattern.isnumeric():
                         timeout = float(pattern)
                         if timeout > 0:
                             ti  = SimpleTimer(self, code, timeout = timeout)
                             self.addTimer(ti)
-                            self.info("创建Timer {} 成功: {}".format(ti.id, ti.__repr__()))
+                            self.info(Settings.gettext("msg_timer_created", ti.id, ti.__repr__()))
 
     def handle_alias(self, code: CodeLine = None, *args, **kwargs):
         r"""
@@ -2977,16 +2977,16 @@ class Session:
                     triggered_enabled += 1
                     if not block: 
                         triggered += 1
-                        info_enabled.append(f"    {tri.__detailed__()} 正常触发。")
-                        info_enabled.append(f"      捕获：{state.wildcards}")
+                        info_enabled.append(Settings.gettext("msg_tri_triggered", tri.__detailed__()))
+                        info_enabled.append(Settings.gettext("msg_tri_wildcards", state.wildcards))
                     
                         if not tri.keepEval:                # 非持续匹配的trigger，匹配成功后停止检测后续Trigger
-                            info_enabled.append(f"      {Settings.WARN_STYLE}该触发器未开启keepEval, 会阻止后续触发器。{Settings.CLR_STYLE}")
-                            #info_enabled.append(f"    该触发器未开启keepEval, 会阻止后续触发器。")
+                            info_enabled.append(Settings.gettext("msg_tri_prevent", Settings.WARN_STYLE, Settings.CLR_STYLE))
+                            #info_enabled.append(f"      {Settings.WARN_STYLE}该触发器未开启keepEval, 会阻止后续触发器。{Settings.CLR_STYLE}")
                             block = True
                     else:
-                        info_enabled.append(f"    {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
-                        #info_enabled.append(f"  {tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。")
+                        info_enabled.append(Settings.gettext("msg_tri_ignored", tri.__detailed__(), Settings.WARN_STYLE, Settings.CLR_STYLE))
+                        # info_enabled.append(f"    {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
             
             
             for tri in tris_disabled:
@@ -2997,37 +2997,47 @@ class Session:
 
                 if state.result == Trigger.SUCCESS:
                     triggered_disabled += 1
-                    # info_disabled.append(f"  {Settings.INFO_STYLE}{tri.__detailed__()} 可以匹配触发。{Settings.CLR_STYLE}")
-                    info_disabled.append(f"    {tri.__detailed__()} 可以匹配触发。")
+                    #info_disabled.append(f"    {tri.__detailed__()} 可以匹配触发。")
+                    info_disabled.append(Settings.gettext("msg_tri_matched", tri.__detailed__()))
 
             if triggered_enabled + triggered_disabled == 0:
                 info_all.append("")
 
         if triggered_enabled == 0:
-            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，没有可以触发的。")
+            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_0", Settings.INFO_STYLE))
+            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，没有可以触发的。")
         elif triggered < triggered_enabled:
-            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
+            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_1", Settings.INFO_STYLE, triggered_enabled, triggered, triggered_enabled - triggered))
+            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
         else:
-            info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
+            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_2", Settings.INFO_STYLE, triggered_enabled))
+            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
 
         if triggered_disabled > 0:
-            info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
+            info_disabled.insert(0, Settings.gettext("msg_disabled_summary_0", Settings.INFO_STYLE, triggered_disabled))
+            #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
         else:
-            info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能触发器，没有可以匹配的。")
+            info_disabled.insert(0, Settings.gettext("msg_disabled_summary_1", Settings.INFO_STYLE))
+            #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能触发器，没有可以匹配的。")
         
         info_all.append("")
         if triggered_enabled + triggered_disabled == 0:
             #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
-            info_all.append(f"  测试内容: {line}")
-            info_all.append(f"  测试结果: 没有可以匹配的触发器。")
+            info_all.append(Settings.gettext("msg_test_summary_0", line))
+            info_all.append(Settings.gettext("msg_test_summary_1"))
+            #info_all.append(f"  测试内容: {line}")
+            #info_all.append(f"  测试结果: 没有可以匹配的触发器。")
         else:
             #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
-            info_all.append(f"  测试内容: {line}")
-            info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
+            info_all.append(Settings.gettext("msg_test_summary_0", line))
+            info_all.append(Settings.gettext("msg_test_summary_2", triggered, triggered_enabled + triggered_disabled))
+            #info_all.append(f"  测试内容: {line}")
+            #info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
             info_all.extend(info_enabled)
             info_all.extend(info_disabled)
         
-        title = f"触发器测试 - {'响应模式' if docallback else '测试模式'}"
+        title = Settings.gettext("msg_test_title", Settings.gettext("msg_triggered_mode") if docallback else Settings.gettext("msg_matched_mode"))
+        #title = f"触发器测试 - {'响应模式' if docallback else '测试模式'}"
         self.info("\n".join(info_all), title)
         #self.info("PYMUD 触发器测试 完毕")
 
@@ -3049,17 +3059,21 @@ class Session:
         if len(args) == 0:
             count = len(self.plugins.keys())
             if count == 0:
-                self.info("PYMUD当前并未加载任何插件。", "PLUGINS")
+                self.info(Settings.gettext("msg_no_plugins"), "PLUGINS")
+                #self.info("PYMUD当前并未加载任何插件。", "PLUGINS")
             else:
-                self.info(f"PYMUD当前已加载 {count} 个插件，分别为：", "PLUGINS")
+                self.info(Settings.gettext("msg_plugins_list", count), "PLUGINS")
+                #self.info(f"PYMUD当前已加载 {count} 个插件，分别为：", "PLUGINS")
                 for name, plugin in self.plugins.items():
-                    self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
+                    self.info(Settings.gettext("msg_plugins_info", plugin.desc['DESCRIPTION'], plugin.desc['VERSION'], plugin.desc['AUTHOR'], plugin.desc['RELEASE_DATE']), f"PLUGIN {name}")
+                    #self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
         
         elif len(args) == 1:
             name = args[0]
             if name in self.plugins.keys():
                 plugin = self.plugins[name]
-                self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
+                self.info(Settings.gettext("msg_plugins_info", plugin.desc['DESCRIPTION'], plugin.desc['VERSION'], plugin.desc['AUTHOR'], plugin.desc['RELEASE_DATE']), f"PLUGIN {name}")
+                #self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
                 self.writetobuffer(plugin.help, True)
 
     def handle_replace(self, code: CodeLine = None, *args, **kwargs):
@@ -3120,7 +3134,7 @@ class Session:
         try:
             exec(code.commandText[4:])
         except Exception as e:
-            self.error(f"Python执行错误：{e}")
+            self.error(Settings.gettext("msg_py_exception", e))
 
     def handle_info(self, code: CodeLine = None, *args, **kwargs):
         '''
@@ -3170,12 +3184,13 @@ class Session:
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.error(new_text[7:])
 
-    def info2(self, msg, title = "消息", style = Settings.INFO_STYLE):
+    def info2(self, msg, title = None, style = Settings.INFO_STYLE):
+        title = title or Settings.gettext("title_msg")
         msg = f"{msg}"
 
         self.writetobuffer("{}〔{}〕{}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
-    def info(self, msg, title = "提示", style = Settings.INFO_STYLE):
+    def info(self, msg, title = None, style = Settings.INFO_STYLE):
         """
         使用默认的INFO_STYLE（绿色）输出信息，并自动换行。信息格式类似 [title] msg
         
@@ -3183,9 +3198,10 @@ class Session:
         :param title: 要显示在前面的标题，不指定时默认为 PYMUD INFO
         :param style: 要输出信息的格式(ANSI)， 默认为 INFO_STYLE, \x1b[32m
         """
+        title = title or Settings.gettext("title_info")
         self.info2(msg, title, style)
 
-    def warning(self, msg, title = "警告", style = Settings.WARN_STYLE):
+    def warning(self, msg, title = None, style = Settings.WARN_STYLE):
         """
         使用默认的WARN_STYLE（黄色）输出信息，并自动换行。信息格式类似 [title] msg
         
@@ -3193,9 +3209,10 @@ class Session:
         :param title: 要显示在前面的标题，不指定时默认为 PYMUD WARNING
         :param style: 要输出信息的格式(ANSI)， 默认为 WARN_STYLE, \x1b[33m
         """
+        title = title or Settings.gettext("title_warning")
         self.info2(msg, title, style)
 
-    def error(self, msg, title = "错误", style = Settings.ERR_STYLE):
+    def error(self, msg, title = None, style = Settings.ERR_STYLE):
         """
         使用默认的ERR_STYLE（红色）输出信息，并自动换行。信息格式类似 [title] msg
         
@@ -3203,6 +3220,7 @@ class Session:
         :param title: 要显示在前面的标题，不指定时默认为 PYMUD ERROR
         :param style: 要输出信息的格式(ANSI)， 默认为 ERR_STYLE, \x1b[31m
         """
+        title = title or Settings.gettext("title_error")
         self.info2(msg, title, style)
 
     def handle_log(self, code: CodeLine = None, *args, **kwargs):
@@ -3248,16 +3266,21 @@ class Session:
         if len(args) == 0:
             session_loggers = set(self._loggers.keys())
             app_loggers = set(self.application.loggers.keys()).difference(session_loggers)
-            self.info("本会话中的记录器情况:")
+            
+            self.info(Settings.gettext("msg_log_title"))
+            #self.info("本会话中的记录器情况:")
             for name in session_loggers:
                 logger = self.application.loggers[name]
-                self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
+                self.info(f"{Settings.gettext('logger')} {logger.name}, {Settings.gettext('logger_status')}: {Settings.gettext('enabled') if logger.enabled else Settings.gettext('disabled')}, {Settings.gettext('file_mode')}: {logger.mode}, {Settings.gettext('logger_mode')}: {Settings.gettext('ANSI') if logger.raw else Settings.gettext('plain_text')}")
+                #self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
 
             if len(app_loggers) > 0:
-                self.info("本应用其他会话中的记录器情况:")
+                self.info(Settings.gettext("msg_log_title2"))
+                #self.info("本应用其他会话中的记录器情况:")
                 for name in app_loggers:
                     logger = self.application.loggers[name]
-                    self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
+                    self.info(f"{Settings.gettext('logger')} {logger.name}, {Settings.gettext('logger_status')}: {Settings.gettext('enabled') if logger.enabled else Settings.gettext('disabled')}, {Settings.gettext('file_mode')}: {logger.mode}, {Settings.gettext('logger_mode')}: {Settings.gettext('ANSI') if logger.raw else Settings.gettext('plain_text')}")
+                    #self.info(f"记录器 {logger.name}, 当前状态: {'开启' if logger.enabled else '关闭'}, 文件模式: {logger.mode}, 记录模式: {'ANSI' if logger.raw else '纯文本'}")
 
         else:
             name = self.name
@@ -3267,24 +3290,30 @@ class Session:
             if (args[0] == "start"):
                 if "-n" in args:
                     mode = "n"
-                    mode_name = '新建'
+                    #mode_name = '新建'
+                    mode_name = Settings.gettext("filemode_new")
                 elif "-w" in args:
                     mode = "w"
-                    mode_name = '覆写'
+                    #mode_name = '覆写'
+                    mode_name = Settings.gettext("filemode_overwrite")
                 else:
                     mode = "a"
-                    mode_name = '添加'
+                    #mode_name = '追加'
+                    mode_name = Settings.gettext("filemode_append")
 
                 raw = True if "-r" in args else False
-                raw_name = '原始ANSI' if raw else '纯文本'
+                #raw_name = '原始ANSI' if raw else '纯文本'
+                raw_name = Settings.gettext("ANSI") if raw else Settings.gettext("plain_text")
 
                 logger = self.getLogger(name = name, mode = mode, raw = raw)
                 logger.enabled = True
 
-                self.info(f"{datetime.datetime.now()}: 记录器{name}以{mode_name}文件模式以及{raw_name}记录模式开启。")
+                #self.info(f"{datetime.datetime.now()}: 记录器{name}以{mode_name}文件模式以及{raw_name}记录模式开启。")
+                self.info(Settings.gettext("msg_logger_enabled", datetime.datetime.now(), name, mode_name, raw_name))
 
             elif (args[0] == "stop"):
-                self.info(f"{datetime.datetime.now()}: 记录器{name}记录已关闭。")
+                #self.info(f"{datetime.datetime.now()}: 记录器{name}记录已关闭。")
+                self.info(Settings.gettext("msg_logger_disabled", datetime.datetime.now(), name))
                 self.log.enabled = False
 
             elif (args[0] == "show"):
@@ -3301,7 +3330,7 @@ class Session:
                         self.application.logFileShown = filepath
                         self.application.showLogInTab()
                     else:
-                        self.warning(f'指定记录文件 {file} 不存在！')
+                        self.warning(Settings.gettext("msg_logfile_not_exists", file))
                     
                 else:
                     self.application.show_logSelectDialog()

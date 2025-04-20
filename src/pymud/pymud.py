@@ -675,7 +675,7 @@ class PyMudApp:
         async def coroutine():
             if self.current_session:
                 if self.current_session.connected:
-                    dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt")}</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt", self.current_session.name)}</style>'))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         self.current_session.disconnect()
@@ -820,7 +820,7 @@ class PyMudApp:
                     con_sessions.append(session.name)
 
             if len(con_sessions) > 0:
-                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext('warning_exit')}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt")}</style>'.format(len(con_sessions), ", ".join(con_sessions))))
+                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext('warning_exit')}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt", len(con_sessions), ", ".join(con_sessions))}</style>'))
                 result = await self.show_dialog_as_float(dlgQuery)
                 if result:
                     for ss_name in con_sessions:
@@ -939,15 +939,14 @@ class PyMudApp:
                 dura = dura - hours * HOUR
                 mins = dura // MINUTE
                 sec = dura - mins * MINUTE
-
                 if days > 0:
-                    con_str = Settings.gettext("status_connected") + ": {:.0f}天{:.0f}小时{:.0f}分{:.0f}秒".format(days, hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{4}{1:.0f}{5}{2:.0f}{6}{3:.0f}{7}".format(days, hours, mins, sec, Settings.gettext("Day"), Settings.gettext("Hour"), Settings.gettext("Minute"), Settings.gettext("Second"))
                 elif hours > 0:
-                    con_str = Settings.gettext("status_connected") + ": {:.0f}小时{:.0f}分{:.0f}秒".format(hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{3}{1:.0f}{4}{2:.0f}{5}".format(hours, mins, sec, Settings.gettext("Hour"), Settings.gettext("Minute"), Settings.gettext("Second"))
                 elif mins > 0:
-                    con_str = Settings.gettext("status_connected") + ": {:.0f}分{:.0f}秒".format(mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{2}{1:.0f}{3}".format(mins, sec, Settings.gettext("Minute"), Settings.gettext("Second"))
                 else:
-                    con_str = Settings.gettext("status_connected") + ": {:.0f}秒".format(sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}{}".format(sec, Settings.gettext("Second"))
 
         return "{}{}{}{} {} {} ".format(beautify, mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
