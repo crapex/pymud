@@ -31,6 +31,12 @@
 
 ## 版本更新信息
 
+### 0.21.0a1 (2025-05-15)
++ 功能新增: 增加了国际化(i18n)支持，支持中文简体和英文。目前完全支持的仅中文简体，英文只完成了界面翻译，运行时的#help帮助内容暂未翻译。
++ 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法
++ 问题修复: 之前对Alias和Command未进行优先级判断，因此遇到能同时匹配的多个时，不一定优先级高的被触发。现在对Alias和Command进行了优先级判断，优先级高的先触发。
++ 问题修复: 之前的Alias中的keepEval参数和oneShot参数不起作用，已修复。keepEval参数支持多个匹配成功的别名同时生效，oneShot参数支持一个匹配成功的别名生效后，后续的匹配不再生效。
+
 ### 0.20.4 (2025-03-30)
 + 功能调整: 为插件功能新增了 PLUGIN_PYMUD_DESTROY 方法，用于在插件被卸载时，进行一些清理工作。
 + 功能调整: 将插件的 PLUGIN_PYMUD_START 方法的调用，从插件加载时刻移动到事件循环启动之后，这样在加载时，可以使用 asyncio.create_task或 asyncio.ensure_future 来执行一些异步操作

@@ -11,9 +11,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.20.4"
+    __version__   = "0.21.0a1"
     "APP 当前版本"
-    __release__   = "2025-03-30"
+    __release__   = "2025-05-15"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -22,7 +22,7 @@ class Settings:
     __website__     = "https://pymud.readthedocs.io/"
     "帮助文档发布网址"
 
-    language = "en"
+    language = "chs"
 
     server = {
         "default_encoding"  : "utf-8",              # 服务器默认编码

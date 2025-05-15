@@ -654,7 +654,7 @@ class Session:
 
         if not self._ignore:
             # 修改实现，形成列表时即排除非使能状态触发器，加快响应速度
-            #all_tris = list(self._triggers.values())
+
             all_tris = [tri for tri in self._triggers.values() if isinstance(tri, Trigger) and tri.enabled]
             all_tris.sort(key = lambda tri: tri.priority)
 
@@ -976,23 +976,35 @@ class Session:
         :param cmdtext: 纯文本命令
         """
         isNotCmd = True
+
+        # fix bugs, commands filter for enabled and sorted for priority
+        avai_cmds = [cmd for cmd in self._commands.values() if isinstance(cmd, Command) and cmd.enabled]
+        avai_cmds.sort(key = lambda cmd: cmd.priority)
+
         for command in self._commands.values():
-            if isinstance(command, Command) and command.enabled:
-                state = command.match(cmdtext)
-                if state.result == Command.SUCCESS:
-                    # 命令的任务名称采用命令id，以便于后续查错
-                    self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
-                    isNotCmd = False
-                    break
+            state = command.match(cmdtext)
+            if state.result == Command.SUCCESS:
+                # 命令的任务名称采用命令id，以便于后续查错
+                self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
+                isNotCmd = False
+                break
 
         # 再判断是否是别名
         if isNotCmd:
             notAlias = True
-            for alias in self._aliases.values():
-                if isinstance(alias, Alias) and alias.enabled: 
-                    state = alias.match(cmdtext)
-                    if state.result == Alias.SUCCESS:
-                        notAlias = False
+
+            # fix bugs, aliases filter for enabled and sorted for priority, and add oneShot, keepEval judge
+            avai_alis = [ali for ali in self._aliases.values() if isinstance(ali, Alias) and ali.enabled]
+            avai_alis.sort(key = lambda ali: ali.priority)
+ 
+            for alias in avai_alis:               
+                state = alias.match(cmdtext)
+                if state.result == Alias.SUCCESS:
+                    notAlias = False
+                    if alias.oneShot:
+                        self.delAlias(alias.id)
+
+                    if not alias.keepEval:
                         break
 
             # 都不是则是普通命令，直接发送
@@ -1007,23 +1019,35 @@ class Session:
         """
         result = None
         isNotCmd = True
-        for command in self._commands.values():
-            if isinstance(command, Command) and command.enabled:
-                state = command.match(cmdtext)
-                if state.result == Command.SUCCESS:
-                    # 命令的任务名称采用命令id，以便于后续查错
-                    result = await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
-                    isNotCmd = False
-                    break
+
+        # fix bugs, commands filter for enabled and sorted for priority
+        avai_cmds = [cmd for cmd in self._commands.values() if isinstance(cmd, Command) and cmd.enabled]
+        avai_cmds.sort(key = lambda cmd: cmd.priority)
+
+        for command in avai_cmds:
+            state = command.match(cmdtext)
+            if state.result == Command.SUCCESS:
+                # 命令的任务名称采用命令id，以便于后续查错
+                result = await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
+                isNotCmd = False
+                break
 
         # 再判断是否是别名
         if isNotCmd:
             notAlias = True
-            for alias in self._aliases.values():
-                if isinstance(alias, Alias) and alias.enabled: 
-                    state = alias.match(cmdtext)
-                    if state.result == Alias.SUCCESS:
-                        notAlias = False
+
+            # fix bugs, aliases filter for enabled and sorted for priority, and add oneShot, keepEval judge
+            avai_alis = [ali for ali in self._aliases.values() if isinstance(ali, Alias) and ali.enabled]
+            avai_alis.sort(key = lambda ali: ali.priority)
+ 
+            for alias in avai_alis:               
+                state = alias.match(cmdtext)
+                if state.result == Alias.SUCCESS:
+                    notAlias = False
+                    if alias.oneShot:
+                        self.delAlias(alias.id)
+
+                    if not alias.keepEval:
                         break
 
             # 都不是则是普通命令，直接发送

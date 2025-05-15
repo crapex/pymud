@@ -1,7 +1,7 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.20.4"  # Required
+version = "0.21.0a1"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.7"
@@ -22,8 +22,8 @@ classifiers = [  # Optional
   #   3 - Alpha
   #   4 - Beta
   #   5 - Production/Stable
-  "Development Status :: 5 - Production/Stable",
-  # "Development Status :: 3 - Alpha",
+  #"Development Status :: 5 - Production/Stable",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: End Users/Desktop",
   "Topic :: Games/Entertainment :: Multi-User Dungeons (MUD)",
   # "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -37,8 +37,16 @@ classifiers = [  # Optional
   "Programming Language :: Python :: 3 :: Only",
 ]
 
-dependencies = [ 
-  "wcwidth", "pyperclip", "pygments", "prompt-toolkit"
+dependencies = [
+  "wcwidth",
+  "pyperclip",
+  "pygments",
+  "prompt-toolkit",
+  "recommonmark>=0.7.1",
+  "sphinx>=5.3.0",
+  "sphinx-markdown-tables>=0.0.17",
+  "sphinx-rtd-theme>=2.0.0",
+  "piccolo-theme>=0.24.0",
 ]
 
 [project.urls]  # Optional

@@ -2,9 +2,126 @@
 import importlib, importlib.util
 from abc import ABC, ABCMeta
 from typing import Any
-from .objects import BaseObject, Command
+from .objects import BaseObject, Command, Trigger, Alias, Timer, GMCPTrigger
 from .settings import Settings
+from .extras import DotDict
 
+class PymudDecorator:
+    """
+    装饰器基类。使用装饰器可以快捷创建各类Pymud基础对象。
+    
+        :param type: 装饰器的类型，用于区分不同的装饰器，为字符串类型。
+        :param args: 可变位置参数，用于传递额外的参数。
+        :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
+    """
+    def __init__(self, type: str, *args, **kwargs):
+        self.type = type
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, func):
+        decos = getattr(func, "__pymud_decorators__", [])
+        decos.append(self)
+        func.__pymud_decorators__ = decos
+        return func
+        return self
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} type = {self.type} args = {self.args} kwargs = {self.kwargs}>"
+
+
+def alias(patterns, id = None, group = "", enabled = True, ignoreCase = False, isRegExp = True, keepEval = False, expandVar = True, priority = 100, oneShot = False,  *args, **kwargs):
+    """
+    使用装饰器创建一个别名（Alias）对象。被装饰的函数将在别名成功匹配时调用。
+    被装饰的函数，除第一个参数为类实例本身self之外，另外包括id, line, wildcards三个参数。
+    其中id为别名对象的唯一标识符，line为匹配的文本行，wildcards为匹配的通配符列表。
+
+    :param patterns: 别名匹配的模式。
+    :param id: 别名对象的唯一标识符，不指定时将自动生成唯一标识符。
+    :param group: 别名所属的组名，默认为空字符串。
+    :param enabled: 别名是否启用，默认为 True。
+    :param ignoreCase: 匹配时是否忽略大小写，默认为 False。
+    :param isRegExp: 模式是否为正则表达式，默认为 True。
+    :param keepEval: 若存在多个可匹配的别名时，是否持续匹配，默认为 False。
+    :param expandVar: 是否展开变量，默认为 True。
+    :param priority: 别名的优先级，值越小优先级越高，默认为 100。
+    :param oneShot: 别名是否只触发一次后自动失效，默认为 False。
+    :param args: 可变位置参数，用于传递额外的参数。
+    :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
+    :return: PymudDecorator 实例，类型为 "alias"。
+    """
+    # 将传入的参数更新到 kwargs 字典中
+    kwargs.update({
+        "patterns": patterns,
+        "id": id, 
+        "group": group, 
+        "enabled": enabled, 
+        "ignoreCase": ignoreCase, 
+        "isRegExp": isRegExp, 
+        "keepEval": keepEval, 
+        "expandVar": expandVar, 
+        "priority": priority, 
+        "oneShot": oneShot})
+    
+    # 如果 id 为 None，则从 kwargs 中移除 "id" 键
+    if not id:
+        kwargs.pop("id")
+
+    return PymudDecorator("alias", *args, **kwargs)
+def trigger(patterns, id = None, group = "", enabled = True, ignoreCase = False, isRegExp = True, keepEval = False, expandVar = True, raw = False, priority = 100, oneShot = False,  *args, **kwargs):
+    """
+    使用装饰器创建一个触发器（Trigger）对象。
+
+    :param patterns: 触发器匹配的模式。单行模式可以是字符串或正则表达式，多行模式必须是元组或列表，其中每个元素都是字符串或正则表达式。
+    :param id: 触发器对象的唯一标识符，不指定时将自动生成唯一标识符。
+    :param group: 触发器所属的组名，默认为空字符串。
+    :param enabled: 触发器是否启用，默认为 True。
+    :param ignoreCase: 匹配时是否忽略大小写，默认为 False。
+    :param isRegExp: 模式是否为正则表达式，默认为 True。
+    :param keepEval: 若存在多个可匹配的触发器时，是否持续匹配，默认为 False。
+    :param expandVar: 是否展开变量，默认为 True。
+    :param raw: 是否使用原始匹配方式，默认为 False。原始匹配方式下，不对 VT100 下的 ANSI 颜色进行解码，因此可以匹配颜色；正常匹配仅匹配文本。
+    :param priority: 触发器的优先级，值越小优先级越高，默认为 100。
+    :param oneShot: 触发器是否只触发一次后自动失效，默认为 False。
+    :param args: 可变位置参数，用于传递额外的参数。
+    :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
+    :return: PymudDecorator 实例，类型为 "trigger"。
+    """
+    # 将传入的参数更新到 kwargs 字典中
+    kwargs.update({
+        "patterns": patterns,
+        "id": id, 
+        "group": group, 
+        "enabled": enabled, 
+        "ignoreCase": ignoreCase, 
+        "isRegExp": isRegExp, 
+        "keepEval": keepEval, 
+        "expandVar": expandVar, 
+        "raw": raw,
+        "priority": priority, 
+        "oneShot": oneShot})
+    if not id:
+        kwargs.pop("id")
+    return PymudDecorator("trigger", *args, **kwargs)
+
+def timer(timeout, *args, **kwargs):
+    kwargs.update({"timeout": timeout})
+    return PymudDecorator("timer", *args, **kwargs)
+
+def gmcp(name, *args, **kwargs):
+    kwargs.update({"id": name})
+    return PymudDecorator("gmcp", *args, **kwargs)
+class PymudMeta(type):
+    def __new__(cls, name, bases, attrs):
+        decorator_funcs = {}
+        for name, value in attrs.items():
+            if hasattr(value, "__pymud_decorators__"):
+                decorator_funcs[value.__name__] = getattr(value, "__pymud_decorators__", [])
+                
+        attrs["_decorator_funcs"] = decorator_funcs
+
+        return super().__new__(cls, name, bases, attrs)
+    
 class ModuleInfo:
     """
     模块管理类。对加载的模块文件进行管理。该类型由Session类进行管理，无需人工创建和干预。
@@ -106,7 +223,7 @@ class ModuleInfo:
         "只读属性，区分是否主模块（即包含具体config的模块）"
         return self._ismainmodule
 
-class IConfig(metaclass = ABCMeta):
+class IConfig(metaclass = PymudMeta):
     """
     用于提示PyMUD应用是否自动创建该配置类型的基础类（模拟接口）。
     
@@ -116,11 +233,48 @@ class IConfig(metaclass = ABCMeta):
     可以从kwargs 中获取该参数，并针对性的设计相应代码。例如，重新加载相关联的其他模块等。
     """
     def __init__(self, session, *args, **kwargs):
-        self.session = session
+        from .session import Session
+        if isinstance(session, Session):
+            self.session = session
+        self.__inline_objects__ = DotDict()
+
+        if hasattr(self, "_decorator_funcs"):
+            for func_name, decorators in self._decorator_funcs.items():
+                func = getattr(self, func_name)
+                for deco in decorators:
+                    if isinstance(deco, PymudDecorator):
+                        if deco.type == "alias":
+                            patterns = deco.kwargs.pop("patterns")
+                            ali = Alias(self.session, patterns, *deco.args, **deco.kwargs, onSccess = func)
+                            self.__inline_objects__[ali.id] = ali
+                        
+                        elif deco.type == "trigger":
+                            patterns = deco.kwargs.pop("patterns")
+                            tri = Trigger(self.session, patterns, *deco.args, **deco.kwargs, onSuccess = func)
+                            self.__inline_objects__[tri.id] = tri
+
+                        elif deco.type == "timer":
+                            tim = Timer(self.session, *deco.args, **deco.kwargs, onSuccess = func)
+                            self.__inline_objects__[tim.id] = tim
+
+                        elif deco.type == "gmcp":
+                            gmcp = GMCPTrigger(self.session, deco.kwargs.get("id"), *deco.args, **deco.kwargs, onSuccess = func)
+                            self.__inline_objects__[gmcp.id] = gmcp
 
     def __unload__(self):
         if self.session:
-            self.session.delObject(self)
+            self.session.delObjects(self.__inline_objects__)
+            if isinstance(self, BaseObject):
+                self.session.delObject(self)
+
+    @property
+    def objs(self) -> DotDict:
+        "返回内联自动创建的对象字典"
+        return self.__inline_objects__
+    
+    def obj(self, obj_id: str) -> BaseObject:
+        "根据对象ID返回内联自动创建的对象"
+        return self.__inline_objects__.get(obj_id)
 
 class Plugin:
     """
