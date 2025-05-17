@@ -6,6 +6,7 @@
 import recommonmark, os, sys
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
+from importlib.metadata import version as get_version
 
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.abspath(r'../../src'))
@@ -21,7 +22,7 @@ source_suffix = ['.rst', '.md']
 project = 'PyMUD 帮助文档'
 copyright = '2023-2025, crapex@crapex.cc'
 author = 'crapex'
-release = '0.21.0'
+release = get_version('pymud')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

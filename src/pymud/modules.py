@@ -304,13 +304,13 @@ class IConfig(metaclass = PymudMeta):
                 for deco in decorators:
                     if isinstance(deco, PymudDecorator):
                         if deco.type == "alias":
-                            patterns = deco.kwargs.pop("patterns")
-                            ali = Alias(self.session, patterns, *deco.args, **deco.kwargs, onSuccess = func)
+                            #patterns = deco.kwargs.pop("patterns")
+                            ali = Alias(self.session, *deco.args, **deco.kwargs, onSuccess = func)
                             self.__inline_objects__[ali.id] = ali
                         
                         elif deco.type == "trigger":
-                            patterns = deco.kwargs.pop("patterns")
-                            tri = Trigger(self.session, patterns, *deco.args, **deco.kwargs, onSuccess = func)
+                            #patterns = deco.kwargs.pop("patterns")
+                            tri = Trigger(self.session, *deco.args, **deco.kwargs, onSuccess = func)
                             self.__inline_objects__[tri.id] = tri
 
                         elif deco.type == "timer":
