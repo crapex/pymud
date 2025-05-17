@@ -5,6 +5,7 @@ import logging, queue
 from logging import FileHandler
 from logging.handlers import QueueHandler, QueueListener
 from wcwidth import wcswidth, wcwidth
+from typing import Union, Optional, Annotated, Any
 from .logger import Logger
 from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
@@ -231,7 +232,7 @@ class Session:
                 wait = Settings.client.get("reconnect_wait", 15)
                 asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
 
-    async def reconnect(self, timeout = 15):
+    async def reconnect(self, timeout: float = 15):
         """
         重新连接到远程服务器，异步非阻塞方式。该方法在 `Settings.client['auto_reconnect']` 设置为真时，断开后自动调用
         
@@ -362,7 +363,7 @@ class Session:
     def event_disconnected(self, event):
         self._events["disconnected"] = event
 
-    def getLogger(self, name, mode = 'a', encoding = 'utf-8', encoding_errors = 'ignore', raw = False) -> Logger:
+    def getLogger(self, name: str, mode = 'a', encoding = 'utf-8', encoding_errors = 'ignore', raw = False) -> Logger:
         """
         根据指定名称和参数获取并返回一个记录器。若指定名称不存在，则创建一个该名称记录器。
         
@@ -534,7 +535,7 @@ class Session:
 
         return plainText
 
-    def writetobuffer(self, data, newline = False):
+    def writetobuffer(self, data: str, newline = False):
         """
         将数据写入到用于本地显示的缓冲中。 **脚本中无需调用。**
         
@@ -803,6 +804,7 @@ class Session:
         await asyncio.sleep(wait_time)
         self.writeline(line)
         return await awaitable
+        
 
     def exec(self, cmd: str, name = None, *args, **kwargs):
         r"""
@@ -1181,7 +1183,7 @@ class Session:
 
         return counts
 
-    def _addObjects(self, objs):
+    def _addObjects(self, objs: Union[Union[list[BaseObject], tuple[BaseObject]], dict[str, BaseObject]]):
         if isinstance(objs, list) or isinstance(objs, tuple):
             for item in objs:
                 self._addObject(item)
@@ -1194,7 +1196,7 @@ class Session:
 
                     self._addObject(item)
 
-    def _addObject(self, obj):
+    def _addObject(self, obj: BaseObject):
         if isinstance(obj, Alias):
             self._aliases[obj.id] = obj
         elif isinstance(obj, Command):
@@ -1226,7 +1228,7 @@ class Session:
         """
         self._addObject(obj)
 
-    def addObjects(self, objs):
+    def addObjects(self, objs: Union[Union[list[BaseObject], tuple[BaseObject]], dict[str, BaseObject]]):
         """
         向会话中增加多个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
 
@@ -1320,7 +1322,7 @@ class Session:
         elif isinstance(obj, (list, tuple, dict)):
             self.delObjects(obj)
 
-    def delObjects(self, objs):
+    def delObjects(self, objs: Union[Union[Union[list, tuple], dict], BaseObject]):
         """
         从会话中移除一组对象，可直接删除多个 Alias, Trigger, GMCPTrigger, Command, Timer
         
@@ -1593,7 +1595,7 @@ class Session:
         for gmcp in gmcp_s:
             self.delGMCP(gmcp)
 
-    def replace(self, newstr):
+    def replace(self, newstr: str):
         """
         将当前行内容显示替换为newstr。该方法仅在用于触发器的同步处置中才能正确相应
 
@@ -1607,7 +1609,7 @@ class Session:
     ## ###################
     ## 变量 Variables 处理
     ## ###################
-    def delVariable(self, name):
+    def delVariable(self, name: str):
         """
         删除一个变量。删除变量是从session管理的变量列表中移除关键字，而不是设置为 None
         
@@ -1617,7 +1619,7 @@ class Session:
         if name in self._variables.keys():
             self._variables.pop(name)
 
-    def setVariable(self, name, value):
+    def setVariable(self, name: str, value: Any):
         """
         设置一个变量的值。可以使用vars快捷点访问器实现同样效果。
         
@@ -1634,7 +1636,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self._variables[name] = value
 
-    def getVariable(self, name, default = None):
+    def getVariable(self, name: str, default = None):
         """
         获取一个变量的值。可以使用vars快捷点访问器实现类似效果，但vars访问时，默认值总为None。
         
@@ -1653,7 +1655,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         return self._variables.get(name, default)
     
-    def setVariables(self, names, values):
+    def setVariables(self, names: Union[list[str], tuple[str]], values: Union[list, tuple]):
         """
         同时设置一组变量的值。要注意，变量名称和值的数量要相同。当不相同时，抛出异常。
 
@@ -1676,7 +1678,7 @@ class Session:
             value = values[index]
             self.setVariable(name, value)
 
-    def getVariables(self, names):
+    def getVariables(self, names: Union[list[str], tuple[str]]):
         """
         同时获取一组变量的值。
 
@@ -1697,7 +1699,7 @@ class Session:
         
         return tuple(values)
     
-    def updateVariables(self, kvdict: dict):
+    def updateVariables(self, kvdict: dict[str, Any]):
         """
         使用字典更新一组变量的值。若变量不存在将自动添加。
 
@@ -1715,7 +1717,7 @@ class Session:
     ## ###################
     ## 全局变量 Globals 处理
     ## ###################
-    def delGlobal(self, name):
+    def delGlobal(self, name: str):
         """
         删除一个全局变量，使用方式与会话变量variable相同
 
@@ -1724,7 +1726,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self.application.del_globals(name)
 
-    def setGlobal(self, name, value):
+    def setGlobal(self, name: str, value):
         """
         设置一个全局变量的值，使用方式与会话变量variable相同
         
@@ -1734,7 +1736,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         self.application.set_globals(name, value)
 
-    def getGlobal(self, name, default = None):
+    def getGlobal(self, name: str, default = None):
         """
         获取一个全局变量的值，使用方式与会话变量variable相同
         

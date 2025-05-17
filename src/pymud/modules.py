@@ -1,10 +1,11 @@
 
 import importlib, importlib.util
 from abc import ABC, ABCMeta
-from typing import Any
+from typing import Any, Annotated, Optional, Union
 from .objects import BaseObject, Command, Trigger, Alias, Timer, GMCPTrigger
 from .settings import Settings
 from .extras import DotDict
+
 
 class PymudDecorator:
     """
@@ -23,6 +24,7 @@ class PymudDecorator:
         decos = getattr(func, "__pymud_decorators__", [])
         decos.append(self)
         func.__pymud_decorators__ = decos
+
         return func
         return self
 
@@ -30,7 +32,18 @@ class PymudDecorator:
         return f"<{self.__class__.__name__} type = {self.type} args = {self.args} kwargs = {self.kwargs}>"
 
 
-def alias(patterns, id = None, group = "", enabled = True, ignoreCase = False, isRegExp = True, keepEval = False, expandVar = True, priority = 100, oneShot = False,  *args, **kwargs):
+def alias(
+        patterns: Union[list[str], str], 
+        id: str = None, 
+        group: str = "", 
+        enabled: bool = True, 
+        ignoreCase: bool = False, 
+        isRegExp: bool = True, 
+        keepEval: bool = False, 
+        expandVar: bool = True, 
+        priority: int = 100, 
+        oneShot: bool = False,  
+        *args, **kwargs):
     """
     使用装饰器创建一个别名（Alias）对象。被装饰的函数将在别名成功匹配时调用。
     被装饰的函数，除第一个参数为类实例本身self之外，另外包括id, line, wildcards三个参数。
@@ -68,7 +81,20 @@ def alias(patterns, id = None, group = "", enabled = True, ignoreCase = False, i
         kwargs.pop("id")
 
     return PymudDecorator("alias", *args, **kwargs)
-def trigger(patterns, id = None, group = "", enabled = True, ignoreCase = False, isRegExp = True, keepEval = False, expandVar = True, raw = False, priority = 100, oneShot = False,  *args, **kwargs):
+
+def trigger(
+        patterns: Union[list[str], str], 
+        id: str = None, 
+        group: str = "", 
+        enabled: bool = True, 
+        ignoreCase: bool = False, 
+        isRegExp: bool = True, 
+        keepEval: bool = False, 
+        expandVar: bool = True, 
+        raw: bool = False, 
+        priority: int = 100, 
+        oneShot: bool = False,  
+        *args, **kwargs):
     """
     使用装饰器创建一个触发器（Trigger）对象。
 
@@ -104,13 +130,47 @@ def trigger(patterns, id = None, group = "", enabled = True, ignoreCase = False,
         kwargs.pop("id")
     return PymudDecorator("trigger", *args, **kwargs)
 
-def timer(timeout, *args, **kwargs):
-    kwargs.update({"timeout": timeout})
+def timer(timeout: float, id: str = None, group: str = "", enabled: bool = True, *args, **kwargs):
+    """
+    使用装饰器创建一个定时器（Timer）对象。
+
+    :param timeout: 定时器超时时间，单位为秒。
+    :param id: 定时器对象的唯一标识符，不指定时将自动生成唯一标识符。
+    :param group: 定时器所属的组名，默认为空字符串。
+    :param enabled: 定时器是否启用，默认为 True。
+    :param args: 可变位置参数，用于传递额外的参数。
+    :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
+    :return: PymudDecorator 实例，类型为 "timer"。
+    """
+    kwargs.update({
+        "timeout": timeout,
+        "id": id,
+        "group": group,
+        "enabled": enabled
+        })
+    if not id:
+        kwargs.pop("id")
     return PymudDecorator("timer", *args, **kwargs)
 
-def gmcp(name, *args, **kwargs):
-    kwargs.update({"id": name})
+def gmcp(name: str, group: str = "", enabled: bool = True, *args, **kwargs):
+    """
+    使用装饰器创建一个GMCP触发器（GMCPTrigger）对象。
+
+    :param name: GMCP触发器的名称。
+    :param group: GMCP触发器所属的组名，默认为空字符串。
+    :param enabled: GMCP触发器是否启用，默认为 True。
+    :param args: 可变位置参数，用于传递额外的参数。
+    :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
+    :return: PymudDecorator 实例，类型为 "gmcp"。
+    """
+    kwargs.update({
+        "id": name,
+        "group": group,
+        "enabled": enabled
+        })
+    
     return PymudDecorator("gmcp", *args, **kwargs)
+
 class PymudMeta(type):
     def __new__(cls, name, bases, attrs):
         decorator_funcs = {}
@@ -225,7 +285,7 @@ class ModuleInfo:
 
 class IConfig(metaclass = PymudMeta):
     """
-    用于提示PyMUD应用是否自动创建该配置类型的基础类（模拟接口）。
+    用于提示PyMUD应用是否自动创建该配置类型的基础类。
     
     继承 IConfig 类型让应用自动管理该类型，唯一需要的是，构造函数中，仅存在一个必须指定的参数 Session。
 
@@ -245,7 +305,7 @@ class IConfig(metaclass = PymudMeta):
                     if isinstance(deco, PymudDecorator):
                         if deco.type == "alias":
                             patterns = deco.kwargs.pop("patterns")
-                            ali = Alias(self.session, patterns, *deco.args, **deco.kwargs, onSccess = func)
+                            ali = Alias(self.session, patterns, *deco.args, **deco.kwargs, onSuccess = func)
                             self.__inline_objects__[ali.id] = ali
                         
                         elif deco.type == "trigger":
@@ -258,7 +318,7 @@ class IConfig(metaclass = PymudMeta):
                             self.__inline_objects__[tim.id] = tim
 
                         elif deco.type == "gmcp":
-                            gmcp = GMCPTrigger(self.session, deco.kwargs.get("id"), *deco.args, **deco.kwargs, onSuccess = func)
+                            gmcp = GMCPTrigger(self.session, name = deco.kwargs.get("id"), *deco.args, **deco.kwargs, onSuccess = func)
                             self.__inline_objects__[gmcp.id] = gmcp
 
     def __unload__(self):

@@ -417,6 +417,8 @@ class GMCPTrigger(BaseObject):
     def __init__(self, session, name, *args, **kwargs):
         self.event = asyncio.Event()
         self.value = None
+        # 确保不要有重复的id
+        kwargs.pop("id", None)
         super().__init__(session, id = name, *args, **kwargs)
 
     def __del__(self):

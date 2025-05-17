@@ -1,7 +1,7 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.21.0a1"  # Required
+version = "0.21.0a2"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.7"
@@ -42,11 +42,6 @@ dependencies = [
   "pyperclip",
   "pygments",
   "prompt-toolkit",
-  "recommonmark>=0.7.1",
-  "sphinx>=5.3.0",
-  "sphinx-markdown-tables>=0.0.17",
-  "sphinx-rtd-theme>=2.0.0",
-  "piccolo-theme>=0.24.0",
 ]
 
 [project.urls]  # Optional

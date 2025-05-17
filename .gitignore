@@ -23,5 +23,5 @@ docs/build/
 
 # my update file for debugging
 update
-update.bat
+update.*
 .vscode/
