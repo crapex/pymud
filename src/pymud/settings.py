@@ -3,6 +3,8 @@ PyMUD Settings 文件
 用于保存与App有关的各类配置、常量等
 """
 
+import importlib.metadata
+
 class Settings:
     "保存PyMUD配置的全局对象"
 
@@ -11,9 +13,9 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.21.0a1"
+    __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-05-15"
+    __release__   = "2025-05-17"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"

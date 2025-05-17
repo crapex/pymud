@@ -1,9 +1,7 @@
-import asyncio, logging, re, math, os, pickle, datetime, importlib, importlib.util, sysconfig, time, dataclasses
+import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, dataclasses, functools, traceback
 from collections.abc import Iterable
 from collections import OrderedDict
-import logging, queue
-from logging import FileHandler
-from logging.handlers import QueueHandler, QueueListener
+import logging
 from wcwidth import wcswidth, wcwidth
 from typing import Union, Optional, Annotated, Any
 from .logger import Logger
@@ -3361,3 +3359,34 @@ class Session:
                 else:
                     self.application.show_logSelectDialog()
 
+
+def exception(func):
+    """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            # 调用类的错误处理方法
+            session = getattr(self, "session", None)
+            if isinstance(session, Session):
+                session.error(f"函数执行中遇到异常, {e}, 类型为 {type(e)}")
+                session.error(f"异常追踪为： {traceback.format_exc()}")
+            else:
+                raise  # 当没有会话时，选择重新抛出异常
+    return wrapper
+
+def async_exception(func):
+    """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
+    @functools.wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        try:
+            return await func(self, *args, **kwargs)
+        except Exception as e:
+            session = getattr(self, "session", None)
+            if isinstance(session, Session):
+                session.error(f"异步执行中遇到异常, {e}, 类型为 {type(e)}")
+                session.error(f"异常追踪为： {traceback.format_exc()}")
+            else:
+                raise  # 当没有会话时，选择重新抛出异常
+    return wrapper

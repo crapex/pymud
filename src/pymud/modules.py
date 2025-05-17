@@ -1,5 +1,5 @@
 
-import importlib, importlib.util
+import importlib, importlib.util, functools
 from abc import ABC, ABCMeta
 from typing import Any, Annotated, Optional, Union
 from .objects import BaseObject, Command, Trigger, Alias, Timer, GMCPTrigger
