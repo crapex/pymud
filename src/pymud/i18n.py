@@ -40,3 +40,24 @@ def i18n_LoadLanguage(lang: str):
         if isinstance(TRANS, dict):
             from .settings import Settings
             Settings.text.update(TRANS["text"])
+
+            if "docstring" in TRANS.keys():
+                docstring = TRANS["docstring"]
+                if isinstance(docstring, dict):
+                    if "Session" in docstring.keys():
+                        from .session import Session
+                        docstring_class_session = docstring["Session"]
+                        if isinstance(docstring_class_session, dict):
+                            for key, newdoc in docstring_class_session.items():
+                                if hasattr(Session, key):
+                                    obj = getattr(Session, key)
+                                    obj.__doc__ = newdoc
+
+                    if "PyMudApp" in docstring.keys():
+                        from .pymud import PyMudApp
+                        docstring_class_pymudapp = docstring["PyMudApp"]
+                        if isinstance(docstring_class_pymudapp, dict):
+                            for key, newdoc in docstring_class_pymudapp.items():
+                                if hasattr(PyMudApp, key):
+                                    obj = getattr(PyMudApp, key)
+                                    obj.__doc__ = newdoc

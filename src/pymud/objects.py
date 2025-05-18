@@ -4,6 +4,7 @@ MUD会话(session)中, 支持的对象列表
 
 import asyncio, logging, re, importlib
 from abc import ABC, ABCMeta, abstractmethod
+from typing import Optional, Union, List, Dict, Tuple
 from collections.abc import Iterable
 from collections import namedtuple
 from typing import Any
@@ -77,7 +78,7 @@ class CodeLine:
         
             return syncmode, hasvar, tuple(code_params), 
         else:
-            return syncmode, hasvar, tuple()
+            return "dontcare", hasvar, tuple()
 
     def __init__(self, _code: str) -> None:
         self.__code = _code
@@ -108,7 +109,7 @@ class CodeLine:
 
         line = kwargs.get("line", None) or session.getVariable("%line", "None")
         raw  = kwargs.get("raw", None) or session.getVariable("%raw", "None")
-        wildcards = kwargs.get("wildcards", None)
+        wildcards = kwargs.get("wildcards", ())
 
         for item in self.code:
             if len(item) == 0: continue
@@ -330,7 +331,7 @@ class BaseObject:
             
         self._enabled   = True              # give a default value
         self.log        = logging.getLogger(f"pymud.{self.__class__.__name__}")
-        self.id         = kwargs.get("id", session.getUniqueID(self.__class__.__abbr__))
+        self.id         = kwargs.get("id", self.session.getUniqueID(self.__class__.__abbr__))
         self.group      = kwargs.get("group", "")                  # 组
         self.enabled    = kwargs.get("enabled", True)              # 使能与否
         self.priority   = kwargs.get("priority", 100)              # 优先级
@@ -504,7 +505,7 @@ class MatchObject(BaseObject):
         return self._patterns
 
     @patterns.setter
-    def patterns(self, patterns):
+    def patterns(self, patterns: Union[str, Union[Tuple[str], List[str]]]):
         self._patterns = patterns
 
         if isinstance(patterns, str):
@@ -517,14 +518,17 @@ class MatchObject(BaseObject):
         if self.isRegExp:
             flag = 0
             if self.ignoreCase: flag = re.I
-            if not self.multiline:
-                self._regExp = re.compile(self.patterns, flag)   # 此处可考虑增加flags
+            if isinstance(patterns, str):
+                self.multiline = False
+                self.linesToMatch = 1
+                self._regExp = re.compile(patterns, flag)   # 此处可考虑增加flags
             else:
                 self._regExps = []
-                for line in self.patterns:
+                for line in patterns:
                     self._regExps.append(re.compile(line, flag))
 
                 self.linesToMatch = len(self._regExps)
+                self.multiline = True
                 self._mline = 0
 
     def reset(self):
@@ -560,7 +564,7 @@ class MatchObject(BaseObject):
             else:
                 #if line.find(self.patterns) >= 0:
                 #if line == self.patterns:
-                if self.patterns in line:
+                if isinstance(self.patterns, str) and (self.patterns in line):
                     result = self.SUCCESS
                     self.lines.clear()
                     self.lines.append(line)
@@ -678,7 +682,7 @@ class Trigger(MatchObject):
 
     __abbr__ = "tri"
 
-    def __init__(self, session, patterns, *args, **kwargs):
+    def __init__(self, session, patterns: Union[str, Union[Tuple[str], List[str]]], *args, **kwargs):
         super().__init__(session, patterns, *args, **kwargs)
         self._task = None
 
@@ -789,7 +793,7 @@ class Command(MatchObject):
             if isinstance(task, asyncio.Task) and (not task.done()):
                 self.remove_task(task)
 
-    async def execute(self, cmd, *args, **kwargs):
+    async def execute(self, cmd, *args, **kwargs) -> Any:
         """
         命令调用的入口函数。该函数由 Session 进行自动调用。
         通过 ``Session.exec`` 系列方法调用的命令，最终是执行该命令的 execute 方法。
@@ -817,7 +821,7 @@ class SimpleCommand(Command):
 
     MAX_RETRY = 20
 
-    def __init__(self, session, patterns, succ_tri, *args, **kwargs):
+    def __init__(self, session, patterns: str, succ_tri, *args, **kwargs):
         super().__init__(session, patterns, succ_tri, *args, **kwargs)
         self._succ_tris = list()
         self._fail_tris = list()
@@ -859,7 +863,7 @@ class SimpleCommand(Command):
         """
         self.reset()
         # 0. check command
-        cmd = cmd or self.patterns
+        cmd = cmd or self.patterns.__str__()
         # 1. save the command, to use later.
         self._executed_cmd = cmd
         # 2. writer command
@@ -914,23 +918,14 @@ class SimpleCommand(Command):
                 break
 
         if result == self.SUCCESS:
-            self._onSuccess(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
-            _outer_onSuccess = kwargs.get("onSuccess", None)
-            if callable(_outer_onSuccess):
-                _outer_onSuccess(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
+            self._onSuccess(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.FAILURE:
-            self._onFailure(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
-            _outer_onFailure = kwargs.get("onFailure", None)
-            if callable(_outer_onFailure):
-                _outer_onFailure(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
+            self._onFailure(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.TIMEOUT:
             self._onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
-            _outer_onTimeout = kwargs.get("onTimeout", None)
-            if callable(_outer_onTimeout):
-                _outer_onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
-
+ 
         return result
 
 class Timer(BaseObject):

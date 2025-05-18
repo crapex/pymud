@@ -15,7 +15,7 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import D
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
-from prompt_toolkit.widgets import Label, MenuItem, TextArea
+from prompt_toolkit.widgets import Label, TextArea
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.cursor_shapes import CursorShape
 from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
@@ -37,7 +37,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from wcwidth import wcwidth, wcswidth
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict
+from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict, MenuItem
 from .modules import Plugin
 from .session import Session
 from .settings import Settings
@@ -381,7 +381,7 @@ class PyMudApp:
         for key, site in ss.items():
             menu = MenuItem(key)
             for name in site["chars"].keys():
-                sub = MenuItem(name, handler = functools.partial(self._quickHandleSession, key, name))
+                sub = MenuItem(name, handler = functools.partial(self._quickHandleSession, key, name)) # type: ignore
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -403,6 +403,8 @@ class PyMudApp:
             b = s.buffer
         elif self.showLog:
             b = self.logSessionBuffer
+        else:
+            b = None
             
         if isinstance(b, Buffer):
             if lines < 0:
@@ -451,7 +453,7 @@ class PyMudApp:
     def complete_autosuggest(self, event: KeyPressEvent):
         """快捷键右箭头→: 自动完成建议"""
         b = event.current_buffer
-        if b.cursor_position == len(b.text):
+        if (b.cursor_position == len(b.text)) and b.auto_suggest:
             s = b.auto_suggest.get_suggestion(b, b.document)
             if s:
                 b.insert_text(s.text, fire_event=False)
@@ -708,7 +710,7 @@ class PyMudApp:
                     self.activate_session(new_sess)
                     #self.set_status(f"当前会话已切换为 {self.current_session.name}")
 
-        asyncio.ensure_future(coroutine())
+        asyncio.ensure_future(coroutine()) # type: ignore
 
     # 菜单选项操作 - 开始
 
@@ -798,17 +800,7 @@ class PyMudApp:
 
     # 暂未实现该功能
     def act_change_layout(self, layout):
-        #if isinstance(layout, STATUS_DISPLAY):
         self.status_display = layout
-        #self.console_frame.body.reset()
-        # if layout == STATUS_DISPLAY.HORIZON:
-        #     self.console_frame.body = self.console_with_horizon_status
-        # elif layout == STATUS_DISPLAY.VERTICAL:
-        #     self.console_frame.body = self.console_with_vertical_status
-        # elif layout == STATUS_DISPLAY.NONE:
-        #     self.console_frame.body = self.console_without_status
-
-        #self.show_message("布局调整", f"已将布局设置为{layout}")
         self.app.invalidate()
 
     def act_exit(self):
@@ -820,7 +812,7 @@ class PyMudApp:
                     con_sessions.append(session.name)
 
             if len(con_sessions) > 0:
-                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext('warning_exit')}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt", len(con_sessions), ", ".join(con_sessions))}</style>'))
+                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning_exit")}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt", len(con_sessions), ", ".join(con_sessions))}</style>'))
                 result = await self.show_dialog_as_float(dlgQuery)
                 if result:
                     for ss_name in con_sessions:
@@ -1194,16 +1186,18 @@ class PyMudApp:
     async def show_dialog_as_float(self, dialog):
         "显示弹出式窗口."
         float_ = Float(content=dialog)
-        self.root_container.floats.insert(0, float_)
+        if self.root_container.floats:
 
-        self.app.layout.focus(dialog)
-        result = await dialog.future
-        self.app.layout.focus(self.commandLine)
+            self.root_container.floats.insert(0, float_)
 
-        if float_ in self.root_container.floats:
-            self.root_container.floats.remove(float_)
+            self.app.layout.focus(dialog)
+            result = await dialog.future
+            self.app.layout.focus(self.commandLine)
 
-        return result
+            if float_ in self.root_container.floats:
+                self.root_container.floats.remove(float_)
+
+            return result
 
     async def run_async(self):
         "以异步方式运行本程序"

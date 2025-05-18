@@ -25,3 +25,4 @@ docs/build/
 update
 update.*
 .vscode/
+src/.DS_Store

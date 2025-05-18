@@ -164,7 +164,7 @@ class MudClientProtocol(Protocol):
     def get_extra_info(self, name, default=None):
         """获取传输信息或者额外的协议信息."""
         if self._transport:
-            default = self._transport._extra.get(name, default)
+            default = self._transport.get_extra_info(name, default)
         return self._extra.get(name, default)
         
     def connection_made(self, transport: BaseTransport) -> None:
@@ -204,8 +204,9 @@ class MudClientProtocol(Protocol):
             self.log.warning(f'由于异常连接已经断开: {self}, {exc}.')
             self.session.set_exception(exc)
 
-        self._transport.close()
-        self._transport = None
+        if self._transport:
+            self._transport.close()
+            self._transport = None
         #self.session.set_transport(None)
 
         # 若设置了onConnected回调函数，则调用
@@ -324,7 +325,7 @@ class MudClientProtocol(Protocol):
     # public protocol methods
     def __repr__(self):
         "%r下的表述"
-        hostport = self.get_extra_info("peername", ["-", "closing"])[:2]
+        hostport = self.get_extra_info("peername", ["-", "closing"])[:2] # type: ignore
         return "<Peer {0} {1}>".format(*hostport)
     
     def _iac_default_handler(self, cmd, option):
@@ -786,15 +787,16 @@ class MudClientProtocol(Protocol):
                 else:
                     val_in_text.append(byte)
             elif state_machine == "wait_val_in_table":
+                state_machine_table = "not_initialized"
                 if byte == MSDP_TABLE_CLOSE:
                     # 最后一组已结束
-                    val_in_table[table_var_name.decode[self.encoding]] = table_var_value.decode[self.encoding]
+                    val_in_table[table_var_name.decode(self.encoding)] = table_var_value.decode(self.encoding)
                     msdp_data[current_var] = val_in_table
                     state_machine = "wait_end"
                     self.log.debug(f"收到表格形式的MSDP子协商数据： {current_var} = '{val_in_table}'")
                 elif byte == MSDP_VAR:
                     if len(table_var_name) > 0:             # 上一个VAL已完成，保存到table，后面继续为VAR
-                        val_in_table[table_var_name.decode[self.encoding]] = table_var_value.decode[self.encoding]
+                        val_in_table[table_var_name.decode(self.encoding)] = table_var_value.decode(self.encoding)
                         table_var_name.clear()
                         table_var_value.clear()
                     state_machine_table = "wait_table_var"

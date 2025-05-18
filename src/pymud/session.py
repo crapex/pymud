@@ -2,8 +2,9 @@ import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, datacl
 from collections.abc import Iterable
 from collections import OrderedDict
 import logging
+from prompt_toolkit.utils import get_cwidth
 from wcwidth import wcswidth, wcwidth
-from typing import Union, Optional, Annotated, Any
+from typing import Union, Optional, Any, List, Tuple, Dict
 from .logger import Logger
 from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
@@ -199,7 +200,7 @@ class Session:
         #self._tasks    = []
         self._tasks    = set()
 
-        self._command_history = []
+        self._command_history: List[str] = []
 
     def open(self):
         "创建到远程服务器的连接，同步方式。通过调用异步connect方法实现。"
@@ -576,7 +577,7 @@ class Session:
         由协议对象调用，处理收到远程 eof 数据，即远程断开连接。 **脚本中无需调用。**
         """
         self._eof = True
-        if self.connected:
+        if self.connected and self._transport:
             self._transport.write_eof()
         self.state = "DISCONNECTED"
         self.syslog.info(f"服务器断开连接! {self._protocol.__repr__}")
@@ -686,7 +687,7 @@ class Session:
         self.error(Settings.gettext("msg_connection_fail", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), exc))
 
 
-    def create_task(self, coro, *args, name: str = None) -> asyncio.Task:
+    def create_task(self, coro, *args, name: Optional[str] = None) -> asyncio.Task:
         """
         创建一个任务，并将其加入到会话的任务管理队列中。
 
@@ -737,6 +738,25 @@ class Session:
 
         self._tasks = set([t for t in self._tasks if not t.done()])
 
+    @property
+    def commandHistory(self) -> List[str]:
+        "返回发送到服务器的命令历史。保存的历史命令数量由 Settings.client['history_records'] 决定。默认为500条。"
+        return self._command_history
+
+    def record_command(self, cmd: str):
+        """
+        记录一条命令到会话的命令历史中。 **脚本中无需调用。**
+        :param cmd: 要记录的命令
+        """
+        record_count = Settings.client["history_records"]
+        if record_count:
+            self._command_history.append(cmd)
+
+            if record_count < 0:
+                pass
+            elif len(self._command_history) > record_count:
+                self._command_history.pop(0)
+
     def write(self, data) -> None:
         """
         向服务器写入数据（RAW格式字节数组/字节串）。 **一般不应在脚本中直接调用。**
@@ -768,6 +788,7 @@ class Session:
                 else:
                     self.log.log(f"\x1b[32m{ln}\x1b[0m\n")
 
+                self.record_command(line)
                 cmd = ln + self.newline
                 self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
                 
@@ -777,6 +798,7 @@ class Session:
             else:
                 self.log.log(f"\x1b[32m{line}\x1b[0m\n")
 
+            self.record_command(line)
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
 
@@ -975,7 +997,8 @@ class Session:
 
         :param cmdtext: 纯文本命令
         """
-        isNotCmd = True
+        keepEval = True
+        notHandle = True
 
         # fix bugs, commands filter for enabled and sorted for priority
         avai_cmds = [cmd for cmd in self._commands.values() if isinstance(cmd, Command) and cmd.enabled]
@@ -984,15 +1007,16 @@ class Session:
         for command in self._commands.values():
             state = command.match(cmdtext)
             if state.result == Command.SUCCESS:
+                notHandle = False
                 # 命令的任务名称采用命令id，以便于后续查错
                 self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
-                isNotCmd = False
-                break
 
-        # 再判断是否是别名
-        if isNotCmd:
-            notAlias = True
+                if not command.keepEval:
+                    keepEval = False
+                    break
 
+        # 若持续匹配，再判断是否是别名
+        if keepEval:
             # fix bugs, aliases filter for enabled and sorted for priority, and add oneShot, keepEval judge
             avai_alis = [ali for ali in self._aliases.values() if isinstance(ali, Alias) and ali.enabled]
             avai_alis.sort(key = lambda ali: ali.priority)
@@ -1000,16 +1024,16 @@ class Session:
             for alias in avai_alis:               
                 state = alias.match(cmdtext)
                 if state.result == Alias.SUCCESS:
-                    notAlias = False
+                    notHandle = False
                     if alias.oneShot:
                         self.delAlias(alias.id)
 
                     if not alias.keepEval:
                         break
 
-            # 都不是则是普通命令，直接发送
-            if notAlias:
-                self.writeline(cmdtext)
+        # 都前面都未被处理，则直接发送
+        if notHandle:
+            self.writeline(cmdtext)
 
     async def exec_text_async(self, cmdtext: str):
         """
@@ -1018,7 +1042,8 @@ class Session:
         异步调用时，该函数要等待对应的代码执行完毕后才会返回。可以用于确保命令执行完毕。
         """
         result = None
-        isNotCmd = True
+        keepEval = True
+        notHandle = True
 
         # fix bugs, commands filter for enabled and sorted for priority
         avai_cmds = [cmd for cmd in self._commands.values() if isinstance(cmd, Command) and cmd.enabled]
@@ -1029,12 +1054,13 @@ class Session:
             if state.result == Command.SUCCESS:
                 # 命令的任务名称采用命令id，以便于后续查错
                 result = await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
-                isNotCmd = False
-                break
+                notHandle = False
+                if not command.keepEval:
+                    keepEval = False
+                    break
 
         # 再判断是否是别名
-        if isNotCmd:
-            notAlias = True
+        if keepEval:
 
             # fix bugs, aliases filter for enabled and sorted for priority, and add oneShot, keepEval judge
             avai_alis = [ali for ali in self._aliases.values() if isinstance(ali, Alias) and ali.enabled]
@@ -1043,16 +1069,16 @@ class Session:
             for alias in avai_alis:               
                 state = alias.match(cmdtext)
                 if state.result == Alias.SUCCESS:
-                    notAlias = False
+                    notHandle = False
                     if alias.oneShot:
                         self.delAlias(alias.id)
 
                     if not alias.keepEval:
                         break
 
-            # 都不是则是普通命令，直接发送
-            if notAlias:
-                self.writeline(cmdtext)
+        # 若均为处理则是普通命令，直接发送
+        if notHandle:
+            self.writeline(cmdtext)
 
         return result
 
@@ -1125,7 +1151,8 @@ class Session:
         
         若要在脚本中控制断开与服务器的连接，请使用 session.disconnect()
         """
-        self._transport.write_eof()
+        if self._transport:
+            self._transport.write_eof()
     
     def getUniqueNumber(self):
         """
@@ -1181,7 +1208,7 @@ class Session:
 
         return counts
 
-    def _addObjects(self, objs: Union[Union[list[BaseObject], tuple[BaseObject]], dict[str, BaseObject]]):
+    def _addObjects(self, objs: Union[Union[List[BaseObject], Tuple[BaseObject]], Dict[str, BaseObject]]):
         if isinstance(objs, list) or isinstance(objs, tuple):
             for item in objs:
                 self._addObject(item)
@@ -1226,7 +1253,7 @@ class Session:
         """
         self._addObject(obj)
 
-    def addObjects(self, objs: Union[Union[list[BaseObject], tuple[BaseObject]], dict[str, BaseObject]]):
+    def addObjects(self, objs: Union[Union[List[BaseObject], Tuple[BaseObject]], Dict[str, BaseObject]]):
         """
         向会话中增加多个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
 
@@ -1653,7 +1680,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         return self._variables.get(name, default)
     
-    def setVariables(self, names: Union[list[str], tuple[str]], values: Union[list, tuple]):
+    def setVariables(self, names: Union[List[str], Tuple[str]], values: Union[list, tuple]):
         """
         同时设置一组变量的值。要注意，变量名称和值的数量要相同。当不相同时，抛出异常。
 
@@ -1676,7 +1703,7 @@ class Session:
             value = values[index]
             self.setVariable(name, value)
 
-    def getVariables(self, names: Union[list[str], tuple[str]]):
+    def getVariables(self, names: Union[List[str], Tuple[str]]):
         """
         同时获取一组变量的值。
 
@@ -1697,7 +1724,7 @@ class Session:
         
         return tuple(values)
     
-    def updateVariables(self, kvdict: dict[str, Any]):
+    def updateVariables(self, kvdict: Dict[str, Any]):
         """
         使用字典更新一组变量的值。若变量不存在将自动添加。
 
@@ -1784,7 +1811,7 @@ class Session:
 
         self.writetobuffer("#"*width, newline = True)
 
-    def handle_help(self, code: CodeLine = None, *args, **kwargs):
+    def handle_help(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #help 的执行函数，在当前会话中现实帮助信息。
         当不带参数时, #help会列出所有可用的帮助主题。
@@ -1808,7 +1835,6 @@ class Session:
             - ``#help session`` 
                 显示 #session 命令有关的帮助
         '''
-
         if code.length == 2:
             self._print_all_help()
 
@@ -1827,9 +1853,14 @@ class Session:
             else:
                 docstring = Settings.gettext("msg_topic_not_found", topic)
             
-            self.writetobuffer(docstring, True)
+            title = f" HELP: #{topic.upper()} "
+            title_line = "=" * 4 + title + "=" * (self.application.get_width() - get_cwidth(title) - 4)
+            self.writetobuffer("", newline = True)
+            self.writetobuffer(title_line, newline = False)
+            self.writetobuffer(docstring, True) # type: ignore
+            self.writetobuffer("=" * self.application.get_width(), newline = True)
 
-    def handle_exit(self, code: CodeLine = None, *args, **kwargs):
+    def handle_exit(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #exit 的执行函数，退出 `PyMudApp` 应用。
         该函数不应该在代码中直接调用。
@@ -1843,7 +1874,7 @@ class Session:
 
         self.application.act_exit()
 
-    def handle_close(self, code: CodeLine = None, *args, **kwargs):
+    def handle_close(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #close 的执行函数，关闭当前会话，并将当前会话从 `PyMudApp` 的会话列表中移除。
         该函数不应该在代码中直接调用。
@@ -1858,7 +1889,7 @@ class Session:
         #self.application.close_session()
         self.application.act_close_session()
 
-    async def handle_wait(self, code: CodeLine = None, *args, **kwargs):
+    async def handle_wait(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #wait / #wa 的执行函数，异步延时等待指定时间，用于多个命令间的延时等待。
         该函数不应该在代码中直接调用。
@@ -1877,13 +1908,13 @@ class Session:
             - #gag
             - #replace
         '''
-        
+
         wait_time = code.code[2]
         if wait_time.isnumeric():
             msec = float(wait_time) / 1000.0
             await asyncio.sleep(msec)
 
-    def handle_connect(self, code: CodeLine = None, *args, **kwargs):
+    def handle_connect(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #connect / #con 的执行函数，连接到远程服务器（仅当远程服务器未连接时有效）。
         该函数不应该在代码中直接调用。
@@ -1898,7 +1929,8 @@ class Session:
             self.open()
 
         else:
-            duration = self._protocol.duration
+            duration = 0 
+            if self._protocol: duration = self._protocol.duration
             hour = duration // 3600
             min  = (duration - 3600 * hour) // 60
             sec  = duration % 60
@@ -1911,7 +1943,7 @@ class Session:
 
             self.info(Settings.gettext("msg_connection_duration",time_msg))
 
-    def handle_disconnect(self, code: CodeLine = None, *args, **kwargs):
+    def handle_disconnect(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #disconnect / #dis 的执行函数，断开到远程服务器的连接（仅当远程服务器已连接时有效）。
         该函数不应该在代码中直接调用。
@@ -2071,7 +2103,7 @@ class Session:
 
         return display_lines
             
-    def handle_variable(self, code: CodeLine = None, *args, **kwargs):
+    def handle_variable(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #variable / #var 的执行函数，操作会话变量。
         该命令可以不带参数、带一个参数、两个参数。
@@ -2104,7 +2136,7 @@ class Session:
         elif len(args) == 1:
             if args[0] in self._variables.keys():
                 obj = self.getVariable(args[0])
-                var_dict = {args[0] : obj}
+                var_dict = DotDict({args[0] : obj})
                 lines = self.buildDisplayLines(var_dict, f" VARIABLE [{args[0]}] IN SESSION {self.name} ")
 
                 for line in lines:
@@ -2123,7 +2155,7 @@ class Session:
             self.setVariable(args[0], val)
             self.info(Settings.gettext("msg_object_value_setted", Settings.gettext("variable"), args[0], val.__repr__()))
 
-    def handle_global(self, code: CodeLine = None, *args, **kwargs):
+    def handle_global(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #global 的执行函数，操作全局变量（跨会话共享）。
         该命令可以不带参数、带一个参数、两个参数。
@@ -2157,7 +2189,7 @@ class Session:
             if var in self.application.globals.keys():
                 # self.info("{0:>20} = {1:<22}".format(var, self.application.get_globals(var).__repr__()), "全局变量")
 
-                var_dict = {var : self.application.get_globals(var)}
+                var_dict = DotDict({var : self.application.get_globals(var)})
                 lines = self.buildDisplayLines(var_dict, f" GLOBAL VARIABLE [{var}] ")
 
                 for line in lines:
@@ -2206,6 +2238,10 @@ class Session:
                     obj.enabled = False
                     self.info(Settings.gettext("msg_object_disabled", obj.__repr__()))
                 elif args[1] == "del":
+                    if hasattr(obj, "__unload__"):
+                        obj.__unload__()
+                    if hasattr(obj, "unload"):
+                        obj.unload()
                     obj.enabled = False
                     objs.pop(args[0])
                     self.info(Settings.gettext("msg_object_deleted", obj.__repr__()))
@@ -2234,7 +2270,7 @@ class Session:
                             self.addTimer(ti)
                             self.info(Settings.gettext("msg_timer_created", ti.id, ti.__repr__()))
 
-    def handle_alias(self, code: CodeLine = None, *args, **kwargs):
+    def handle_alias(self, code: CodeLine, *args, **kwargs):
         r"""
         嵌入命令 #alias / #ali 的执行函数，操作别名。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
@@ -2270,7 +2306,7 @@ class Session:
 
         self._handle_objs("Alias", self._aliases, *code.code[2:])
 
-    def handle_timer(self, code: CodeLine = None, *args, **kwargs):
+    def handle_timer(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #timer / #ti 的执行函数，操作定时器。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
@@ -2306,7 +2342,7 @@ class Session:
 
         self._handle_objs("Timer", self._timers, *code.code[2:])
      
-    def handle_command(self, code: CodeLine = None, *args, **kwargs):
+    def handle_command(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #command / #cmd 的执行函数，操作命令。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
@@ -2338,7 +2374,7 @@ class Session:
 
         self._handle_objs("Command", self._commands, *code.code[2:])
 
-    def handle_trigger(self, code: CodeLine = None, *args, **kwargs):
+    def handle_trigger(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #trigger / #tri / #action 的执行函数，操作触发器。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
@@ -2374,7 +2410,7 @@ class Session:
    
         self._handle_objs("Trigger", self._triggers, *code.code[2:])
 
-    def handle_task(self, code: CodeLine = None, *args, **kwargs):
+    def handle_task(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #task 的执行函数，显示当前管理的所有任务清单（仅用于调试）。
         该函数不应该在代码中直接调用。
@@ -2395,7 +2431,7 @@ class Session:
         self.writetobuffer("="*width, newline = True)
 
 
-    def handle_ignore(self, code: CodeLine = None, *args, **kwargs):
+    def handle_ignore(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #ignore / #ig, #t+ / #t- 的执行函数，处理使能/禁用状态。
         该函数不应该在代码中直接调用。
@@ -2444,7 +2480,7 @@ class Session:
             cnts = self.enableGroup(groupname, False)
             self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
 
-    def handle_repeat(self, code: CodeLine = None, *args, **kwargs):
+    def handle_repeat(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #repeat / #rep 的执行函数，重复向session输出上一次人工输入的命令。
         该函数不应该在代码中直接调用。
@@ -2461,7 +2497,7 @@ class Session:
         else:
             self.info(Settings.gettext("msg_repeat_invalid"))
 
-    async def handle_num(self, times, code: CodeLine = None, *args, **kwargs):
+    async def handle_num(self, times, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #{num} 的执行函数，重复执行多次命令。
         该函数不应该在代码中直接调用。
@@ -2490,7 +2526,7 @@ class Session:
             for i in range(0, times):
                 await cmd.async_execute(self, *args, **kwargs)
 
-    def handle_gmcp(self, code: CodeLine = None, *args, **kwargs):
+    def handle_gmcp(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #gmcp 的执行函数，操作GMCPTrigger。该命令可以不带参数、带一个参数或者两个参数。
         该函数不应该在代码中直接调用。
@@ -2522,7 +2558,7 @@ class Session:
 
         self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
 
-    def handle_message(self, code: CodeLine = None, *args, **kwargs):
+    def handle_message(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #message / #mess 的执行函数，弹出对话框显示给定信息。
         该函数不应该在代码中直接调用。
@@ -2545,7 +2581,7 @@ class Session:
         self.application.show_message(title, new_cmd_text[index:], False)
 
 
-    def handle_all(self, code: CodeLine = None, *args, **kwargs):
+    def handle_all(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #all 的执行函数，向所有会话发送统一命令。
         该函数不应该在代码中直接调用。
@@ -2723,7 +2759,7 @@ class Session:
                 self.warning(Settings.gettext("msg_module_not_loaded", module_names))
         
 
-    def handle_load(self, code: CodeLine = None, *args, **kwargs):
+    def handle_load(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #load 的执行函数，为当前会话执行模块加载操作。当要加载多个模块时，使用空格或英文逗号隔开。
         该函数不应该在代码中直接调用。
@@ -2752,7 +2788,7 @@ class Session:
         modules = ",".join(code.code[2:]).split(",")
         self.load_module(modules)
 
-    def handle_reload(self, code: CodeLine = None, *args, **kwargs):
+    def handle_reload(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #reload 的执行函数，重新加载模块/插件。
         该函数不应该在代码中直接调用。
@@ -2802,11 +2838,11 @@ class Session:
 
                 elif mod in self.plugins.keys():
                     self.application.reload_plugin(self.plugins[mod])
-                    self.info(Settings.gettext("msg_plugin_reloaded", mod))
+                    self.info(Settings.gettext("msg_plugins_reloaded", mod))
                 else:
                     self.warning(Settings.gettext("msg_name_not_found", mod))
 
-    def handle_unload(self, code: CodeLine = None, *args, **kwargs):
+    def handle_unload(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #unload 的执行函数，卸载模块。
         该函数不应该在代码中直接调用。
@@ -2842,7 +2878,7 @@ class Session:
             modules = ",".join(args).split(",")
             self.unload_module(modules)
 
-    def handle_modules(self, code: CodeLine = None, *args, **kwargs):
+    def handle_modules(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #modules / #mods 的执行函数，显示加载模块清单。该命令不带参数。
         该函数不应该在代码中直接调用。
@@ -2879,7 +2915,7 @@ class Session:
                 else:
                     self.info(Settings.gettext("msg_module_not_loaded", mod))
 
-    def handle_reset(self, code: CodeLine = None, *args, **kwargs):
+    def handle_reset(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #reset 的执行函数，复位全部脚本。该命令不带参数。
         复位操作将复位所有的触发器、命令、未完成的任务，并清空所有触发器、命令、别名、变量。
@@ -2896,7 +2932,7 @@ class Session:
         
         self.reset()
 
-    def handle_save(self, code: CodeLine = None, *args, **kwargs):
+    def handle_save(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #save 的执行函数，保存当前会话变量（系统变量和临时变量除外）至文件。该命令不带参数。
         系统变量包括 %line, %copy 和 %raw 三个，临时变量是指变量名已下划线开头的变量
@@ -2930,7 +2966,7 @@ class Session:
             pickle.dump(saved, fp)
             self.info(Settings.gettext("msg_variables_saved", file))
 
-    def handle_clear(self, code: CodeLine = None, *args, **kwargs):
+    def handle_clear(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #clear / #cls 的执行函数，清空当前会话缓冲与显示。
         该函数不应该在代码中直接调用。
@@ -2941,23 +2977,23 @@ class Session:
 
         self.buffer.text = ""
 
-    def handle_test(self, code: CodeLine = None, *args, **kwargs):
+    def handle_test(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #test / #show 的执行函数，触发器测试命令。类似于zmud的#show命令。
         该函数不应该在代码中直接调用。
 
         使用:
-            - #test {some_text}: 测试服务器收到{some_text}时的触发器响应情况。此时，触发器不会真的响应。
-            - #tt {some_test}: 与#test 的差异是，若存在匹配的触发器，无论其是否被使能，该触发器均会实际响应。
+            - #show {some_text}: 测试服务器收到{some_text}时的触发器响应情况。此时，触发器不会真的响应。
+            - #test {some_test}: 与#show 的差异是，若存在匹配的触发器，无论其是否被使能，该触发器均会实际响应。
 
         示例:
-            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（仅显示触发测试情况）
+            - ``#show 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（仅显示触发测试情况）
             - ``#test %copy``: 复制一句话，模拟服务器再次收到复制的这句内容时的情况进行触发器测试
             - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（会实际导致触发器动作）
 
         注意:
-            - #test命令测试触发器时，触发器不会真的响应。
-            - #tt命令测试触发器时，触发器无论是否使能，均会真的响应。
+            - #show命令测试触发器时，触发器不会真的响应。
+            - #test命令测试触发器时，触发器无论是否使能，均会真的响应。
         '''
         cmd = code.code[1].lower()
         docallback = False
@@ -3065,7 +3101,7 @@ class Session:
         self.info("\n".join(info_all), title)
         #self.info("PYMUD 触发器测试 完毕")
 
-    def handle_plugins(self, code: CodeLine = None, *args, **kwargs):
+    def handle_plugins(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #plugins 的执行函数，显示插件信息。该命令可以不带参数、带一个参数。
         该函数不应该在代码中直接调用。
@@ -3100,7 +3136,7 @@ class Session:
                 #self.info(f"{plugin.desc['DESCRIPTION']}, 版本 {plugin.desc['VERSION']} 作者 {plugin.desc['AUTHOR']} 发布日期 {plugin.desc['RELEASE_DATE']}", f"PLUGIN {name}")
                 self.writetobuffer(plugin.help, True)
 
-    def handle_replace(self, code: CodeLine = None, *args, **kwargs):
+    def handle_replace(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #replace 的执行函数，修改显示内容，将当前行原本显示内容替换为msg显示。不需要增加换行符。
         该函数不应该在代码中直接调用。
@@ -3124,7 +3160,7 @@ class Session:
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.replace(new_text[9:])
         
-    def handle_gag(self, code: CodeLine = None, *args, **kwargs):
+    def handle_gag(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #gag 的执行函数，在主窗口中不显示当前行内容，一般用于触发器中。
         该函数不应该在代码中直接调用。
@@ -3141,7 +3177,7 @@ class Session:
 
         self.display_line = ""
 
-    def handle_py(self, code: CodeLine = None, *args, **kwargs):
+    def handle_py(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #py 的执行函数，执行 Python 语句。
         该函数不应该在代码中直接调用。
@@ -3160,7 +3196,7 @@ class Session:
         except Exception as e:
             self.error(Settings.gettext("msg_py_exception", e))
 
-    def handle_info(self, code: CodeLine = None, *args, **kwargs):
+    def handle_info(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #info 的执行函数，使用 session.info 输出一行，主要用于测试。
         该函数不应该在代码中直接调用。
@@ -3176,7 +3212,7 @@ class Session:
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.info(new_text[6:])
 
-    def handle_warning(self, code: CodeLine = None, *args, **kwargs):
+    def handle_warning(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #warning 的执行函数，使用 session.warning 输出一行，主要用于测试。
         该函数不应该在代码中直接调用。
@@ -3192,7 +3228,7 @@ class Session:
         new_text, new_code = code.expand(self, *args, **kwargs)
         self.warning(new_text[9:])
 
-    def handle_error(self, code: CodeLine = None, *args, **kwargs):
+    def handle_error(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #error 的执行函数，使用 session.error 输出一行，主要用于测试。
         该函数不应该在代码中直接调用。
@@ -3247,7 +3283,7 @@ class Session:
         title = title or Settings.gettext("title_error")
         self.info2(msg, title, style)
 
-    def handle_log(self, code: CodeLine = None, *args, **kwargs):
+    def handle_log(self, code: CodeLine, *args, **kwargs):
         '''
         嵌入命令 #log 的执行函数，控制当前会话的记录状态。
         该函数不应该在代码中直接调用。

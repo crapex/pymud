@@ -1,18 +1,18 @@
 import asyncio, webbrowser
-
+from typing import Any, Callable, Iterable, List, Tuple, Union
 from prompt_toolkit.layout import AnyContainer, ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
 from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame, RadioList 
 from prompt_toolkit.layout.dimension import Dimension, D
 from prompt_toolkit import ANSI, HTML
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
 from prompt_toolkit.application.current import get_app
 from .extras import EasternButton
 
 from .settings import Settings
 
 class BasicDialog:
-    def __init__(self, title = "", modal = True):
+    def __init__(self, title: AnyFormattedText = "", modal = True):
         self.future = asyncio.Future()
         self.dialog = Dialog(
             body = self.create_body(),
@@ -22,7 +22,7 @@ class BasicDialog:
             width = D(preferred=80),
         )
 
-    def set_done(self, result = True):
+    def set_done(self, result: Any = True):
         self.future.set_result(result)
 
     def create_body(self) -> AnyContainer:
@@ -47,7 +47,7 @@ class MessageDialog(BasicDialog):
         return HSplit([Label(text=self.message)])
     
 class QueryDialog(BasicDialog):
-    def __init__(self, title="", message = "", modal=True):
+    def __init__(self, title: AnyFormattedText = "", message: AnyFormattedText = "", modal = True):
         self.message = message
         super().__init__(title, modal)
 
@@ -95,19 +95,19 @@ class NewSessionDialog(BasicDialog):
         body = HSplit([
             VSplit([
                 HSplit([
-                    Label(f" {Settings.gettext("sessionname")}:"),
+                    Label(f" {Settings.gettext('sessionname')}:"),
                     Frame(body=TextArea(name = "session", text="session", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=10), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(f" {Settings.gettext("host")}:"),
+                    Label(f" {Settings.gettext('host')}:"),
                     Frame(body=TextArea(name = "host", text="mud.pkuxkx.net", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=20), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(f" {Settings.gettext("port")}:"),
+                    Label(f" {Settings.gettext('port')}:"),
                     Frame(body=TextArea(name = "port", text="8081", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
                 ]),
                 HSplit([
-                    Label(f" {Settings.gettext("encoding")}:"),
+                    Label(f" {Settings.gettext('encoding')}:"),
                     Frame(body=TextArea(name = "encoding", text="utf8", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
                 ]),
             ])
@@ -121,10 +121,13 @@ class NewSessionDialog(BasicDialog):
         return [ok_button, cancel_button]
     
     def btn_ok_clicked(self):
-        name = get_app().layout.get_buffer_by_name("session").text
-        host = get_app().layout.get_buffer_by_name("host").text
-        port = int(get_app().layout.get_buffer_by_name("port").text)
-        encoding = get_app().layout.get_buffer_by_name("encoding").text
+        def get_text_safely(buffer_name):
+            buffer = get_app().layout.get_buffer_by_name(buffer_name)
+            return buffer.text if buffer else ""
+        name = get_text_safely("session")
+        host = get_text_safely("host")
+        port = get_text_safely("port")
+        encoding = get_text_safely("encoding")
         result = (name, host, port, encoding)
         self.set_done(result)
 
@@ -154,7 +157,10 @@ class LogSelectionDialog(BasicDialog):
     
     def btn_ok_clicked(self):
         if self._itemsCount:
-            result = self._radio_list.current_value
+            if isinstance(self._radio_list, RadioList):
+                result = self._radio_list.current_value
+            else:
+                result = None
             self.set_done(result)
         else:
             self.set_done(False)

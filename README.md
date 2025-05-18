@@ -31,15 +31,51 @@
 
 ## 版本更新信息
 
-### 0.21.0a2 (2025-05-17)
-+ 功能新增: 增加了国际化(i18n)支持，支持中文简体和英文。目前完全支持的仅中文简体，英文只完成了界面翻译，运行时的#help帮助内容暂未翻译。
-+ 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法
-+ 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。
-+ 问题修复: 之前对Alias和Command未进行优先级判断，因此遇到能同时匹配的多个时，不一定优先级高的被触发。现在对Alias和Command进行了优先级判断，优先级高的先触发。
-+ 问题修复: 之前的Alias中的keepEval参数和oneShot参数不起作用，已修复。keepEval参数支持多个匹配成功的别名同时生效，oneShot参数支持一个匹配成功的别名生效后，后续的匹配不再生效。
-+ 问题修复: 修复a1版中@alias别名创建错误的问题(a1版问题，a2版中已修复)
-+ 示例更新: 更新了包中自带的pkuxkx.py，增加了@gmcp的示例以及状态窗口的示例
-+ 功能增强: 对部分函数的参数进行了类型标注，增加了类型检查，以提高代码的可读性和可维护性。
+### 0.21.0 开发中，最新更新2025-05-18
++ 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
++ 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
++ 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：
+``` Python
+    from pymud import Command, Trigger, IConfig
+
+    class MyCustomCommand(Command, IConfig):
+        @exception
+        def a_sync_routine(self, args: list[str]):
+            # 这里的代码抛出的异常会被self.session.error捕获并显示
+            something_that_may_raise_an_exception()
+
+        @async_exception
+        async def execute(self, args: list[str]):
+            # 这里的代码抛出的异常会被self.session.error捕获并显示
+            await something_that_may_raise_another_exception()
+
+    # 上述代码相当于以下代码
+    class MyCustomCommand(Command, IConfig):
+        def a_sync_routine(self, args: list[str]):
+            try:
+                something_that_may_raise_an_exception()
+            except Exception as e:
+                self.session.error(error_msg_of_e)
+
+        async def execute(self, args: list[str]):
+            try:
+                await something_that_may_raise_another_exception()
+            except Exception as e:
+                self.session.error(error_msg_of_e)
+```
++ 问题修复: 修复了Alias和Command执行时的优先级判断。之前未进行优先级判断，因此遇到能同时匹配的多个时，不一定优先级高的被触发。现在对Alias和Command进行了优先级判断，优先级高的先触发。
++ 问题修复: 修复Alias中的keepEval参数和oneShot参数。keepEval参数支持多个匹配成功的别名同时生效，oneShot参数支持一个匹配成功的别名生效后，后续的匹配不再生效。
++ 问题修复: 修复Command中的keepEval参数。以往同时匹配生效的Command会覆盖后续Command和Alias，当前会持续匹配。
++ 功能增强: 对几乎所有函数的参数进行了类型标注，增加了类型检查，提高了代码的可读性和可维护性，也便于自行编写脚本时的提示。
++ 功能增强: 为Session类型增加了commandHistory属性，用于查询发送到服务器的命令历史。保存的命令历史的数量由pymud.cfg中的client["history_records"]控制，默认为500。当该值为0时，不会保存命令历史。为-1时，会保存所有命令历史。
++ 功能调整: #help命令时，增加了上下两行分隔符显示，以便明显区分帮助输出和游戏输出。
++ 功能增强: 当前pymud界面中显示的版本号会自动从pyproject.toml中读取，以确保版本号的准确性和唯一性。
++ 问题修复: 修复了代码中的部分编码错误。新版Python中能容忍一些错误，但老版本不行。经修复，当前代码支持的Python版本已测试3.8确保可用，3.7版理论可用，但未经测试。建议使用3.10或更高版本的Python。
++ 问题修复: 删除了extras.py中多余的MenuItem类型定义，该定义与prompt_toolkit中的MenuItem定义冲突。
++ 问题修复: 调整了众多代码中未检查对象是否为None即调用、使用的局部变量可能未经过初始化和赋值路径等的情况，保证程序运行的健壮性。
++ 问题修复: 修复了#test命令的帮助内容错误。实际#show命令不触发脚本，仅测试；而#test会触发脚本。
++ 已知问题: 在进行类型标注时，发现了协议中处理MSDP协议的代码有问题，由于北大侠客行不适用MSDP传输数据，所以关闭了默认配置中的MSDP支持，此问题先遗留，后续再解决。之前某些MUD游戏报解码错误可能与MSDP协议有关。
++ 示例更新: 更新了包中自带的pkuxkx.py，增加了@alias, @trigger, @timer, @gmcp的示例以及状态窗口的示例。
 
 ### 0.20.4 (2025-03-30)
 + 功能调整: 为插件功能新增了 PLUGIN_PYMUD_DESTROY 方法，用于在插件被卸载时，进行一些清理工作。

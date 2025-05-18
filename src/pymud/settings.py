@@ -35,7 +35,7 @@ class Settings:
         "SGA"               : True,                 # Supress Go Ahead
         "ECHO"              : False,                # Echo
         "GMCP"              : True,                 # Generic Mud Communication Protocol
-        "MSDP"              : True,                 # Mud Server Data Protocol
+        "MSDP"              : False,                # Mud Server Data Protocol (has bugs, please disable MSDP)
         "MSSP"              : True,                 # Mud Server Status Protocol
         "MCCP2"             : False,                # Mud Compress Communication Protocol V2
         "MCCP3"             : False,                # Mud Compress Communication Protocol V3
@@ -72,6 +72,7 @@ class Settings:
         "remain_last_input" : False,
         "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
+        "history_records"   : 500,                  # 记录发送到服务器的命令的上限数量，0表示不记录，-1表示无限记录
         
         "status_divider"    : True,                 # 是否显示状态栏的分隔线
         "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
@@ -186,8 +187,10 @@ class Settings:
     CLR_STYLE      = "\x1b[0m"
 
     @classmethod
-    def gettext(cls, text: str):
-        return cls.text[text] if text in cls.text else text
-    @classmethod
-    def gettext(self, text: str, *args, **kwargs):
-        return self.text[text].format(*args, **kwargs) if text in self.text else text.format(*args, **kwargs)
+    def gettext(cls, text: str, *args, **kwargs):
+        if len(args) == 0 and len(kwargs) == 0:
+            return cls.text[text] if text in cls.text else text
+        else:
+            return cls.text[text].format(*args, **kwargs) if text in cls.text else text.format(*args, **kwargs)
+
+

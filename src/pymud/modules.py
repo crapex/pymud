@@ -1,7 +1,7 @@
 
 import importlib, importlib.util, functools
 from abc import ABC, ABCMeta
-from typing import Any, Annotated, Optional, Union
+from typing import Any, Optional, Union, List, Dict
 from .objects import BaseObject, Command, Trigger, Alias, Timer, GMCPTrigger
 from .settings import Settings
 from .extras import DotDict
@@ -33,8 +33,8 @@ class PymudDecorator:
 
 
 def alias(
-        patterns: Union[list[str], str], 
-        id: str = None, 
+        patterns: Union[List[str], str], 
+        id: Optional[str] = None, 
         group: str = "", 
         enabled: bool = True, 
         ignoreCase: bool = False, 
@@ -83,8 +83,8 @@ def alias(
     return PymudDecorator("alias", *args, **kwargs)
 
 def trigger(
-        patterns: Union[list[str], str], 
-        id: str = None, 
+        patterns: Union[List[str], str], 
+        id: Optional[str] = None, 
         group: str = "", 
         enabled: bool = True, 
         ignoreCase: bool = False, 
@@ -130,7 +130,7 @@ def trigger(
         kwargs.pop("id")
     return PymudDecorator("trigger", *args, **kwargs)
 
-def timer(timeout: float, id: str = None, group: str = "", enabled: bool = True, *args, **kwargs):
+def timer(timeout: float, id: Optional[str] = None, group: str = "", enabled: bool = True, *args, **kwargs):
     """
     使用装饰器创建一个定时器（Timer）对象。
 
@@ -299,7 +299,8 @@ class IConfig(metaclass = PymudMeta):
         self.__inline_objects__ = DotDict()
 
         if hasattr(self, "_decorator_funcs"):
-            for func_name, decorators in self._decorator_funcs.items():
+            deco_funcs = getattr(self, "_decorator_funcs")
+            for func_name, decorators in deco_funcs.items():
                 func = getattr(self, func_name)
                 for deco in decorators:
                     if isinstance(deco, PymudDecorator):
@@ -334,8 +335,8 @@ class IConfig(metaclass = PymudMeta):
     
     def obj(self, obj_id: str) -> BaseObject:
         "根据对象ID返回内联自动创建的对象"
-        return self.__inline_objects__.get(obj_id)
-
+        return self.__inline_objects__.get(obj_id, None) # type: ignore
+        
 class Plugin:
     """
     插件管理类。对加载的插件文件进行管理。该类型由PyMudApp进行管理，无需人工创建。
@@ -356,17 +357,17 @@ class Plugin:
         "加载/重新加载插件对象"
         #del self.modspec, self.mod
         self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
-        self.mod     = importlib.util.module_from_spec(self.modspec)
-        self.modspec.loader.exec_module(self.mod)
+        if self.modspec and self.modspec.loader:
+            self.mod     = importlib.util.module_from_spec(self.modspec)
+            self.modspec.loader.exec_module(self.mod)
         
-        # self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
-        # self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
-        # self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
-        # self._app_destroy = self.mod.__dict__["PLUGIN_PYMUD_DESTROY"]
-        self._app_init = self._load_mod_function("PLUGIN_PYMUD_START")
-        self._session_create = self._load_mod_function("PLUGIN_SESSION_CREATE")
-        self._session_destroy = self._load_mod_function("PLUGIN_SESSION_DESTROY")
-        self._app_destroy = self._load_mod_function("PLUGIN_PYMUD_DESTROY")
+            self._app_init = self._load_mod_function("PLUGIN_PYMUD_START")
+            self._session_create = self._load_mod_function("PLUGIN_SESSION_CREATE")
+            self._session_destroy = self._load_mod_function("PLUGIN_SESSION_DESTROY")
+            self._app_destroy = self._load_mod_function("PLUGIN_PYMUD_DESTROY")
+
+        else:
+            raise FileNotFoundError(Settings.gettext("exception_plugin_file_not_found", self._plugin_file))
         
     def _load_mod_function(self, func_name):
         # 定义一个默认函数，当插件文件中未定义指定名称的函数时，返回该函数

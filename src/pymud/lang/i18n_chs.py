@@ -201,5 +201,20 @@ TRANSLATION = {
         "msg_logger_disabled"           : "{0}: 记录器{1}记录已关闭。",
         "msg_logfile_not_exists"        : "指定的记录文件 {0} 不存在。",
 
+        "exception_logmode_error"       : "错误的记录模式： {0}",
+        "exception_plugin_file_not_found"   : "指定的插件文件 {0} 不存在或者格式不正确。",
+    },
+
+    "docstring" : {
+        "Session": {
+            "handle_clear" :
+        '''
+        嵌入命令 #clear / #cls 的执行函数，清空当前会话缓冲与显示。
+        该函数不应该在代码中直接调用。
+
+        使用:
+            - #cls: 清空当前会话缓冲及显示
+        ''',
+        }
     }
 }

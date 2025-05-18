@@ -43,24 +43,42 @@ class MyConfig(IConfig):
         # 不要遗漏 super().__unload__()，否则会导致@alias等函数装饰器生成的对象不能被正常卸载
         super().__unload__()
 
-    @trigger('^http://fullme.pkuxkx.net/robot.php.+$', group = "sys")
-    def ontri_webpage(self, id, line, wildcards):
-        webbrowser.open(line)
-
+    # 别名， gp gold = get gold from corpse
     @alias(r"^gp\s(.+)$", id = "ali_get", group = "sys")
     def getfromcorpse(self, id, line, wildcards):
         cmd = f"get {wildcards[0]} from corpse"
         self.session.writeline(cmd)
 
+    # 定时器，每5秒打印一次信息
     @timer(5)
     def onTimer(self, id, *args, **kwargs):
         self.session.info("每5秒都会打印本信息", "定时器测试")
+
+    # 导航触发器示例
+    @trigger('^http://fullme.pkuxkx.net/robot.php.+$', group = "sys")
+    def ontri_webpage(self, id, line, wildcards):
+        webbrowser.open(line)
 
     # 若多个对象共用同一个处理函数，也可以同时使用多个装饰器实现
     @trigger(r"^\s+你可以获取(.+)")
     @trigger(r"^\s+这里位于(.+)和(.+)的.+")
     def ontri_multideco(self, id, line, wildcards):
         self.session.info("触发器触发，ID: {0}, 内容: {1}, 匹配项: {2}".format(id, line, wildcards), "测试")
+
+    # 多行触发器示例
+    @trigger([r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$'], group = "sys")
+    def ontri_hpbrief_3lines(self, id, line, wildcards):
+        # 注意注意，此处捕获的额内容在wildcards里都是str类型，直接用下面这种方式赋值的时候，保存的变量也是str类型，因此这种在status_window直接调用并用于计算时，需要另行处理
+        self.session.setVariables([
+        "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli", 
+        "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing", 
+        "vigour/qi", "vigour/yuan", "food", "water", "fighting", "busy"
+        ]
+        , wildcards)
+        # 因为GMCP.Status传递来的是busy和fighting，与hpbrief逻辑相反，因此重新处理下，保证hpbrief和GMCP.Status一致
+        is_busy = not wildcards[-1]
+        is_fighting = not wildcards[-2]
+        self.session.setVariables(['is_busy', 'is_fighting'], [is_busy, is_fighting])
 
     # gmcp定义式，name的大小写必须与GMCP的大小写一致，否则无法触发
     @gmcp("GMCP.Status")

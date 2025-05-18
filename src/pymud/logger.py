@@ -1,7 +1,7 @@
 import os, re, datetime, threading, pathlib
 from queue import SimpleQueue, Empty
 from pathlib import Path
-
+from .settings import Settings
 class Logger:
     """
     PyMUD 的记录器类型，可用于会话中向文件记录数据。记录文件保存在当前目录下的 log 子目录中
@@ -57,6 +57,10 @@ class Logger:
                     now = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
                     filename = f"{self.name}.{now}.log"
 
+                else:
+                    raise ValueError(Settings.gettext("exception_logmode_error", self._mode))
+
+                
                 logdir = Path.cwd().joinpath('log')
                 if not logdir.exists() or not logdir.is_dir():
                     logdir.mkdir()
@@ -70,8 +74,9 @@ class Logger:
 
             else:
                 self._queue.put_nowait(None)
-                self._thread.join()
-                self._thread = None
+                if self._thread:
+                    self._thread.join()
+                    self._thread = None
                 self._closeFile()
 
             self._enabled = enabled
@@ -130,7 +135,7 @@ class Logger:
         The thread will terminate if it sees a sentinel object in the queue.
         """
         newline = True
-        while True:
+        while self._stream:
             try:
                 data = self._queue.get(block = True)
                 if data:

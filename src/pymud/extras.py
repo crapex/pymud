@@ -3,7 +3,7 @@ from unicodedata import east_asian_width
 from wcwidth import wcwidth
 import time, re, logging
 
-from typing import Iterable
+from typing import Iterable, Optional, Union, Tuple
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
@@ -225,11 +225,11 @@ class SessionBuffer(Buffer):
 
     # End of <getters/setters>
 
-    def save_to_undo_stack(self, clear_redo_stack: bool = True) -> None:
-        pass
+    # def save_to_undo_stack(self, clear_redo_stack: bool = True) -> None:
+    #     pass
 
-    def delete(self, count: int = 1) -> str:
-        pass
+    # def delete(self, count: int = 1) -> str:
+    #     pass
 
     def insert_text(
         self,
@@ -291,7 +291,7 @@ class SessionBuffer(Buffer):
 
 
 class SessionBufferControl(BufferControl):
-    def __init__(self, buffer: SessionBuffer = None, input_processors = None, include_default_input_processors: bool = True, lexer: Lexer = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control = None, menu_position = None, focus_on_click: FilterOrBool = False, key_bindings: KeyBindingsBase = None):
+    def __init__(self, buffer: Optional[SessionBuffer] = None, input_processors = None, include_default_input_processors: bool = True, lexer: Optional[Lexer] = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control = None, menu_position = None, focus_on_click: FilterOrBool = False, key_bindings: Optional[KeyBindingsBase] = None):
         # 将所属Buffer类型更改为SessionBuffer
         buffer = buffer or SessionBuffer()
         super().__init__(buffer, input_processors, include_default_input_processors, lexer, preview_search, focusable, search_buffer_control, menu_position, focus_on_click, key_bindings)
@@ -876,30 +876,6 @@ class EasternMenuContainer(MenuContainer):
 
         return Window(FormattedTextControl(get_text_fragments), style="class:menu")
 
-
-
-class MenuItem:
-    def __init__(
-        self,
-        text: str = "",
-        handler = None,
-        children = None,
-        shortcut = None,
-        disabled: bool = False,
-    ) -> None:
-        self.text = text
-        self.handler = handler
-        self.children = children or []
-        self.shortcut = shortcut
-        self.disabled = disabled
-        self.selected_item = 0
-
-    @property
-    def width(self) -> int:
-        if self.children:
-            return max(get_cwidth(c.text) for c in self.children)
-        else:
-            return 0
 
 
 class DotDict(dict):

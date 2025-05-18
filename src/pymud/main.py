@@ -60,6 +60,7 @@ def detect_system_language():
     return lang
 
 def init_pymud_env(args):
+    system = "unknown"
     lang = detect_system_language()
     if lang == "chs":
         print(f"欢迎使用PyMUD, 版本{Settings.__version__}. 使用PyMUD时, 建议建立一个新目录（任意位置），并将自己的脚本以及配置文件放到该目录下.")
