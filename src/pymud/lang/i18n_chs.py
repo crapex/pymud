@@ -86,6 +86,8 @@ TRANSLATION = {
         "load_fail"                : "加载失败",
         "unload_ok"                : "卸载完成",
         "reload_ok"                : "重新加载完成",
+        "msg_plugin_unloaded"      : "本会话中插件 {0} 已停用。",
+        "msg_plugin_loaded"        : "本会话中插件 {0} 已启用。",
 
         # text in objects.py
         "excpetion_brace_not_matched"   : "错误的代码块，大括号数量不匹配",

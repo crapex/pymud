@@ -8,7 +8,7 @@ from typing import Union, Optional, Any, List, Tuple, Dict, Type
 from .logger import Logger
 from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
-from .modules import ModuleInfo
+from .modules import ModuleInfo, Plugin
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
 from .settings import Settings
 from .decorators import exception, async_exception
@@ -2711,7 +2711,13 @@ class Session:
     def _load_module(self, module_name):
         "加载指定名称模块"
         try:
-            if module_name not in self._modules.keys():
+            if module_name in self.application.plugins.keys():
+                plugin = self.application.plugins[module_name]
+                if isinstance(plugin, Plugin):
+                    plugin.onSessionCreate(self)
+                    self.info(Settings.gettext("msg_plugin_loaded", module_name))
+
+            elif module_name not in self._modules.keys():
                 self._modules[module_name] = ModuleInfo(module_name, self)
 
             else:
@@ -2748,6 +2754,12 @@ class Session:
             mod = self._modules.pop(module_name)
             if isinstance(mod, ModuleInfo):
                 mod.unload()
+
+        elif module_name in self.application.plugins.keys():
+            plugin = self.application.plugins[module_name]
+            if isinstance(plugin, Plugin):
+                plugin.onSessionDestroy(self)
+                self.info(Settings.gettext("msg_plugin_unloaded", module_name))
 
         else:
             self.warning(Settings.gettext("msg_module_not_loaded", module_name))

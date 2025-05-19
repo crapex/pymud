@@ -86,6 +86,8 @@ TRANSLATION = {
         "load_fail"                : "Load failed",
         "unload_ok"                : "Unload completed",
         "reload_ok"                : "Reload completed",
+        "msg_plugin_unloaded"      : "Plugin {0} has been disabled for this session.",
+        "msg_plugin_loaded"        : "Plugin {0} has been enabled for this session.",
 
         # text in objects.py
         "excpetion_brace_not_matched"   : "Invalid code block, number of braces does not match",
