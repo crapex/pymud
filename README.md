@@ -5,12 +5,15 @@
 ### 源代码地址: https://github.com/crapex/pymud
 ### 帮助文档地址： https://pymud.readthedocs.org
 ### PyPi项目地址： https://pypi.org/project/pymud
-### 使用交流QQ群：554672580
+### 由deepwiki自动生成的项目理解文档地址： https://deepwiki.com/crapex/pymud
+### PyMUD用户shanghua写的入门教程文档：https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
+### 交流QQ群：554672580
 
 
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
 + 原生Python开发，除prompt-toolkit及其依赖库（wcwidth, pygment, pyperclip)外，不需要其他第三方库支持
++ 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
 + 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作）
 + 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
 + 解决了99%情况下，北大侠客行中文对不齐，也就是看不清字符画的问题（因为我没有走遍所有地方，不敢保证100%）
@@ -32,6 +35,28 @@
 ## 版本更新信息
 
 ### 0.21.0 开发中，最新更新2025-05-18
++ 功能新增: 调整了enableGroup处理，可以通过组名支持子组操作，也可以指定有效类型范围。例如下面代码：
+``` Python
+    class MyTestConfig(IConfig):
+        def __init__(self, session, *args, **kwargs):
+            self._objs = [
+                Trigger(session, "tri1", group = "group1"),
+                Trigger(session, "tri2", group = "group1.subgroup1"),
+                Trigger(session, "tri3", group = "group1.subgroup2"),
+                Alias(session, "alias1", group = "group1"),
+                Alias(session, "alias2", group = "group1.subgroup1"),
+                Timer(session, 5, group = "group1.subgroup1")
+            ]
+    
+            #以下调用可以同时禁用上述6个对象，因为 group1.subgroup1 和 group1.subgroup2 都属于 group1 的子组
+            session.enableGroup("group1", False)
+            #以下调用可以同时仅启用触发器tri1和别名alias1，因为通过subgroup参数限定了不传递到子组
+            session.enableGroup("group1", True, subgroup = False)
+            # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
+            session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
+
+```
++ 功能新增: 增加了多处异常追踪提示。在模块或插件的脚本中发生错误时，均会打印错误追踪信息，方便定位错误。
 + 功能新增: 新增 #echo 命令，类似于 #test 命令，但该命令只会模拟收到服务器数据，直接激发各匹配触发器，但不显示触发测试结果。
 + 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
 + 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。

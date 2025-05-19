@@ -765,21 +765,21 @@ class PyMudApp:
         val = not Settings.client["beautify"]
         Settings.client["beautify"] = val
         if self.current_session:
-            self.current_session.info(f'{Settings.gettext("msg_beautify")}{Settings.gettext("open") if val else Settings.gettext("close")}!')
+            self.current_session.info(f'{Settings.gettext("msg_beautify")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}!')
 
     def act_echoinput(self):
         "菜单: 显示/隐藏输入指令"
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
         if self.current_session:
-            self.current_session.info(f'{Settings.gettext("msg_echoinput")}{Settings.gettext("open") if val else Settings.gettext("close")}!')
+            self.current_session.info(f'{Settings.gettext("msg_echoinput")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}!')
 
     def act_autoreconnect(self):
         "菜单: 打开/关闭自动重连"
         val = not Settings.client["auto_reconnect"]
         Settings.client["auto_reconnect"] = val
         if self.current_session:
-            self.current_session.info(f'{Settings.gettext("msg_autoreconnect")}{Settings.gettext("open") if val else Settings.gettext("close")}')
+            self.current_session.info(f'{Settings.gettext("msg_autoreconnect")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}')
 
     def act_copy(self):
         "菜单: 复制纯文本"

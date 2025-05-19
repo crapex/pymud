@@ -4,7 +4,7 @@ from collections import OrderedDict
 import logging
 from prompt_toolkit.utils import get_cwidth
 from wcwidth import wcswidth, wcwidth
-from typing import Union, Optional, Any, List, Tuple, Dict
+from typing import Union, Optional, Any, List, Tuple, Dict, Type
 from .logger import Logger
 from .extras import SessionBuffer, DotDict
 from .protocol import MudClientProtocol
@@ -1173,39 +1173,49 @@ class Session:
         """
         return "{0}_{1}".format(prefix, self.getUniqueNumber())
 
-    def enableGroup(self, group: str, enabled = True):
+    def enableGroup(self, group: str, enabled = True, subgroup = True, types: Union[Type, Union[Tuple[Type], List[Type]]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
         """
         使能或禁用Group中所有对象, 返回组内各对象个数。
         
         :param group: 组名，即各对象的 group 属性的值
         :param enabled: 使能/禁用开关。为True时表示使能， False为禁用
+        :param subgroup: 是否对子组同时生效，默认为True。子组是指名称在父组名之后的用.xxx命名的组。例如, 组 group1.group2 是 group1 的子组。
+        :param types: 要使能的对象类型，默认为 (Alias, Trigger, Command, Timer, GMCPTrigger)。
+            可以指定为单个类型，也可以指定为类型列表或元组。
+            若指定为单个类型，则只使能该类型的对象。
+            若指定为类型列表或元组，则使能该类型列表或元组中的所有类型的对象。
         :return: 5个整数的列表，依次表示改组内操作的 别名，触发器，命令，定时器，GMCP 的个数
         """
         counts = [0, 0, 0, 0, 0]
-        for ali in self._aliases.values():
-            if isinstance(ali, Alias) and (ali.group == group):
-                ali.enabled = enabled
-                counts[0] += 1
+        if (Alias == types) or (Alias in types):
+            for ali in self._aliases.values():
+                if isinstance(ali, Alias) and ((ali.group == group) or (subgroup and ali.group.startswith(group + "."))):
+                    ali.enabled = enabled
+                    counts[0] += 1
 
-        for tri in self._triggers.values():
-            if isinstance(tri, Trigger) and (tri.group == group):
-                tri.enabled = enabled
-                counts[1] += 1
+        if (Trigger == types) or (Trigger in types):
+            for tri in self._triggers.values():
+                if isinstance(tri, Trigger) and ((tri.group == group) or (subgroup and tri.group.startswith(group + "."))):
+                    tri.enabled = enabled
+                    counts[1] += 1
 
-        for cmd in self._commands.values():
-            if isinstance(cmd, Command) and (cmd.group == group):
-                cmd.enabled = enabled
-                counts[2] += 1
+        if (Command == types) or (Command in types):
+            for cmd in self._commands.values():
+                if isinstance(cmd, Command) and ((cmd.group == group) or (subgroup and cmd.group.startswith(group + "."))):
+                    cmd.enabled = enabled
+                    counts[2] += 1
 
-        for tmr in self._timers.values():
-            if isinstance(tmr, Timer) and (tmr.group == group):
-                tmr.enabled = enabled
-                counts[3] += 1
+        if (Timer == types) or (Timer in types):
+            for tmr in self._timers.values():
+                if isinstance(tmr, Timer) and ((tmr.group == group) or (subgroup and tmr.group.startswith(group + "."))):
+                    tmr.enabled = enabled
+                    counts[3] += 1
 
-        for gmcp in self._gmcp.values():
-            if isinstance(gmcp, GMCPTrigger) and (gmcp.group == group):
-                gmcp.enabled = enabled       
-                counts[4] += 1 
+        if (GMCPTrigger == types) or (GMCPTrigger in types):
+            for gmcp in self._gmcp.values():
+                if isinstance(gmcp, GMCPTrigger) and ((gmcp.group == group) or (subgroup and gmcp.group.startswith(group + "."))):
+                    gmcp.enabled = enabled       
+                    counts[4] += 1 
 
         return counts
 
@@ -2450,6 +2460,9 @@ class Session:
             - ``#t+ mygroup``: 使能名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
             - ``#t- mygroup``: 禁用名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
 
+        注意:
+            使用#t+/#t-调用时，相当于enableGroup传递的默认参数，即subgroup为True, 且types为所有类型。
+            
         相关命令:
             - #trigger
             - #alias
