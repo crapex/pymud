@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from collections import namedtuple
 from typing import Any
 from .settings import Settings
+from .decorators import exception, async_exception, print_exception
 
 class CodeLine:
     """
@@ -448,10 +449,13 @@ class GMCPTrigger(BaseObject):
 
         self.line  = value
         self.value = value_exp
-
+        
         if callable(self._onSuccess):
             self.event.set()
-            self._onSuccess(self.id, value, value_exp)
+            try:
+                self._onSuccess(self.id, value, value_exp)
+            except Exception as e:
+                print_exception(self.session, e)
 
     def __detailed__(self) -> str:
         group = f'group = "{self.group}" ' if self.group else ''
@@ -548,76 +552,79 @@ class MatchObject(BaseObject):
 
         :return: BaseObject.State 类型，一个包含 result, id, name, line, wildcards 的命名元组对象
         """
-        result = self.NOTSET
+        try:
+            result = self.NOTSET
 
-        if not self.multiline:                              # 非多行
-            if self.isRegExp:
-                m = self._regExp.match(line)
-                if m:
-                    result = self.SUCCESS
-                    self.wildcards.clear()
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
+            if not self.multiline:                              # 非多行
+                if self.isRegExp:
+                    m = self._regExp.match(line)
+                    if m:
+                        result = self.SUCCESS
+                        self.wildcards.clear()
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
 
-                    self.lines.clear()
-                    self.lines.append(line)
-            else:
-                #if line.find(self.patterns) >= 0:
-                #if line == self.patterns:
-                if isinstance(self.patterns, str) and (self.patterns in line):
-                    result = self.SUCCESS
-                    self.lines.clear()
-                    self.lines.append(line)
-                    self.wildcards.clear()
-
-        else:                                               # 多行匹配情况
-            # multilines match. 多行匹配时，受限于行的捕获方式，必须一行一行来，设置状态标志进行处理。
-            if self._mline == 0:                            # 当尚未开始匹配时，匹配第1行
-                m = self._regExps[0].match(line)
-                if m:
-                    self.lines.clear()
-                    self.lines.append(line)
-                    self.wildcards.clear()
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    self._mline = 1                         # 下一状态 （中间行）
-            elif (self._mline > 0) and (self._mline < self.linesToMatch - 1):
-                m = self._regExps[self._mline].match(line)
-                if m:
-                    self.lines.append(line)
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    self._mline += 1
+                        self.lines.clear()
+                        self.lines.append(line)
                 else:
+                    #if line.find(self.patterns) >= 0:
+                    #if line == self.patterns:
+                    if isinstance(self.patterns, str) and (self.patterns in line):
+                        result = self.SUCCESS
+                        self.lines.clear()
+                        self.lines.append(line)
+                        self.wildcards.clear()
+
+            else:                                               # 多行匹配情况
+                # multilines match. 多行匹配时，受限于行的捕获方式，必须一行一行来，设置状态标志进行处理。
+                if self._mline == 0:                            # 当尚未开始匹配时，匹配第1行
+                    m = self._regExps[0].match(line)
+                    if m:
+                        self.lines.clear()
+                        self.lines.append(line)
+                        self.wildcards.clear()
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        self._mline = 1                         # 下一状态 （中间行）
+                elif (self._mline > 0) and (self._mline < self.linesToMatch - 1):
+                    m = self._regExps[self._mline].match(line)
+                    if m:
+                        self.lines.append(line)
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        self._mline += 1
+                    else:
+                        self._mline = 0
+                elif self._mline == self.linesToMatch - 1:      # 最终行
+                    m = self._regExps[self._mline].match(line)
+                    if m:
+                        self.lines.append(line)
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        result = self.SUCCESS
+
                     self._mline = 0
-            elif self._mline == self.linesToMatch - 1:      # 最终行
-                m = self._regExps[self._mline].match(line)
-                if m:
-                    self.lines.append(line)
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    result = self.SUCCESS
 
-                self._mline = 0
+            state = BaseObject.State(result, self.id, "\n".join(self.lines), tuple(self.wildcards))
 
-        state = BaseObject.State(result, self.id, "\n".join(self.lines), tuple(self.wildcards))
-
-        # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
-        # 当docallback为真时，是真正的进行匹配和触发，为false时，仅返回匹配结果，不实际触发
-        if docallback:
-            if self.sync:
-                if state.result == self.SUCCESS:
-                    self._onSuccess(state.id, state.line, state.wildcards)
-                elif state.result == self.FAILURE:
-                    self._onFailure(state.id, state.line, state.wildcards)
-                elif state.result == self.TIMEOUT:
-                    self._onTimeout(state.id, state.line, state.wildcards)
-            
-            if state.result == self.SUCCESS:
-                self.event.set()
+            # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
+            # 当docallback为真时，是真正的进行匹配和触发，为false时，仅返回匹配结果，不实际触发
+            if docallback:
+                if self.sync:
+                    if state.result == self.SUCCESS:
+                        self._onSuccess(state.id, state.line, state.wildcards)
+                    elif state.result == self.FAILURE:
+                        self._onFailure(state.id, state.line, state.wildcards)
+                    elif state.result == self.TIMEOUT:
+                        self._onTimeout(state.id, state.line, state.wildcards)
                 
-        self.state = state
-        return state
+                if state.result == self.SUCCESS:
+                    self.event.set()
+                    
+            self.state = state
+            return state
+        except Exception as e:
+            print_exception(self.session, e)
     
     async def matched(self) -> BaseObject.State:
         """
@@ -630,10 +637,10 @@ class MatchObject(BaseObject):
             self.reset()
             await self.event.wait()
             self.reset()
-        except Exception as e:
-            self.error(Settings.gettext("exception_in_async", e))
 
-        return self.state
+            return self.state
+        except Exception as e:
+            print_exception(self.session, e)
     
     def __detailed__(self) -> str:
         group = f'group = "{self.group}" ' if self.group else ''

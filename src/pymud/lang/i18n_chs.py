@@ -92,7 +92,9 @@ TRANSLATION = {
         "exception_quote_not_matched"   : "引号的数量不匹配",
         "exception_forced_async"        : "该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将失效。",
         "exception_session_type_fail"   : "session 必须是 Session 类型对象的实例!",
-        "exception_in_async"            : "异步执行中遇到异常, {}",
+        "exception_message"             : "异常信息: <{}> {}",
+        "exception_traceback"           : '脚本执行异常, 异常位于文件"{}"中的第{}行的"{}"函数中。',
+        "script_error"                  : "脚本错误",
 
 
         # text display in session.py
@@ -173,7 +175,7 @@ TRANSLATION = {
 
         "msg_no_plugins"                : "PYMUD当前并未加载任何插件。",
         "msg_plugins_list"              : "PYMUD当前已加载 {0} 个插件，分别为：",
-        "msg_plugins_info"              : "{0}, 版本 {1} 作者 {2} 发布日期 {3}",
+        "msg_plugins_info"              : "作者 {2} 版本 {1} 发布日期 {3}\n  简介: {0}",
 
         "msg_py_exception"              : "Python执行错误：{0}",
 

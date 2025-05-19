@@ -92,7 +92,9 @@ TRANSLATION = {
         "exception_quote_not_matched"   : "Number of quotes does not match",
         "exception_forced_async"        : "This command contains both forced synchronous and asynchronous commands, will use asynchronous execution, synchronous commands will be invalid.",
         "exception_session_type_fail"   : "session must be an instance of Session type object!",
-        "exception_in_async"            : "Exception occurred during asynchronous execution, {}",
+        "exception_message"             : "Exception information: <{}> {}",
+        "exception_traceback"           : "Exception occurred at line number {1} in file '{0}', and function name is '{2}'",
+        "script_error"                  : "Script Error",
 
         # text display in session.py
         "msg_var_autoload_success"      : "Variables automatically loaded from {0} successfully.",
@@ -172,7 +174,7 @@ TRANSLATION = {
 
         "msg_no_plugins"                : "PYMUD currently has no plugins loaded.",
         "msg_plugins_list"              : "PYMUD currently has {0} plugins loaded, respectively:",
-        "msg_plugins_info"              : "{0}, version {1} author {2} release date {3}",
+        "msg_plugins_info"              : "Author {2} Version {1}  Release Date {3}\n  Description: {0}",
 
         "msg_py_exception"              : "Python execution error: {0}",
 
@@ -363,21 +365,24 @@ TRANSLATION = {
 
             "handle_test" :
         '''
-        The execution function of the embedded command #test/#show, trigger testing command. Similar to zmud's #show command.
+        The execution function of the embedded command #test/#show/#echo, trigger testing command. Similar to zmud's #show command.
         This function should not be called directly in the code.
 
         Usage:
-            - #show {some_text}: Test trigger response when server receives {some_text}. Triggers won't actually execute.
-            - #test {some_test}: Difference from #show is that matched triggers will execute regardless of enabled status.
+            - #show {some_text}: Test trigger response when receives {some_text}. Triggers won't actually execute.
+            - #test {some_text}: Difference from #show is that matched triggers will execute regardless of enabled status.
+            - #echo {some_text}: Simulate receiving {some_text} from server, triggers will execute normally but won't display test results.
 
         Examples:
             - ``#show You take a deep breath and stand up.``: Simulate trigger testing when server receives "You take a deep breath and stand up." (display test results only)
             - ``#test %copy``: Copy a sentence and simulate trigger testing when server receives the copied content again
             - ``#test You take a deep breath and stand up.``: Actual trigger execution will occur even if disabled
+            - ``#echo You take a deep breath and stand up.``: Simulate trigger testing when server receives "You take a deep breath and stand up." (won't display test results)
 
         Notes:
             - #show command only displays test results without actual trigger execution
-            - #ttest command forces actual trigger execution regardless of enabled status
+            - #test command forces actual trigger execution regardless of enabled status
+            - #echo command can be used to manually trigger triggers
         ''',
 
             "handle_timer" :

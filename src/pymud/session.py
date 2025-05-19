@@ -11,7 +11,7 @@ from .protocol import MudClientProtocol
 from .modules import ModuleInfo
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
 from .settings import Settings
-
+from .decorators import exception, async_exception
 
 class Session:
     """
@@ -102,6 +102,7 @@ class Session:
         "t+"  : "ignore",
         "t-"  : "ignore",
         "show": "test",
+        "echo": "test",
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, loop = None, **kwargs):
@@ -2977,28 +2978,32 @@ class Session:
 
         self.buffer.text = ""
 
+    @exception
     def handle_test(self, code: CodeLine, *args, **kwargs):
         '''
-        嵌入命令 #test / #show 的执行函数，触发器测试命令。类似于zmud的#show命令。
+        嵌入命令 #test / #show / #echo 的执行函数，触发器测试命令。类似于zmud的#show命令。
         该函数不应该在代码中直接调用。
 
         使用:
-            - #show {some_text}: 测试服务器收到{some_text}时的触发器响应情况。此时，触发器不会真的响应。
+            - #show {some_text}: 测试收到服务器{some_text}时的触发器响应情况。此时，触发器不会真的响应。
             - #test {some_test}: 与#show 的差异是，若存在匹配的触发器，无论其是否被使能，该触发器均会实际响应。
+            - #echo {some_text}: 模拟收到服务器 {some_text}的情况，触发器按正常情况响应，但不会显示测试结果。
 
         示例:
-            - ``#show 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（仅显示触发测试情况）
+            - ``#show 你深深吸了口气，站了起来。`` ： 模拟收到服务器“你深深吸了口气，站了起来。”时的情况进行触发测试（仅显示触发测试情况）
             - ``#test %copy``: 复制一句话，模拟服务器再次收到复制的这句内容时的情况进行触发器测试
-            - ``#test 你深深吸了口气，站了起来。`` ： 模拟服务器收到“你深深吸了口气，站了起来。”时的情况进行触发测试（会实际导致触发器动作）
+            - ``#test 你深深吸了口气，站了起来。`` ： 模拟收到服务器“你深深吸了口气，站了起来。”时的情况进行触发测试（会实际导致触发器动作）
+            - ``#echo 你深深吸了口气，站了起来。`` ： 模拟收到服务器“你深深吸了口气，站了起来。”时的情况进行触发测试（不会显示测试结果）
 
         注意:
             - #show命令测试触发器时，触发器不会真的响应。
             - #test命令测试触发器时，触发器无论是否使能，均会真的响应。
+            - #echo命令可以用来人工激发触发器。
         '''
         cmd = code.code[1].lower()
-        docallback = False
-        if cmd == "test":
-            docallback = True
+        docallback = True
+        if cmd == "show":
+            docallback = False
 
         new_cmd_text, new_code = code.expand(self, *args, **kwargs)
         line = new_cmd_text[6:]       # 取出#test 之后的所有内容
@@ -3024,6 +3029,10 @@ class Session:
         tris_disabled.sort(key = lambda tri: tri.priority)
         
         for raw_line in lines:
+            # echo 模式下，直接将原始数据输出到窗口，并进行触发测试
+            if cmd == "echo":
+                self.writetobuffer(raw_line, True)
+
             tri_line = self.getPlainText(raw_line)
             
             block = False
@@ -3033,7 +3042,7 @@ class Session:
                 else:
                     state = tri.match(tri_line, docallback = docallback)
 
-                if state.result == Trigger.SUCCESS:
+                if state and (state.result == Trigger.SUCCESS):
                     triggered_enabled += 1
                     if not block: 
                         triggered += 1
@@ -3048,58 +3057,59 @@ class Session:
                         info_enabled.append(Settings.gettext("msg_tri_ignored", tri.__detailed__(), Settings.WARN_STYLE, Settings.CLR_STYLE))
                         # info_enabled.append(f"    {Settings.WARN_STYLE}{tri.__detailed__()} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{Settings.CLR_STYLE}")
             
+            if cmd != "echo":
+                for tri in tris_disabled:
+                    if tri.raw:
+                        state = tri.match(raw_line, docallback = docallback)
+                    else:
+                        state = tri.match(tri_line, docallback = docallback)
+
+                    if state and (state.result == Trigger.SUCCESS):
+                        triggered_disabled += 1
+                        #info_disabled.append(f"    {tri.__detailed__()} 可以匹配触发。")
+                        info_disabled.append(Settings.gettext("msg_tri_matched", tri.__detailed__()))
+
+                if triggered_enabled + triggered_disabled == 0:
+                    info_all.append("")
+
+        if cmd != "echo":
+            if triggered_enabled == 0:
+                info_enabled.insert(0, Settings.gettext("msg_enabled_summary_0", Settings.INFO_STYLE))
+                #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，没有可以触发的。")
+            elif triggered < triggered_enabled:
+                info_enabled.insert(0, Settings.gettext("msg_enabled_summary_1", Settings.INFO_STYLE, triggered_enabled, triggered, triggered_enabled - triggered))
+                #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
+            else:
+                info_enabled.insert(0, Settings.gettext("msg_enabled_summary_2", Settings.INFO_STYLE, triggered_enabled))
+                #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
+
+            if triggered_disabled > 0:
+                info_disabled.insert(0, Settings.gettext("msg_disabled_summary_0", Settings.INFO_STYLE, triggered_disabled))
+                #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
+            else:
+                info_disabled.insert(0, Settings.gettext("msg_disabled_summary_1", Settings.INFO_STYLE))
+                #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能触发器，没有可以匹配的。")
             
-            for tri in tris_disabled:
-                if tri.raw:
-                    state = tri.match(raw_line, docallback = docallback)
-                else:
-                    state = tri.match(tri_line, docallback = docallback)
-
-                if state.result == Trigger.SUCCESS:
-                    triggered_disabled += 1
-                    #info_disabled.append(f"    {tri.__detailed__()} 可以匹配触发。")
-                    info_disabled.append(Settings.gettext("msg_tri_matched", tri.__detailed__()))
-
+            info_all.append("")
             if triggered_enabled + triggered_disabled == 0:
-                info_all.append("")
-
-        if triggered_enabled == 0:
-            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_0", Settings.INFO_STYLE))
-            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，没有可以触发的。")
-        elif triggered < triggered_enabled:
-            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_1", Settings.INFO_STYLE, triggered_enabled, triggered, triggered_enabled - triggered))
-            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个可以触发，实际触发 {triggered} 个，另有 {triggered_enabled - triggered} 个由于 keepEval 原因实际不会触发。")
-        else:
-            info_enabled.insert(0, Settings.gettext("msg_enabled_summary_2", Settings.INFO_STYLE, triggered_enabled))
-            #info_enabled.insert(0, f"{Settings.INFO_STYLE}  使能的触发器中，共有 {triggered_enabled} 个全部可以被正常触发。")
-
-        if triggered_disabled > 0:
-            info_disabled.insert(0, Settings.gettext("msg_disabled_summary_0", Settings.INFO_STYLE, triggered_disabled))
-            #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能的触发器中，共有 {triggered_disabled} 个可以匹配。")
-        else:
-            info_disabled.insert(0, Settings.gettext("msg_disabled_summary_1", Settings.INFO_STYLE))
-            #info_disabled.insert(0, f"{Settings.INFO_STYLE}  未使能触发器，没有可以匹配的。")
-        
-        info_all.append("")
-        if triggered_enabled + triggered_disabled == 0:
-            #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
-            info_all.append(Settings.gettext("msg_test_summary_0", line))
-            info_all.append(Settings.gettext("msg_test_summary_1"))
-            #info_all.append(f"  测试内容: {line}")
-            #info_all.append(f"  测试结果: 没有可以匹配的触发器。")
-        else:
-            #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
-            info_all.append(Settings.gettext("msg_test_summary_0", line))
-            info_all.append(Settings.gettext("msg_test_summary_2", triggered, triggered_enabled + triggered_disabled))
-            #info_all.append(f"  测试内容: {line}")
-            #info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
-            info_all.extend(info_enabled)
-            info_all.extend(info_disabled)
-        
-        title = Settings.gettext("msg_test_title", Settings.gettext("msg_triggered_mode") if docallback else Settings.gettext("msg_matched_mode"))
-        #title = f"触发器测试 - {'响应模式' if docallback else '测试模式'}"
-        self.info("\n".join(info_all), title)
-        #self.info("PYMUD 触发器测试 完毕")
+                #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+                info_all.append(Settings.gettext("msg_test_summary_0", line))
+                info_all.append(Settings.gettext("msg_test_summary_1"))
+                #info_all.append(f"  测试内容: {line}")
+                #info_all.append(f"  测试结果: 没有可以匹配的触发器。")
+            else:
+                #info_all.append(f"PYMUD 触发器测试: {'响应模式' if docallback else '测试模式'}")
+                info_all.append(Settings.gettext("msg_test_summary_0", line))
+                info_all.append(Settings.gettext("msg_test_summary_2", triggered, triggered_enabled + triggered_disabled))
+                #info_all.append(f"  测试内容: {line}")
+                #info_all.append(f"  测试结果: 有{triggered}个触发器可以被正常触发，一共有{triggered_enabled + triggered_disabled}个满足匹配触发要求。")
+                info_all.extend(info_enabled)
+                info_all.extend(info_disabled)
+            
+            title = Settings.gettext("msg_test_title", Settings.gettext("msg_triggered_mode") if docallback else Settings.gettext("msg_matched_mode"))
+            #title = f"触发器测试 - {'响应模式' if docallback else '测试模式'}"
+            self.info("\n".join(info_all), title)
+            #self.info("PYMUD 触发器测试 完毕")
 
     def handle_plugins(self, code: CodeLine, *args, **kwargs):
         '''
@@ -3247,7 +3257,6 @@ class Session:
     def info2(self, msg, title = None, style = Settings.INFO_STYLE):
         title = title or Settings.gettext("title_msg")
         msg = f"{msg}"
-
         self.writetobuffer("{}〔{}〕{}{}".format(style, title, msg, Settings.CLR_STYLE), newline = True)
 
     def info(self, msg, title = None, style = Settings.INFO_STYLE):
@@ -3395,34 +3404,3 @@ class Session:
                 else:
                     self.application.show_logSelectDialog()
 
-
-def exception(func):
-    """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except Exception as e:
-            # 调用类的错误处理方法
-            session = getattr(self, "session", None)
-            if isinstance(session, Session):
-                session.error(f"函数执行中遇到异常, {e}, 类型为 {type(e)}")
-                session.error(f"异常追踪为： {traceback.format_exc()}")
-            else:
-                raise  # 当没有会话时，选择重新抛出异常
-    return wrapper
-
-def async_exception(func):
-    """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
-    @functools.wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        try:
-            return await func(self, *args, **kwargs)
-        except Exception as e:
-            session = getattr(self, "session", None)
-            if isinstance(session, Session):
-                session.error(f"异步执行中遇到异常, {e}, 类型为 {type(e)}")
-                session.error(f"异常追踪为： {traceback.format_exc()}")
-            else:
-                raise  # 当没有会话时，选择重新抛出异常
-    return wrapper

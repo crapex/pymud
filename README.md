@@ -32,6 +32,7 @@
 ## 版本更新信息
 
 ### 0.21.0 开发中，最新更新2025-05-18
++ 功能新增: 新增 #echo 命令，类似于 #test 命令，但该命令只会模拟收到服务器数据，直接激发各匹配触发器，但不显示触发测试结果。
 + 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
 + 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
 + 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：

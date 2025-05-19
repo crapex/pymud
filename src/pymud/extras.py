@@ -310,7 +310,7 @@ class SessionBufferControl(BufferControl):
         # Focus buffer when clicked.
         cur_control = get_app().layout.current_control
         cur_buffer = get_app().layout.current_buffer
-        # 这里时修改的内容
+        # 这里是修改的内容
         if (cur_control == self) or (cur_buffer and cur_buffer.name == "input"):
             if self._last_get_processed_line:
                 processed_line = self._last_get_processed_line(position.y)
