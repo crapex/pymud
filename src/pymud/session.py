@@ -2434,7 +2434,7 @@ class Session:
    
         self._handle_objs("Trigger", self._triggers, *code.code[2:])
 
-    def handle_task(self, code: CodeLine, *args, **kwargs):
+    def handle_task(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #task 的执行函数，显示当前管理的所有任务清单（仅用于调试）。
         该函数不应该在代码中直接调用。
@@ -2507,7 +2507,7 @@ class Session:
             cnts = self.enableGroup(groupname, False)
             self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
 
-    def handle_repeat(self, code: CodeLine, *args, **kwargs):
+    def handle_repeat(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
         嵌入命令 #repeat / #rep 的执行函数，重复向session输出上一次人工输入的命令。
         该函数不应该在代码中直接调用。
