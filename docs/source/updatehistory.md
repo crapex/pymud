@@ -1,5 +1,82 @@
 # 附录: 更新历史
 
+
+### 0.21.0 (2025-05-20)
++ 功能新增: #load / #unload 现在支持当前会话对插件的临时启用和禁用，实现方式为调用插件里的PLUGIN_SESSION_CREATE和PLUGIN_SESSION_DESTROYE函数。群文件的moving.py插件写法可以支持。
++ 功能调整: 各会话变量保存的.mud文件，统一移到save子目录下。原来当前目录下的.mud文件，在对应会话重新加载时会自动移动，无需人工处理。
++ 功能新增: 调整了enableGroup处理，可以通过组名支持子组操作，也可以指定有效类型范围。例如下面代码：
+
+    ``` Python
+        class MyTestConfig(IConfig):
+            def __init__(self, session, *args, **kwargs):
+                self._objs = [
+                    Trigger(session, "tri1", group = "group1"),
+                    Trigger(session, "tri2", group = "group1.subgroup1"),
+                    Trigger(session, "tri3", group = "group1.subgroup2"),
+                    Alias(session, "alias1", group = "group1"),
+                    Alias(session, "alias2", group = "group1.subgroup1"),
+                    Timer(session, 5, group = "group1.subgroup1")
+                ]
+        
+                #以下调用可以同时禁用上述6个对象，因为 group1.subgroup1 和 group1.subgroup2 都属于 group1 的子组
+                session.enableGroup("group1", False)
+                #以下调用可以同时仅启用触发器tri1和别名alias1，因为通过subgroup参数限定了不传递到子组
+                session.enableGroup("group1", True, subgroup = False)
+                # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
+                session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
+
+    ```
+
++ 功能新增: 增加了多处异常追踪提示。在模块或插件的脚本中发生错误时，均会打印错误追踪信息，方便定位错误。
++ 功能新增: 新增 #echo 命令，类似于 #test 命令，但该命令只会模拟收到服务器数据，直接激发各匹配触发器，但不显示触发测试结果。
++ 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
++ 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
++ 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：
+
+    ``` Python
+        from pymud import Command, Trigger, IConfig, exception, async_exception
+
+        class MyCustomCommand(Command, IConfig):
+            @exception
+            def a_sync_routine(self, args: list[str]):
+                # 这里的代码抛出的异常会被self.session.error捕获并显示
+                something_that_may_raise_an_exception()
+
+            @async_exception
+            async def execute(self, args: list[str]):
+                # 这里的代码抛出的异常会被self.session.error捕获并显示
+                await something_that_may_raise_another_exception()
+
+        # 上述代码相当于以下代码
+        class MyCustomCommand(Command, IConfig):
+            def a_sync_routine(self, args: list[str]):
+                try:
+                    something_that_may_raise_an_exception()
+                except Exception as e:
+                    self.session.error(error_msg_of_e)
+
+            async def execute(self, args: list[str]):
+                try:
+                    await something_that_may_raise_another_exception()
+                except Exception as e:
+                    self.session.error(error_msg_of_e)
+    ```
+
++ 问题修复: 修复了Alias和Command执行时的优先级判断。之前未进行优先级判断，因此遇到能同时匹配的多个时，不一定优先级高的被触发。现在对Alias和Command进行了优先级判断，优先级高的先触发。
++ 问题修复: 修复Alias中的keepEval参数和oneShot参数。keepEval参数支持多个匹配成功的别名同时生效，oneShot参数支持一个匹配成功的别名生效后，后续的匹配不再生效。
++ 问题修复: 修复Command中的keepEval参数。以往同时匹配生效的Command会覆盖后续Command和Alias，当前会持续匹配。
++ 功能增强: 对几乎所有函数的参数进行了类型标注，增加了类型检查，提高了代码的可读性和可维护性，也便于自行编写脚本时的提示。
++ 功能增强: 为Session类型增加了commandHistory属性，用于查询发送到服务器的命令历史。保存的命令历史的数量由pymud.cfg中的client["history_records"]控制，默认为500。当该值为0时，不会保存命令历史。为-1时，会保存所有命令历史。
++ 功能调整: #help命令时，增加了上下两行分隔符显示，以便明显区分帮助输出和游戏输出。
++ 功能增强: 当前pymud界面中显示的版本号会自动从pyproject.toml中读取，以确保版本号的准确性和唯一性。
++ 问题修复: 修复了代码中的部分编码错误。新版Python中能容忍一些错误，但老版本不行。经修复，当前代码支持的Python版本已测试3.8确保可用，3.7版理论可用，但未经测试。建议使用3.10或更高版本的Python。
++ 问题修复: 删除了extras.py中多余的MenuItem类型定义，该定义与prompt_toolkit中的MenuItem定义冲突。
++ 问题修复: 调整了众多代码中未检查对象是否为None即调用、使用的局部变量可能未经过初始化和赋值路径等的情况，保证程序运行的健壮性。
++ 问题修复: 修复了#test命令的帮助内容错误。实际#show命令不触发脚本，仅测试；而#test会触发脚本。
++ 问题修复: 修复了协议处理中MSDP编码解码处理错误的问题；修复了协议处理中默认encoding不传递导致某些情况下报解码错误的问题。
++ 示例更新: 更新了包中自带的pkuxkx.py，增加了@alias, @trigger, @timer, @gmcp的示例以及状态窗口的示例。
+
+
 ### 0.20.4 (2025-03-30)
 + 功能调整: 为插件功能新增了 PLUGIN_PYMUD_DESTROY 方法，用于在插件被卸载时，进行一些清理工作。
 + 功能调整: 将插件的 PLUGIN_PYMUD_START 方法的调用，从插件加载时刻移动到事件循环启动之后，这样在加载时，可以使用 asyncio.create_task或 asyncio.ensure_future 来执行一些异步操作

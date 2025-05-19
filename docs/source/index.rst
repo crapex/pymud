@@ -15,6 +15,8 @@ PyMUD 帮助文档
 - PyPi地址: https://pypi.org/project/pymud
 - 北侠wiki地址: https://www.pkuxkx.net/wiki/tools/pymud
 - 北侠地址: https://www.pkuxkx.net/
+- deepwiki自动生成的项目理解文档地址: https://deepwiki.com/crapex/pymud
+- PyMUD用户shanghua写的入门教程文档: https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
 
 写在最前面的话
 ^^^^^^^^^^^^^^^

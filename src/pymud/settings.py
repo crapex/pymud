@@ -35,7 +35,7 @@ class Settings:
         "SGA"               : True,                 # Supress Go Ahead
         "ECHO"              : False,                # Echo
         "GMCP"              : True,                 # Generic Mud Communication Protocol
-        "MSDP"              : False,                # Mud Server Data Protocol (has bugs, please disable MSDP)
+        "MSDP"              : True,                 # Mud Server Data Protocol
         "MSSP"              : True,                 # Mud Server Status Protocol
         "MCCP2"             : False,                # Mud Compress Communication Protocol V2
         "MCCP3"             : False,                # Mud Compress Communication Protocol V3

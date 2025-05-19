@@ -64,7 +64,7 @@
 + 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
 + 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：
 ``` Python
-    from pymud import Command, Trigger, IConfig
+    from pymud import Command, Trigger, IConfig, exception, async_exception
 
     class MyCustomCommand(Command, IConfig):
         @exception

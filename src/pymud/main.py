@@ -5,23 +5,28 @@ from .settings import Settings
 
 CFG_TEMPLATE = {
     "language" : "chs",                             # 语言设置，默认为简体中文
+
     "client": {
         "buffer_lines"      : 5000,                 # 保留缓冲行数
 
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
         "auto_reconnect"    : False,                # 在会话异常断开之后，是否自动重连
+        "reconnect_wait"    : 15,                   # 自动重连等待的时间（秒数）
         "var_autosave"      : True,                 # 断开时自动保存会话变量
         "var_autoload"      : True,                 # 初始化时自动加载会话变量
 
-        "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
+        "history_records"   : 500, 
 
+        "status_divider"    : False,                 # 是否显示状态栏的分隔线
         "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         "status_height"     : 4,                    # 下侧状态栏的高度
         "status_width"      : 30,                   # 右侧状态栏的宽度
+        
 
     },
+
     "sessions" : {
         "pkuxkx" : {
             "host" : "mud.pkuxkx.net",
@@ -68,7 +73,11 @@ def init_pymud_env(args):
         
         dir = args.dir
         if dir:
-            print(f"你已经指定了创建脚本的目录为 {args.dir}")
+            if dir == ".":
+                dir_msg = "当前目录"
+            else:
+                dir_msg = f": {dir}"
+            print(f"你已经指定了创建脚本的目录为{dir_msg}")
             dir = Path(dir)
         else:
             dir = Path.home().joinpath('pkuxkx')
@@ -112,7 +121,11 @@ def init_pymud_env(args):
         print("Starting to initialize the environment for the first time...")
         dir = args.dir
         if dir:
-            print(f"You have specified the directory to create the script as {args.dir}")
+            if dir == ".":
+                dir_msg = "current directory"
+            else:
+                dir_msg = f": {dir}"
+            print(f"You have specified the directory to create the script as {dir_msg}")
             dir = Path(dir)
         else:
             dir = Path.home().joinpath('pkuxkx')
@@ -189,7 +202,7 @@ def main():
     subparsers = parser.add_subparsers(help = 'init用于初始化运行环境')
 
     par_init = subparsers.add_parser('init', description = '初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.')
-    par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, default = '', help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
+    par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, default = '.', help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
     par_init.set_defaults(func = init_pymud_env)
 
     parser.add_argument('-d', '--debug', dest = 'debug', action = 'store_true', default = False, help = '指定以调试模式进入PyMUD。此时，系统log等级将设置为logging.NOTSET, 所有log数据均会被记录。默认不启用。')

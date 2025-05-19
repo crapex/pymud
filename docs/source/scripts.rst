@@ -38,7 +38,7 @@
     PyMUD模块:
         PyMUD模块本身是一个标准的Python模块。为了保证PyMUD应用的正常加载，模块文件应当放在当前目录下，可以以包的形式进行组织。PyMUD支持同时加载任意多个模块。
 
-        根据PyMUD模块文件中是否包含名为 Configuration 的类型，或者包含继承自 IConfig 的子类型，将PyMUD模块区分为主配置模块和子配置模块两类。
+        根据PyMUD模块文件中是否包含继承自 IConfig 的子类型，将PyMUD模块区分为主配置模块和子配置模块两类。
 
         将PyMUD模块放在当前目录下之后，可以在命令行通过 ``#load xxx`` 指令加载名为xxx的模块(xxx为模块不包括扩展名.py的文件名，下同)，也可以将名称放在本地 pymud.cfg 中的 sessions_ 字典中以进行自动加载。
 
@@ -49,7 +49,7 @@
 
             readonly property name: str             # 模块名称，只读属性
             readonly property module: ModuleType    # 模块对应的Python的ModuleType类型属性, 只读属性
-            readonly property config: dict          # 模块中包含的所有 Configuration 配置类型和 IConfig 配置类型的实例对象，以类型名为字典key
+            readonly property config: dict          # 模块中包含的所有 IConfig 配置类型的实例对象，以类型名为字典key
             readonly property ismainmodule: bool    # 模块是否为主模块（主模块定义是包含了配置类型的模块）
 
             load()                                  # 加载模块对象
@@ -67,13 +67,13 @@
             对子模块的#reload，需要在引用该子模块的主模块也执行#reload之后才生效。经测试，目前看来，模块的#reload是生效的
 
     PyMUD子配置模块:
-        PyMUD模块中不包含名为 Configuration 的类型，也不包含 IConfig 子类型的PyMUD模块即属于PyMUD子配置模块。
+        PyMUD模块中不包含 IConfig 子类型的PyMUD模块即属于PyMUD子配置模块。
         加载子配置模块时，相当于在 Python 中调用 import xxx 指令。
         加载子配置模块后， ModuleInfo 对象的 config 为 空字典
 
     PyMUD主配置模块:    
-        模块中包含一个或多个名为 Configuration 的类型和 IConfig 子类型的PyMUD模块。该类型构造函数接受一个 `pymud.Session`_ 对象作为唯一必须指定参数。
-        这种模块在加载时，除了如子配置模块执行相同操作之外，还将自动创建所有 Configuration 类型以及 IConfig 子类型的实例对象。
+        模块中包含一个或多个 IConfig 子类型的PyMUD模块。该类型构造函数接受一个 `pymud.Session`_ 对象作为参数，还接受一个用于指定是否为重新加载的 reload 布尔值标记。
+        这种模块在加载时，除了如子配置模块执行相同操作之外，还将自动创建所有 IConfig 子类型的实例对象。
         所有创建的对象，以其对象类型名称为 key ，保存在 ModuleInfo 对象的 config 字典中.
 
         注: 一个主模块中，可以存在多个配置类型
@@ -86,11 +86,11 @@
             from pymud import Session
 
             # 一个主模块配置类型
-            class Configuration:
-                def __init__(self, session: Session):
+            class MyConfig(IConfig):
+                def __init__(self, session: Session, *args, **kwargs):
                     self.session = session
+                    reload = kwargs.get('reload', False)
 
-                # 注：0.20.0以后，__unload__或unload函数均可生效
                 def __unload__(self):
                     pass
 
@@ -131,11 +131,11 @@
             # filename: mainmodule.py
             # 一个主模块的示例，调用了子模块中的触发器
 
-            from pymud import SimpleAlias, SimpleTimer, Session
+            from pymud import SimpleAlias, SimpleTimer, Session, IConfig
             from submodule import MyTestTrigger
 
-            class Configuration:
-                def __init__(self, session: Session):
+            class MyConfig(IConfig):
+                def __init__(self, session: Session, *args, **kwargs):
                     self.session = session
 
                 self.objs = [
@@ -209,10 +209,10 @@
 
     .. code:: Python
 
-        from pymud import Session, Trigger, SimpleAlias, SimpleTrigger
+        from pymud import IConfig, Session, Trigger, SimpleAlias, SimpleTrigger
         
-        class Configuration:
-            def __init__(self, session: Session):
+        class MyConfig(IConfig):
+            def __init__(self, session: Session, *args, **kwargs):
                 self.session = session
                 self._opVariables()
                 
@@ -345,10 +345,10 @@
         # 主脚本函数，调用hook来向远程服务器发送信息
 
         import webbrowser
-        from pymud import Session, Trigger
+        from pymud import Session, Trigger, IConfig
 
-        class Configuration:
-            def __init__(self, session: Session):
+        class MyConfig(IConfig):
+            def __init__(self, session: Session, *args, **kwargs):
                 self.session = session
                 tri_webpage = Trigger(self.session, id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', group = "sys", onSuccess = self.ontri_webpage)
                 self.session.addTrigger(tri_webpage)
@@ -370,9 +370,11 @@
 ^^^^^^^^^^^^^^^^^^^^^
 
     要周期性的执行某段代码，会使用到定时器（Timer）。PyMUD支持多种特性的定时器，并内置实现了 `Timer`_ 和 `SimpleTimer`_ 两个基础类。
+    同时，PyMUD还提供了装饰器 @timer 用于快速定义一个定时器。
 
-    要在会话中使用定时器，需要：
+    要在会话中使用定时器，可以：
 
+    - 使用PyMUD提供的 @timer 装饰器快速定义一个定时器
     - 构建一个Timer类（或其子类）的实例。SimpleTimer是系统提供的Timer的子类，用于简单定时器创建。
     - 也可以自定义一个类型，继承自 Timer 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义定时器类型实例。
 
@@ -397,7 +399,7 @@
     其余所有定时器的参数都通过命名参数在kwargs中指定。定时器支持和使用的命名参数、默认值及其含义如下：
 
     + id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
-    + group: 触发器所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + group: 触发器所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用。组的使用方法，详见 `6.9 分组对象管理`_ 一节。
     + enabled: 使能状态，默认为True。标识是否使能该定时器。
     + timeout: 超时时间，即定时器延时多久后执行操作，默认为10s
     + oneShot: 单次执行，默认为False。当为True时，定时器仅响应一次，之后自动停止。否则，每隔timeout时间均会执行。
@@ -407,8 +409,8 @@
 6.4.3 定时器使用示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^        
 
-    下列代码中实现了两个定时器，均用于在莫高窟冥想时，每隔5s发送一次mingxiang命令。
-    其中一个使用SimpleTimer实现，另一个使用标准Timer实现，并增加了仅在会话连接状态下发送的判断。
+    下列代码中实现了3个定时器，均用于在莫高窟冥想时，每隔5s发送一次mingxiang命令。
+    其中一个使用SimpleTimer实现，另一个使用标准Timer实现，并增加了仅在会话连接状态下发送的判断，第三个使用 @timer 装饰器快捷创建。
 
     .. code:: Python
 
@@ -417,8 +419,9 @@
 
         # 定义一个配置类型
         class TimerTest(IConfig):
-            def __init__(self, session: Session):
-                self.session = session
+            def __init__(self, session: Session, *args, **kwargs):
+                # 调用父类构造函数，传入session参数，以支持装饰器对象的自动创建
+                super().__init__(session, *args, **kwargs)
                 
                 self._objs = [
                     # 使用SimpleTimer定义一个默认10s超时的定时器, id自动生成, 超时执行代码 mingxiang. 创建时，系统将自动将该实例加入会话，后通
@@ -433,11 +436,22 @@
                 self.session.timers['timer2'].timeout = 10
 
             def __unload__(self):
-                # 卸载时通过 delObjects 将创建的对象删除
+                # 卸载时通过 delObjects 将由代码创建的对象删除
                 self.delObjects(self._objs)
+
+                # 调用父类的super().__unload__()，确保装饰器创建的对象也能成功卸载
+                super().__unload__()
+
                 
             # timer2的超时回调函数，该函数由系统自动调用，并传递定时器的 id 作为参数
             def onTimer2(self, id, *args, **kwargs):
+                # 定时器超时时若本会话处于连接状态, 则执行代码 mingxiang
+                if self.session.connected:
+                    self.session.exec('mingxiang')
+
+            # timer3直接在其回调函数上使用 @timer 装饰器。除了不传递 session 之外，其他参数均与 Timer 相同
+            @timer(5, id = 'timer3')
+            def onTimer3(self, id, *args, **kwargs):
                 # 定时器超时时若本会话处于连接状态, 则执行代码 mingxiang
                 if self.session.connected:
                     self.session.exec('mingxiang')
@@ -457,9 +471,11 @@
 ^^^^^^^^^^^^^^^^^^^^^
 
     当要简化一些输入的MUD命令，或者代入一些参数时，会使用到别名（Alias）。PyMUD支持多种特性的别名，并内置实现了 `Alias`_ 和 `SimpleAlias`_ 两个基础类。
+    同时，PyMUD还提供了装饰器 @alias 用于快速定义一个别名。
 
-    要在会话中使用别名，需要：
+    要在会话中使用别名，可以：
 
+    - 使用PyMUD提供的 @alias 装饰器快速定义一个别名
     - 构建一个Alias类（或其子类）的实例。SimpleAlias是系统提供的Alias的子类，用于创建简单别名。
     - 也可以自定义一个类型，继承自 Alias 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义类型实例。
     
@@ -485,9 +501,11 @@
     别名支持和使用的关键字参数、默认值及其含义如下：
 
     + :id: 唯一标识符。不指定时，默认生成session中此类的唯一标识。
-    + :group: 别名所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用
+    + :group: 别名所属的组名，默认为空。支持使用session.enableGroup来进行整组对象的使能/禁用。组的使用方法，详见 `6.9 分组对象管理`_ 一节。
     + :priority: 优先级，默认100。在对键入命令进行别名触发时会按优先级排序执行，越小优先级越高。
     + :enabled: 使能状态，默认为True。标识是否使能该别名。
+    + :keepEval: 持续匹配，默认为False。当为True时，别名触发后，不会立即停止匹配，而是继续匹配。
+    + :oneShot: 单次执行，默认为False。当为True时，别名触发后，将删除自身。
     + :onSuccess: 函数的引用，默认为空。当别名被触发时自动调用的函数，函数类型应为func(id, line, wildcards)形式。
     + :ignoreCase: 忽略大小写，默认为False。别名模式匹配时是否忽略大小写。
     + :isRegExp：是否正则表达式，默认为True。即指定的别名模式匹配模式patterns是否为正则表达式。
@@ -509,8 +527,8 @@
         from pymud import IConfig, Alias, SimpleAlias, Session
 
         class AliasTest(IConfig):
-            def __init__(self, session: Session):
-                self.session = session
+            def __init__(self, session: Session, *args, **kwargs):
+                super().__init__(session, *args, **kwargs)
                 
                 self._objs = [
                     # 使用 SimpleAlias 建立一个简单别名，以 yz_xy 将从扬州中央广场到信阳小广场的路径设置为别名，可以如此建立：
@@ -527,7 +545,10 @@
                 self.session.alis['ali_get'].patterns = "new_patterns"
 
             def __unload__(self):
+                # 卸载时通过 delObjects 将由代码创建的对象删除
                 self.session.delObjects(self._objs)
+                # 调用父类的super().__unload__()，确保装饰器创建的对象也能成功卸载
+                super().__unload__()
 
             # 别名ali_get的成功回调调函数，该函数由系统自动调用，并传递别名的 id、键入的整行 line， 匹配的结果数组 wildcards 作为参数
             # 假设键入的命令为 gp2 gold， 则系统调用该函数时，id, line, wildcards 三个参数分别为：
@@ -544,6 +565,18 @@
                 else:
                     cmd = f"get {item} from corpse"
 
+                self.session.writeline(cmd)
+
+            # 也可以通过在回调函数上使用装饰器实现同样的功能
+            @alias("^gp(\d+)?\s(.+)$")
+            def onali_getfromcorpse2(self, id, line, wildcards):
+                "别名get xxx from corpse xxx"
+                index = wildcards[0]
+                item  = wildcards[1]
+                if index:
+                    cmd = f"get {item} from corpse {index}"
+                else:
+                    cmd = f"get {item} from corpse"
                 self.session.writeline(cmd)
 
         # 命令行中，可以使用 #ali, #alias 操作别名，比如
@@ -1559,6 +1592,13 @@
             except Exception as e:
                 self.session.error(f"状态窗口发生错误！错误信息为： {e}")
                 return f"{e}"
+
+6.9 分组对象管理
+------------------------
+
+    分组对象管理是指，通过分组对象管理，可以将多个对象归为一类，便于统一管理。
+    分组对象管理的基本原理是，通过创建一个对象，该对象包含多个其他对象，从而实现分组管理。
+    分组对象管理的优点是，可以统一管理多个对象，便于维护。
 
 .. _#mods: syscommand.html#modules
 .. _pymud.Session: references.html#pymud.Session
