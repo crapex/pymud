@@ -1,7 +1,7 @@
-import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, dataclasses, functools, traceback
+import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, dataclasses
+from pathlib import Path
 from collections.abc import Iterable
 from collections import OrderedDict
-import logging
 from prompt_toolkit.utils import get_cwidth
 from wcwidth import wcswidth, wcwidth
 from typing import Union, Optional, Any, List, Tuple, Dict, Type
@@ -164,15 +164,28 @@ class Session:
 
         # 将变量加载和脚本加载调整到会话创建时刻
         if Settings.client["var_autoload"]:
-                file = f"{self.name}.mud"
+            muddir = Path.cwd().joinpath('save')
+            if not muddir.exists() or not muddir.is_dir():
+                muddir.mkdir()
+            
+            # 处理老版本当前目录的.mud文件，移动到save目录下
+            file = f"{self.name}.mud"
+            new_loc_file = muddir.joinpath(file)
+            if not os.path.exists(new_loc_file):
                 if os.path.exists(file):
-                    with open(file, "rb") as fp:
-                        try:
-                            vars = pickle.load(fp)
-                            self._variables.update(vars)
-                            self.info(Settings.gettext("msg_var_autoload_success", file))
-                        except Exception as e:
-                            self.warning(Settings.gettext("msg_var_autoload_fail", file, e))
+                    os.rename(file, new_loc_file)
+            else:
+                if os.path.exists(file):
+                    os.remove(file)
+
+            if os.path.exists(new_loc_file):
+                with open(new_loc_file, "rb") as fp:
+                    try:
+                        vars = pickle.load(fp)
+                        self._variables.update(vars)
+                        self.info(Settings.gettext("msg_var_autoload_success", file))
+                    except Exception as e:
+                        self.warning(Settings.gettext("msg_var_autoload_fail", file, e))
 
         
         if self._auto_script:
@@ -210,7 +223,7 @@ class Session:
     async def connect(self):
         "创建到远程服务器的连接，异步非阻塞方式。"
         def _protocol_factory():
-            return MudClientProtocol(self, onDisconnected = self.onDisconnected)
+            return MudClientProtocol(self, onDisconnected = self.onDisconnected, encoding = self.encoding, encoding_errors = Settings.server["encoding_errors"])
         
         try:
             #self.loop = asyncio.get_running_loop()
@@ -1173,7 +1186,7 @@ class Session:
         """
         return "{0}_{1}".format(prefix, self.getUniqueNumber())
 
-    def enableGroup(self, group: str, enabled = True, subgroup = True, types: Union[Type, Union[Tuple[Type], List[Type]]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+    def enableGroup(self, group: str, enabled = True, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
         """
         使能或禁用Group中所有对象, 返回组内各对象个数。
         
@@ -1187,31 +1200,31 @@ class Session:
         :return: 5个整数的列表，依次表示改组内操作的 别名，触发器，命令，定时器，GMCP 的个数
         """
         counts = [0, 0, 0, 0, 0]
-        if (Alias == types) or (Alias in types):
+        if (Alias == types) or (isinstance(types, Union[List, Tuple]) and (Alias in types)):
             for ali in self._aliases.values():
                 if isinstance(ali, Alias) and ((ali.group == group) or (subgroup and ali.group.startswith(group + "."))):
                     ali.enabled = enabled
                     counts[0] += 1
 
-        if (Trigger == types) or (Trigger in types):
+        if (Trigger == types) or (isinstance(types, Union[List, Tuple]) and (Trigger in types)):
             for tri in self._triggers.values():
                 if isinstance(tri, Trigger) and ((tri.group == group) or (subgroup and tri.group.startswith(group + "."))):
                     tri.enabled = enabled
                     counts[1] += 1
 
-        if (Command == types) or (Command in types):
+        if (Command == types) or (isinstance(types, Union[List, Tuple]) and (Command in types)):
             for cmd in self._commands.values():
                 if isinstance(cmd, Command) and ((cmd.group == group) or (subgroup and cmd.group.startswith(group + "."))):
                     cmd.enabled = enabled
                     counts[2] += 1
 
-        if (Timer == types) or (Timer in types):
+        if (Timer == types) or (isinstance(types, Union[List, Tuple]) and (Timer in types)):
             for tmr in self._timers.values():
                 if isinstance(tmr, Timer) and ((tmr.group == group) or (subgroup and tmr.group.startswith(group + "."))):
                     tmr.enabled = enabled
                     counts[3] += 1
 
-        if (GMCPTrigger == types) or (GMCPTrigger in types):
+        if (GMCPTrigger == types) or (isinstance(types, Union[List, Tuple]) and (GMCPTrigger in types)):
             for gmcp in self._gmcp.values():
                 if isinstance(gmcp, GMCPTrigger) and ((gmcp.group == group) or (subgroup and gmcp.group.startswith(group + "."))):
                     gmcp.enabled = enabled       
@@ -2965,7 +2978,11 @@ class Session:
             - #variable
         '''
 
-        file = f"{self.name}.mud"
+        muddir = Path.cwd().joinpath('save')
+        if not muddir.exists() or not muddir.is_dir():
+            muddir.mkdir()
+
+        file = muddir.joinpath(f"{self.name}.mud")
 
         with open(file, "wb") as fp:
             saved = dict()
