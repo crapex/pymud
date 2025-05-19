@@ -26,3 +26,4 @@ update
 update.*
 .vscode/
 src/.DS_Store
+docs/.DS_Store
