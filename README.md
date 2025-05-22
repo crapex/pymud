@@ -35,31 +35,70 @@
 ## 版本更新信息
 
 ### 0.21.0 开发中，最新更新2025-05-18
-+ 功能新增: #load / #unload 现在支持当前会话对插件的临时启用和禁用，实现方式为调用插件里的PLUGIN_SESSION_CREATE和PLUGIN_SESSION_DESTROYE函数。群文件的moving.py插件写法可以支持。
-+ 功能调整: 各会话变量保存的.mud文件，统一移到save子目录下。原来当前目录下的.mud文件，在对应会话重新加载时会自动移动，无需人工处理。
-+ 功能新增: 调整了enableGroup处理，可以通过组名支持子组操作，也可以指定有效类型范围。例如下面代码：
-``` Python
-    class MyTestConfig(IConfig):
-        def __init__(self, session, *args, **kwargs):
-            self._objs = [
-                Trigger(session, "tri1", group = "group1"),
-                Trigger(session, "tri2", group = "group1.subgroup1"),
-                Trigger(session, "tri3", group = "group1.subgroup2"),
-                Alias(session, "alias1", group = "group1"),
-                Alias(session, "alias2", group = "group1.subgroup1"),
-                Timer(session, 5, group = "group1.subgroup1")
-            ]
-    
-            #以下调用可以同时禁用上述6个对象，因为 group1.subgroup1 和 group1.subgroup2 都属于 group1 的子组
-            session.enableGroup("group1", False)
-            #以下调用可以同时仅启用触发器tri1和别名alias1，因为通过subgroup参数限定了不传递到子组
-            session.enableGroup("group1", True, subgroup = False)
-            # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
-            session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
 
++ 功能新增: 各类对象的group属性，新增组、子组概念，用于快速成组操作对象。组可以包括子组，子组可以再包括子组。
+  组名以点号.分隔，例如：group1.subgroup1.subsubgroup1。组的层级没有限制。
+  组的概念可以用于快速处理多个对象，例如启用/禁用一组对象、删除一组对象等。例如，以下几个组的关系：
+  - mygroup1
+  - mygroup1.subgroup1                # 属于 mygroup1的子组
+  - mygroup1.subgroup2                # 属于 mygroup1的子组
+  - mygroup1.subgroup2.subsubgroup1   # 属于 mygroup1.subgroup2的子组，也同样属于更高层级mygroup1的子组
+  - mygroup2
+  - mygroup2.subgroup1                # 属于 mygroup2的子组
+
++ 功能新增: 新增了deleteGroup函数，用于删除指定的对象组。可同时指定组名、是否包含子组名、有效类型范围。函数定义和示例代码如下：
+
+``` Python
+    def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+        pass
+    # 各参数含义:
+    # group: 要删除的组名，可以是完整的组名，也可以是部分组名。例如："group1" 或 "group1.subgroup1" 等。
+    # subgroup: 是否包含子组。如果为True，则删除指定组及其所有子组的对象。如果为False，则仅删除指定组的对象，不包括子组。
+    # types: 要删除的对象类型范围。可以是单个类型，也可以是类型的元组或列表。例如：Trigger, Alias, Command, Timer, GMCPTrigger 等。
+    # 示例代码：
+    # 删除所有属于group1的Trigger和Alias对象，包括子组如 group1.subgroup1 和 group1.subgroup2 等
+    self.session.deleteGroup("group1", True, [Trigger, Alias])
+    # 删除所有属于group1的Trigger对象，但不包括子组
+    self.session.deleteGroup("group1", False, [Trigger])
 ```
+
++ 功能新增: 对 #trigger, #alias, #timer, #gmcp, #command, #t+, #t- 等命令新增了组处理选项，用于对整组对象进行处理。各命令的语法格式类似。
+  处理组时，组名应以大于号>或者等于号=开头，紧跟组名（无空格）。当使用>时，表示操作针对当前组及所有所属子组，当使用=时，表示操作仅针对当前组。
+  例如下面代码：
+
+    ```
+        #t+ >group1 表示启用所有属于group1以及其子组的所有可管理对象，包括Trigger、Alias、Command、Timer、GMCPTrigger
+        #t- =group1.subgroup1 表示禁用所有仅属于group1.subgroup1的Trigger、Alias、Command、Timer、GMCPTrigger等对象
+        #tri >group1 off 表示禁用所有属于group1以及其子组的Trigger对象
+        #ali =group1.subgroup1 on 表示启用所有仅属于group1.subgroup1的Alias对象
+    ```
+
++ 功能新增: 调整了enableGroup处理，可以通过组名支持子组操作，也可以指定有效类型范围。例如下面代码：
+    ``` Python
+        class MyTestConfig(IConfig):
+            def __init__(self, session, *args, **kwargs):
+                self._objs = [
+                    Trigger(session, "tri1", group = "group1"),
+                    Trigger(session, "tri2", group = "group1.subgroup1"),
+                    Trigger(session, "tri3", group = "group1.subgroup2"),
+                    Alias(session, "alias1", group = "group1"),
+                    Alias(session, "alias2", group = "group1.subgroup1"),
+                    Timer(session, 5, group = "group1.subgroup1")
+                ]
+        
+                #以下调用可以同时禁用上述6个对象，因为 group1.subgroup1 和 group1.subgroup2 都属于 group1 的子组
+                session.enableGroup("group1", False)
+                #以下调用可以同时仅启用触发器tri1和别名alias1，因为通过subgroup参数限定了不传递到子组
+                session.enableGroup("group1", True, subgroup = False)
+                # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
+                session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
+
+    ```
+
 + 功能新增: 增加了多处异常追踪提示。在模块或插件的脚本中发生错误时，均会打印错误追踪信息，方便定位错误。
 + 功能新增: 新增 #echo 命令，类似于 #test 命令，但该命令只会模拟收到服务器数据，直接激发各匹配触发器，但不显示触发测试结果。
++ 功能新增: #load / #unload 现在支持当前会话对插件的临时启用和禁用，实现方式为调用插件里的PLUGIN_SESSION_CREATE和PLUGIN_SESSION_DESTROYE函数。群文件的moving.py插件写法可以支持。
++ 功能调整: 各会话变量保存的.mud文件，统一移到save子目录下。原来当前目录下的.mud文件，在对应会话重新加载时会自动移动，无需人工处理。
 + 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
 + 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
 + 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：
