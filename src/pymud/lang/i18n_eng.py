@@ -132,6 +132,9 @@ TRANSLATION = {
         "msg_object_enabled"            : "Object {0} enabled status is now on.",
         "msg_object_disabled"           : "Object {0} enabled status is now off.",
         "msg_object_deleted"            : "Object {0} has been deleted from session.",
+        "msg_group_objects_enabled"     : "{1} object(s) of Type {2} in group {1} has(have) been enabled.",
+        "msg_group_objects_disabled"    : "{1} object(s) of Type {2} in group {1} has(have) been disabled.",
+        "msg_group_objects_deleted"     : "{1} object(s) of Type {2} in group {1} has(have) been deleted.",
         "msg_object_param_invalid"      : "#{0} command's second parameter only accepts on/off/del",
         "msg_ignore_on"                 : "All trigger enables are globally disabled.",
         "msg_ignore_off"                : "No longer globally disable all trigger enables.",
@@ -334,16 +337,17 @@ TRANSLATION = {
 
         Usage:
             - #ig: Toggle the global enable/disable status of triggers.
-            - #t+ {group}: Enable all objects in the {group} group, including aliases, triggers, commands, timers, GMCP triggers, etc.
-            - #t- {group}: Disable all objects in the {group} group, including aliases, triggers, commands, timers, GMCP triggers, etc.
+            - #t+ [>=]{group}: Enable all objects in the {group} group, including aliases, triggers, commands, timers, GMCP triggers, etc.
+            - #t- [>=]{group}: Disable all objects in the {group} group, including aliases, triggers, commands, timers, GMCP triggers, etc.
 
         Parameters:
-            :group: Group name.
+            :group: Group name. There could be a '=' or '>' sign before groupname, to indicate only this group or this group and it's subgroups. If there is no sign, it is equavalant to use '='.
 
         Examples:
             - ``#ig``: Toggle the global enable/disable status of triggers. When disabled, "Global disabled" will be displayed in the lower right corner of the status bar.
             - ``#t+ mygroup``: Enable all objects in the group named mygroup, including aliases, triggers, commands, timers, GMCP triggers, etc.
             - ``#t- mygroup``: Disable all objects in the group named mygroup, including aliases, triggers, commands, timers, GMCP triggers, etc.
+            - ``#t+ >mygroup``: Enable all objects in the group named mygroup and its subgroups (eg. mygroup.subgroup, etc.), including aliases, triggers, commands, timers, GMCP triggers, etc.
 
         Related commands:
             - #trigger

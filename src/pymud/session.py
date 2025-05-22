@@ -1200,35 +1200,75 @@ class Session:
         :return: 5个整数的列表，依次表示改组内操作的 别名，触发器，命令，定时器，GMCP 的个数
         """
         counts = [0, 0, 0, 0, 0]
-        if (Alias == types) or (isinstance(types, Union[List, Tuple]) and (Alias in types)):
+        if (Alias == types) or (isinstance(types, (list, tuple)) and (Alias in types)):
             for ali in self._aliases.values():
                 if isinstance(ali, Alias) and ((ali.group == group) or (subgroup and ali.group.startswith(group + "."))):
                     ali.enabled = enabled
                     counts[0] += 1
 
-        if (Trigger == types) or (isinstance(types, Union[List, Tuple]) and (Trigger in types)):
+        if (Trigger == types) or (isinstance(types, (list, tuple)) and (Trigger in types)):
             for tri in self._triggers.values():
                 if isinstance(tri, Trigger) and ((tri.group == group) or (subgroup and tri.group.startswith(group + "."))):
                     tri.enabled = enabled
                     counts[1] += 1
 
-        if (Command == types) or (isinstance(types, Union[List, Tuple]) and (Command in types)):
+        if (Command == types) or (isinstance(types, (list, tuple)) and (Command in types)):
             for cmd in self._commands.values():
                 if isinstance(cmd, Command) and ((cmd.group == group) or (subgroup and cmd.group.startswith(group + "."))):
                     cmd.enabled = enabled
                     counts[2] += 1
 
-        if (Timer == types) or (isinstance(types, Union[List, Tuple]) and (Timer in types)):
+        if (Timer == types) or (isinstance(types, (list, tuple)) and (Timer in types)):
             for tmr in self._timers.values():
                 if isinstance(tmr, Timer) and ((tmr.group == group) or (subgroup and tmr.group.startswith(group + "."))):
                     tmr.enabled = enabled
                     counts[3] += 1
 
-        if (GMCPTrigger == types) or (isinstance(types, Union[List, Tuple]) and (GMCPTrigger in types)):
+        if (GMCPTrigger == types) or (isinstance(types, (list, tuple)) and (GMCPTrigger in types)):
             for gmcp in self._gmcp.values():
                 if isinstance(gmcp, GMCPTrigger) and ((gmcp.group == group) or (subgroup and gmcp.group.startswith(group + "."))):
                     gmcp.enabled = enabled       
                     counts[4] += 1 
+
+        return counts
+
+    def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+        """
+        删除Group中所有对象, 返回组内各对象个数。
+
+        :param group: 组名，即各对象的 group 属性的值
+        :param subgroup: 是否对子组同时生效，默认为True。子组是指名称在父组名之后的用.xxx命名的组。例如, 组 group1.group2 是 group1 的子组。
+        :param types: 要删除的对象类型，默认为 (Alias, Trigger, Command, Timer, GMCPTrigger)。
+            可以指定为单个类型，也可以指定为类型列表或元组。
+            若指定为单个类型，则只删除该类型的对象。
+            若指定为类型列表或元组，则删除该类型列表或元组中的所有类型的对象。
+        :return: 5个整数的列表，依次表示改组内操作的 别名，触发器，命令，定时器，GMCP 的个数
+        """
+        counts = [0, 0, 0, 0, 0]
+        if (Alias == types) or (isinstance(types, (list, tuple)) and (Alias in types)):
+            ali_ids = [ali.id for ali in self._aliases.values() if isinstance(ali, Alias) and ((ali.group == group) or (subgroup and ali.group.startswith(group + ".")))]
+            self.delAliases(ali_ids)
+            counts[0] = len(ali_ids)
+
+        if (Trigger == types) or (isinstance(types, (list, tuple)) and (Trigger in types)):
+            tri_ids = [tri.id for tri in self._triggers.values() if isinstance(tri, Trigger) and ((tri.group == group) or (subgroup and tri.group.startswith(group + ".")))]
+            self.delTriggers(tri_ids)
+            counts[1] = len(tri_ids)
+
+        if (Command == types) or (isinstance(types, (list, tuple)) and (Command in types)):
+            cmd_ids = [cmd.id for cmd in self._commands.values() if isinstance(cmd, Command) and ((cmd.group == group) or (subgroup and cmd.group.startswith(group + ".")))]
+            self.delCommands(cmd_ids)
+            counts[2] = len(cmd_ids)
+
+        if (Timer == types) or (isinstance(types, (list, tuple)) and (Timer in types)):
+            tmr_ids = [tmr.id for tmr in self._timers.values() if isinstance(tmr, Timer) and ((tmr.group == group) or (subgroup and tmr.group.startswith(group + ".")))]
+            self.delTimers(tmr_ids)
+            counts[3] = len(tmr_ids)
+
+        if (GMCPTrigger == types) or (isinstance(types, (list, tuple)) and (GMCPTrigger in types)):
+            gmcp_ids = [gmcp.id for gmcp in self._gmcp.values() if isinstance(gmcp, GMCPTrigger) and ((gmcp.group == group) or (subgroup and gmcp.group.startswith(group + ".")))]
+            self.delGMCPs(gmcp_ids)
+            counts[4] = len(gmcp_ids)
 
         return counts
 
@@ -2230,30 +2270,70 @@ class Session:
             self.application.set_globals(args[0], val)
             self.info(Settings.gettext("msg_object_value_setted", Settings.gettext("globalvar"), args[0], val.__repr__()))
 
-    def _handle_objs(self, name: str, objs: dict, *args):
-        if len(args) == 0:
+    @exception
+    def _handle_objs(self, type: Type, objs: dict, *args):
+        if len(args) <= 1:
+            if len(args) == 0:
+                display_objs = objs
+                title = f"  {type.__name__.upper()} LIST IN SESSION {self.name}  "
+            else:
+                arg = args[0]
+                if arg.startswith(">"):
+                    arg = arg[1:]
+                    title = f"  {type.__name__.upper()} LIST IN GROUP <{arg.upper()}> AND ITS SUBGROUPS IN SESSION {self.name}  "
+                    display_objs = {obj.id: obj for obj in objs.values() if (obj.group == arg) or obj.group.startswith(f"{arg}.")}
+                elif arg.startswith("="):
+                    arg = arg[1:]
+                    title = f"  {type.__name__.upper()} LIST IN GROUP <{arg.upper()}> IN SESSION {self.name}  "
+                    display_objs = {obj.id: obj for obj in objs.values() if (obj.group == arg)}
+                else:
+                    title = f"  {type.__name__.upper()} LIST OF ID <{arg.upper()}> IN SESSION {self.name}  "
+                    display_objs = {obj.id: obj for obj in objs.values() if (obj.id == arg)}
+
             width = self.application.get_width()
-            
-            title = f"  {name.upper()} LIST IN SESSION {self.name}  "
+
             left = (width - len(title)) // 2
             right = width - len(title) - left
+            self.writetobuffer("", newline = True)
             self.writetobuffer("="*left + title + "="*right, newline = True)
 
-            for id in sorted(objs.keys()):
+            for id in sorted(display_objs.keys()):
                 self.writetobuffer("  %r" % objs[id], newline = True)
 
             self.writetobuffer("="*width, newline = True)
 
-        elif len(args) == 1:
-            if args[0] in objs.keys():
-                obj = objs[args[0]]
-                self.info(obj.__detailed__())
-            else:
-                self.warning(Settings.gettext("msg_object_not_exists", args[0], name))
-
         elif len(args) == 2:
-            # 当第一个参数为对象obj名称时，对对象进行处理
-            if args[0] in objs.keys():
+            if args[0].startswith(">"):
+                group = args[0][1:]
+                if args[1] == "on":
+                    cnt =self.enableGroup(group, True, True, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_enabled", group, cnt_total, type.__name__))
+                elif args[1] == "off":
+                    cnt =self.enableGroup(group, False, True, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_disabled", group, cnt_total, type.__name__))
+                elif args[1] == "del":
+                    cnt =self.deleteGroup(group, True, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_deleted", group, cnt_total, type.__name__))
+
+            elif args[0].startswith("="):
+                group = args[0][1:]
+                if args[1] == "on":
+                    cnt =self.enableGroup(group, True, False, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_enabled", group, cnt_total, type.__name__))
+                elif args[1] == "off":
+                    cnt =self.enableGroup(group, False, False, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_disabled", group, cnt_total, type.__name__))
+                elif args[1] == "del":
+                    cnt =self.deleteGroup(group, False, type)
+                    cnt_total = sum(cnt)
+                    self.info(Settings.gettext("msg_group_objects_deleted", group, cnt_total, type.__name__))
+
+            elif args[0] in objs.keys():
                 obj = objs[args[0]]
                 if args[1] == "on":
                     obj.enabled = True
@@ -2270,23 +2350,22 @@ class Session:
                     objs.pop(args[0])
                     self.info(Settings.gettext("msg_object_deleted", obj.__repr__()))
                 else:
-                    self.error(Settings.gettext("msg_invalid_param", name.lower()))
+                    self.error(Settings.gettext("msg_invalid_param", type.__name__.lower()))
             
             else:
                 pattern, code = args[0], args[1]
                 if (len(pattern)>=2) and (pattern[0] == '{') and (pattern[-1] == '}'):
                     pattern = pattern[1:-1]
 
-                name = name.lower()
-                if name == "alias":
+                if type == Alias:
                     ali = SimpleAlias(self, pattern, code)
                     self.addAlias(ali)
                     self.info(Settings.gettext("msg_alias_created", ali.id, ali.__repr__()))
-                elif name == "trigger":
+                elif type == Trigger:
                     tri = SimpleTrigger(self, pattern, code)
                     self.addTrigger(tri)
                     self.info(Settings.gettext("msg_trigger_created", tri.id, tri.__repr__()))
-                elif name == "timer":
+                elif type == Timer:
                     if pattern.isnumeric():
                         timeout = float(pattern)
                         if timeout > 0:
@@ -2304,10 +2383,14 @@ class Session:
             - #ali {ali_id}: 显示本会话中id为{ali_id}的别名信息
             - #ali {ali_id} {on/off/del}: 使能/禁用/删除本会话中id为{ali_id}的别名
             - #ali {pattern} {code}: 创建一个新别名，匹配为{pattern}，匹配时执行{code}
+            - #ali [>=]{groupname}: 显示本会话中组名为{groupname}（当为=时）及其子组（当为>时）的所有别名
+            - #ali [>=]{groupname} {on/off/del}: 使能/禁用/删除本会话中组名为groupname（当为=时）及其子组（当为>时）的所有别名
             - 别名的code中，可以使用%line代表行，%1~%9代表捕获信息
 
         参数:
             :ali_id:  别名Alias的id
+            :>/=:     二者选择其一，标记第二个参数为组名，且指定是否包含子组。当为=时，表示仅指定组，当为>时，表示指定组及其子组。
+            :groupname: 组名，即 alias 的 group 属性
             :on:      使能
             :off:     禁用
             :del:     删除
@@ -2317,9 +2400,13 @@ class Session:
         示例:
             - ``#ali``               : 无参数, 打印列出当前会话中所有的别名清单
             - ``#ali my_ali``        : 一个参数, 列出id为my_ali的Alias对象的详细信息
+            - ``#ali =mygroup``      : 一个参数，列出所有 group 名为 "mygroup" 的 Alias 对象的详细信息
+            - ``#ali >mygroup``      : 一个参数，列出所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Alias 对象的详细信息
             - ``#ali my_ali on``     : 两个参数，启用id为my_ali的Alias对象（enabled = True）
             - ``#ali my_ali off``    : 两个参数， 禁用id为my_ali的Alias对象（enabled = False）
             - ``#ali my_ali del``    : 两个参数，删除id为my_ali的Alias对象
+            - ``#ali =mygroup on``   : 两个参数，启用所有 group 名为 "mygroup" 的 Alias 对象
+            - ``#ali >mygroup off``  : 两个参数，禁用所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Alias 对象
             - ``#ali {^gp\s(.+)$} {get %1 from corpse}``   : 两个参数，新增创建一个Alias对象。使用时， ``gp gold = get gold from corpse``
 
         相关命令:
@@ -2328,7 +2415,7 @@ class Session:
             - #command
         """
 
-        self._handle_objs("Alias", self._aliases, *code.code[2:])
+        self._handle_objs(Alias, self._aliases, *code.code[2:])
 
     def handle_timer(self, code: CodeLine, *args, **kwargs):
         '''
@@ -2339,11 +2426,15 @@ class Session:
             - #ti: 显示本会话所有定时器
             - #ti {ti_id}: 显示本会话中id为{ti_id}的定时器信息
             - #ti {ti_id} {on/off/del}: 使能/禁用/删除本会话中id为{ti_id}的定时器
+            - #ti [>=]{groupname}: 显示本会话中组名为{groupname}（当为=时）及其子组（当为>时）的所有定时器
+            - #ti [>=]{groupname} {on/off/del}: 使能/禁用/删除本会话中组名为groupname（当为=时）及其子组（当为>时）的所有定时器
             - #ti {second} {code}: 创建一个新定时器，定时间隔为{second}秒，定时器到时间执行{code}
             - PyMUD支持同时任意多个定时器。
 
         参数:
             :ti_id:   定时器Timer的id
+            :>/=:     二者选择其一，标记第二个参数为组名，且指定是否包含子组。当为=时，表示仅指定组，当为>时，表示指定组及其子组。
+            :groupname: 组名，即 timer 的 group 属性
             :on:      使能
             :off:     禁用
             :del:     删除
@@ -2353,9 +2444,13 @@ class Session:
         示例:
             - ``#ti``: 无参数, 打印列出当前会话中所有的定时器清单
             - ``#ti my_timer``: 一个参数, 列出id为my_timer的Timer对象的详细信息
+            - ``#ti =mygroup``: 一个参数，列出所有 group 名为 "mygroup" 的 Timer 对象的详细信息
+            - ``#ti >mygroup``: 一个参数，列出所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Timer 对象的详细信息
             - ``#ti my_timer on``: 两个参数，启用id为my_timer的Timer对象（enabled = True）
             - ``#ti my_timer off``: 两个参数， 禁用id为my_timer的Timer对象（enabled = False）
             - ``#ti my_timer del``: 两个参数，删除id为my_timer的Timer对象
+            - ``#ti =mygroup on``: 两个参数，启用所有 group 名为 "mygroup" 的 Timer 对象
+            - ``#ti >mygroup off``: 两个参数，禁用所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Timer 对象
             - ``#ti 100 {drink jiudai;#wa 200;eat liang}``: 两个参数，新增创建一个Timer对象。每隔100s，自动执行一次喝酒袋吃干粮。
 
         相关命令:
@@ -2364,7 +2459,7 @@ class Session:
             - #command
         '''
 
-        self._handle_objs("Timer", self._timers, *code.code[2:])
+        self._handle_objs(Timer, self._timers, *code.code[2:])
      
     def handle_command(self, code: CodeLine, *args, **kwargs):
         '''
@@ -2375,10 +2470,14 @@ class Session:
             - #cmd: 显示本会话所有命令（Command及其子类）
             - #cmd {cmd_id}: 显示本会话中id为{cmd_id}的命令信息
             - #cmd {cmd_id} {on/off/del}: 使能/禁用/删除本会话中id为{cmd_id}的命令
+            - #cmd [>=]{groupname}: 显示本会话中组名为{groupname}（当为=时）及其子组（当为>时）的所有命令
+            - #cmd [>=]{groupname} {on/off/del}: 使能/禁用/删除本会话中组名为groupname（当为=时）及其子组（当为>时）的所有命令
             - 由于命令的特殊性，其只能使用脚本代码创建
 
         参数:
             :cmd_id:  命令Command的id
+            :>/=:     二者选择其一，标记第二个参数为组名，且指定是否包含子组。当为=时，表示仅指定组，当为>时，表示指定组及其子组。
+            :groupname: 组名，即 command 的 group 属性
             :on:      使能
             :off:     禁用
             :del:     删除
@@ -2386,9 +2485,13 @@ class Session:
         示例:
             - ``#cmd`` : 无参数, 打印列出当前会话中所有的命令清单
             - ``#cmd my_cmd`` : 一个参数, 列出id为my_cmd的Command对象的详细信息
+            - ``#cmd =mygroup`` : 一个参数，列出所有 group 名为 "mygroup" 的 Command 对象的详细信息
+            - ``#cmd >mygroup`` : 一个参数，列出所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Command 对象的详细信息
             - ``#cmd my_cmd on`` : 两个参数，启用id为my_cmd的Command对象（enabled = True）
             - ``#cmd my_cmd off`` : 两个参数， 禁用id为my_cmd的Command对象（enabled = False）
             - ``#cmd my_cmd del`` : 两个参数，删除id为my_cmd的Command对象
+            - ``#cmd =mygroup on`` : 两个参数，启用所有 group 名为 "mygroup" 的 Command 对象
+            - ``#cmd >mygroup off`` : 两个参数，禁用所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Command 对象
         
         相关命令:
             - #alias
@@ -2396,7 +2499,7 @@ class Session:
             - #timer
         '''
 
-        self._handle_objs("Command", self._commands, *code.code[2:])
+        self._handle_objs(Command, self._commands, *code.code[2:])
 
     def handle_trigger(self, code: CodeLine, *args, **kwargs):
         '''
@@ -2407,11 +2510,15 @@ class Session:
             - #tri: 显示本会话所有触发器
             - #tri {tri_id}: 显示本会话中id为{tri_id}的触发器信息
             - #tri {tri_id} {on/off/del}: 使能/禁用/删除本会话中id为{tri_id}的触发器
+            - #tri [>=]{groupname}: 显示本会话中组名为{groupname}（当为=时）及其子组（当为>时）的所有触发器
+            - #tri [>=]{groupname} {on/off/del}: 使能/禁用/删除本会话中组名为groupname（当为=时）及其子组（当为>时）的所有触发器
             - #tri {pattern} {code}: 创建一个新触发器，匹配为{pattern}，匹配时执行{code}
             - 触发器的code中，可以使用%line代表行，%1~%9代表捕获信息
 
         参数:
             :tri_id:  触发器Trigger的id
+            :[>=]:    二者选择其一，标记第二个参数为组名，且指定是否包含子组。当为=时，表示仅指定组，当为>时，表示指定组及其子组。
+            :groupname: 组名，即 trigger 的 group 属性
             :on:      使能
             :off:     禁用
             :del:     删除
@@ -2421,9 +2528,13 @@ class Session:
         示例:
             - ``#tri``: 无参数, 打印列出当前会话中所有的触发器清单
             - ``#tri my_tri``: 一个参数, 列出id为my_tri的Trigger对象的详细信息
+            - ``#tri =mygroup``: 一个参数，列出所有 group 名为 "mygroup" 的 Trigger 对象的详细信息
+            - ``#tri >mygroup``: 一个参数，列出所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Trigger 对象的详细信息
             - ``#tri my_tri on``: 两个参数，启用id为my_tri的Trigger对象（enabled = True）
             - ``#tri my_tri off``: 两个参数， 禁用id为my_tri的Trigger对象（enabled = False）
             - ``#tri my_tri del``: 两个参数，删除id为my_tri的Trigger对象
+            - ``#tri =mygroup on``: 两个参数，启用所有 group 名为 "mygroup" 的 Trigger 对象
+            - ``#tri >mygroup off``: 两个参数，禁用所有 group 名为 "mygroup" 或以 "mygroup." 开头的下级组（子组，比如 mygroup.subgroup1, mygroup.subgroup2 等）内的 Trigger 对象
             - ``#tri {^[> ]*段誉脚下一个不稳.+} {get duan}``: 两个参数，新增创建一个Trigger对象。当段誉被打倒的时刻把他背起来。
 
         相关命令:
@@ -2432,7 +2543,7 @@ class Session:
             - #command
         '''
    
-        self._handle_objs("Trigger", self._triggers, *code.code[2:])
+        self._handle_objs(Trigger, self._triggers, *code.code[2:])
 
     def handle_task(self, code: Optional[CodeLine] = None, *args, **kwargs):
         '''
@@ -2462,16 +2573,17 @@ class Session:
 
         使用:
             - #ig: 切换触发器全局使能/禁用状态
-            - #t+ {group}: 使能{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
-            - #t- {group}: 禁用{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+            - #t+ [>=]{group}: 使能{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+            - #t- [>=]{group}: 禁用{group}组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
 
         参数:
-            :group:  组名
+            :group:  组名。可以在组名前带 '=', '>' 表示对当前组生效或对当前组及子组同时生效。当省略 >/= 时，相当于 =，即仅对当前组生效。
     
         示例:
             - ``#ig``: 切换全局触发器的使能/禁用状态。为禁用时，状态栏右下角会显示“全局已禁用”
             - ``#t+ mygroup``: 使能名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
             - ``#t- mygroup``: 禁用名称为 mygroup 的组内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
+            - ``#t+ >mygroup``: 使能名称为 mygroup 的组及子组（所有以 mygroup. 开头的其他组，如 mygroup.subgroup）内的所有对象，包括别名、触发器、命令、定时器、GMCPTrigger等
 
         注意:
             使用#t+/#t-调用时，相当于enableGroup传递的默认参数，即subgroup为True, 且types为所有类型。
@@ -2495,7 +2607,15 @@ class Session:
                 return
             
             groupname = code.code[2]
-            cnts = self.enableGroup(groupname)
+            # 组名支持=, >两种，分别代表仅当前组组，当前组及子组
+            # #t+、t-不指定 >, =时，按 = 处理
+            if groupname.startswith(">"):
+                cnts = self.enableGroup(groupname[1:])
+            elif groupname.startswith("="):
+                cnts = self.enableGroup(groupname[1:], subgroup = False)
+            else:
+                cnts = self.enableGroup(groupname, subgroup = False)
+
             self.info(Settings.gettext("msg_group_enabled", groupname, *cnts))
 
         elif cmd == "t-":
@@ -2504,7 +2624,13 @@ class Session:
                 return
             
             groupname = code.code[2]
-            cnts = self.enableGroup(groupname, False)
+            if groupname.startswith(">"):
+                cnts = self.enableGroup(groupname[1:], False)
+            elif groupname.startswith("="):
+                cnts = self.enableGroup(groupname[1:], False, subgroup = False)
+            else:
+                cnts = self.enableGroup(groupname, False)
+
             self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
 
     def handle_repeat(self, code: Optional[CodeLine] = None, *args, **kwargs):
@@ -2562,10 +2688,14 @@ class Session:
             - #gmcp: 显示本会话所有GMCPTrigger
             - #gmcp {gmcp_key}: 显示本会话中name为{gmcp_key}的GMCPTrigger信息
             - #gmcp {gmcp_key} {on/off/del}: 使能/禁用/删除本会话中name为{gmcp_key}的GMCPTrigger
+            - #gmcp [>=]{groupname}: 显示本会话中组名为{groupname}（当为=时）及其子组（当为>时）的所有GMCPTrigger
+            - #gmcp [>=]{groupname} {on/off/del}: 使能/禁用/删除本会话中group为{groupname}的GMCPTrigger
             - 由于GMCPTrigger的特殊性，其只能使用脚本代码创建
 
         参数:
             :gmcp_key:  GMCPTrigger的关键字name
+            :>/=:     二者选择其一，标记第二个参数为组名，且指定是否包含子组。当为=时，表示仅指定组，当为>时，表示指定组及其子组。
+            :groupname: 组名，即 gmcp 的 group 属性。虽然GMCP大概率不会使用group，但仍支持此功能。
             :on:      使能
             :off:     禁用
             :del:     删除
@@ -2583,7 +2713,7 @@ class Session:
             - #timer
         '''
 
-        self._handle_objs("GMCPs", self._gmcp, *code.code[2:])
+        self._handle_objs(GMCPTrigger, self._gmcp, *code.code[2:])
 
     def handle_message(self, code: CodeLine, *args, **kwargs):
         '''
