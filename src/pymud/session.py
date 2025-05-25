@@ -218,7 +218,8 @@ class Session:
 
     def open(self):
         "创建到远程服务器的连接，同步方式。通过调用异步connect方法实现。"
-        asyncio.ensure_future(self.connect(), loop = self.loop)
+        #asyncio.ensure_future(self.connect(), loop = self.loop)
+        self.create_task(self.connect())
 
     async def connect(self):
         "创建到远程服务器的连接，异步非阻塞方式。"
@@ -243,7 +244,8 @@ class Session:
 
             if Settings.client["auto_reconnect"]:
                 wait = Settings.client.get("reconnect_wait", 15)
-                asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
+                #asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
+                self.create_task(self.reconnect(wait))
 
     async def reconnect(self, timeout: float = 15):
         """
@@ -287,7 +289,8 @@ class Session:
 
         if Settings.client["auto_reconnect"]:
             wait = Settings.client.get("reconnect_wait", 15)
-            asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
+            #asyncio.ensure_future(self.reconnect(wait), loop = self.loop)
+            self.create_task(self.reconnect(wait))
 
     @property
     def connected(self) -> bool:
