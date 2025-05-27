@@ -1,10 +1,10 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.21.0"  # Required
+version = "0.21.1"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 # license = {file = "LICENSE.txt"}
 license = "GPL-3.0-or-later"
 license-files = ["LICEN[CS]E*"]
