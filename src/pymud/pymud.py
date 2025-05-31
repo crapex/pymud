@@ -9,7 +9,7 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.application import Application
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollbarMargin, NumberedMargin
+from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollbarMargin, NumberedMargin, to_dimension
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import D
@@ -398,11 +398,26 @@ class PyMudApp:
         else:
             b = None
             
-        if isinstance(b, Buffer):
+        if isinstance(b, SessionBuffer):
             if lines < 0:
-                b.cursor_up(-1 * lines)
-            elif lines > 0:
-                b.cursor_down(lines)
+                if b.start_lineno < 0:
+                    self.console._scroll_up()
+                    b.start_lineno = b.lineCount - self.get_height() * 3 // 2
+                else:
+                    b.start_lineno += lines
+                    if b.start_lineno < 0:
+                        b.start_lineno = 0
+
+            else:
+                if b.start_lineno < 0:
+                    return
+
+                b.start_lineno += lines
+ 
+                if b.start_lineno >= b.lineCount - self.get_height():
+                    b.start_lineno = -1
+
+
 
     def page_up(self, event: KeyPressEvent) -> None:
         "快捷键PageUp: 用于向上翻页。翻页页数为显示窗口行数的一半减去一行。"
