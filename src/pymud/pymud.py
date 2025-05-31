@@ -37,7 +37,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from wcwidth import wcwidth, wcswidth
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict, MenuItem
+from .extras import SessionBuffer, SessionBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
 from .modules import Plugin
 from .session import Session
 from .settings import Settings
@@ -162,8 +162,9 @@ class PyMudApp:
         self.loggers = dict()           # 所有记录字典
         self.showLog = False            # 是否显示记录页
         self.logFileShown = ''          # 记录页显示的记录文件名
-        self.logSessionBuffer = SessionBuffer()
-        self.logSessionBuffer.name = "LOGBUFFER"
+        #self.logSessionBuffer = SessionBuffer()
+        #self.logSessionBuffer.name = "LOGBUFFER"
+        self.logSessionBuffer = SessionBuffer("LOGBUFFER", max_buffered_lines = -1)
 
         self.load_plugins()
 
@@ -217,17 +218,8 @@ class PyMudApp:
             show_cursor=False
         )
 
-        self.mudFormatProc = MudFormatProcessor()
-
         self.consoleView = SessionBufferControl(
             buffer = None,
-            input_processors=[
-                self.mudFormatProc,
-                HighlightSearchProcessor(),
-                HighlightSelectionProcessor(),
-                DisplayMultipleCursors(),
-                ],
-            focus_on_click = False,
             )
         
 
@@ -507,22 +499,18 @@ class PyMudApp:
         """
         
         b = self.consoleView.buffer
-        if b.selection_state:
-            cur1, cur2 = b.selection_state.original_cursor_position, b.document.cursor_position
-            start, end = min(cur1, cur2), max(cur1, cur2)
-            srow, scol = b.document.translate_index_to_position(start)
-            erow, ecol = b.document.translate_index_to_position(end)
-            # srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
-            # erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
-
+        if b and b.selection.is_valid():
             if not raw:
-                # Control-C 复制纯文本
-                if srow == erow:
-                    # 单行情况
-                    #line = b.document.current_line
-                    line = self.mudFormatProc.line_correction(b.document.current_line)
-                    start = max(0, scol)
-                    end = min(ecol, len(line))
+                if b.selection.start_row == b.selection.end_row:
+                    if b.selection.end_col - b.selection.start_col == len(b.getLine(b.selection.start_row)):
+                        # 单行且选中了整行，此时不校正显示位置匹配
+                        line = b.getLine(b.selection.start_row)
+                    else:
+                        # 单行且选中了部分内容，此时校正显示位置匹配
+                        line = self.consoleView.line_correction(b.getLine(b.selection.start_row))
+
+                    start = max(0, b.selection.start_col)
+                    end = min(len(line), b.selection.end_col)
                     line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
@@ -532,35 +520,37 @@ class PyMudApp:
                 else:
                     # 多行只认行
                     lines = []
-                    for row in range(srow, erow + 1):
-                        line = b.document.lines[row]
+                    for row in range(b.selection.start_row, b.selection.end_row + 1):
+                        line = b.getLine(row)
                         line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
+                    copy_text = "\n".join(lines)
+                    self.app.clipboard.set_text(copy_text)
+                    self.set_status(Settings.gettext("msg_copylines", b.selection.rows))
 
-                    self.app.clipboard.set_text("\n".join(lines))
-                    self.set_status(Settings.gettext("msg_copylines", 1 + erow - srow))
-                    
-                    if self.current_session:
-                        self.current_session.setVariable("%copy", "\n".join(lines))
-                    
             else:
-                # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此RAW复制时自动整行复制）
-                if srow == erow:
-                    line = b.document.current_line
+                # RAW模式，直接复制原始内容
+                if b.selection.start_row == b.selection.end_row:
+                    # 单行情况
+                    line = b.getLine(b.selection.start_row)
                     self.app.clipboard.set_text(line)
                     self.set_status(Settings.gettext("msg_copy", line))
-                    
                     if self.current_session:
                         self.current_session.setVariable("%copy", line)
 
                 else:
-                    lines = b.document.lines[srow:erow+1]
-                    copy_raw_text = "".join(lines)
+                    # 多行只认行
+                    lines = []
+                    for row in range(b.selection.start_row, b.selection.end_row + 1):
+                        line = b.getLine(row)
+                        lines.append(line)
+                    copy_raw_text = "\n".join(lines)
                     self.app.clipboard.set_text(copy_raw_text)
-                    self.set_status(Settings.gettext("msg_copylines", 1 + erow - srow))
+                    self.set_status(Settings.gettext("msg_copylines", b.selection.rows))
 
                     if self.current_session:
                         self.current_session.setVariable("%copy", copy_raw_text)
+
 
         else:
             self.set_status(Settings.gettext("msg_no_selection"))
@@ -654,11 +644,10 @@ class PyMudApp:
             if os.path.exists(filename):
                 lock = threading.RLock()
                 lock.acquire()
-                with open(filename, 'r', encoding = 'utf-8', errors = 'ignore') as file:
-                    self.logSessionBuffer._set_text(file.read())
+                self.logSessionBuffer.loadfile(filename, encoding = 'utf-8', errors = 'ignore')
                 lock.release()
 
-            self.logSessionBuffer.cursor_position = len(self.logSessionBuffer.text)
+            #self.logSessionBuffer.cursor_position = len(self.logSessionBuffer.text)
             self.consoleView.buffer = self.logSessionBuffer
             self.app.invalidate()
 
@@ -702,7 +691,8 @@ class PyMudApp:
                 self.current_session.closeLoggers()
                 self.current_session.clean()
                 self.current_session = None
-                self.consoleView.buffer = SessionBuffer()
+                #self.consoleView.buffer = SessionBuffer()
+                self.consoleView.buffer = None
                 self.sessions.pop(name)
                 #self.set_status(f"会话 {name} 已关闭")
                 if len(self.sessions.keys()) > 0:
@@ -741,12 +731,15 @@ class PyMudApp:
             s = self.current_session
             b = s.buffer
             b.exit_selection()
-            b.cursor_position = len(b.text)
+            #b.cursor_position = len(b.text)
+            b.nosplit()
 
         elif self.showLog:
             b = self.logSessionBuffer
             b.exit_selection()
-            b.cursor_position = len(b.text)
+            #b.cursor_position = len(b.text)
+            #b.start_lineno = -1
+            b.nosplit()
 
     def act_close_session(self):
         "菜单: 关闭当前会话"
@@ -755,7 +748,7 @@ class PyMudApp:
 
         elif self.showLog:
             self.showLog = False
-            self.logSessionBuffer.text = ""
+            #self.logSessionBuffer = None
             if len(self.sessions.keys()) > 0:
                 new_sess = list(self.sessions.keys())[0]
                 self.activate_session(new_sess)
@@ -791,7 +784,8 @@ class PyMudApp:
 
     def act_clearsession(self):
         "菜单: 清空会话内容"
-        self.consoleView.buffer.text = ""
+        if self.consoleView.buffer:
+            self.consoleView.buffer.clear()
 
     def act_reload(self):
         "菜单: 重新加载脚本配置"

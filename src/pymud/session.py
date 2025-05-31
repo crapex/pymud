@@ -6,7 +6,7 @@ from prompt_toolkit.utils import get_cwidth
 from wcwidth import wcswidth, wcwidth
 from typing import Union, Optional, Any, List, Tuple, Dict, Type
 from .logger import Logger
-from .extras import SessionBuffer, DotDict
+from .extras import DotDict, SessionBuffer
 from .protocol import MudClientProtocol
 from .modules import ModuleInfo, Plugin
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
@@ -139,7 +139,7 @@ class Session:
 
         self.last_command = ""
         
-        self.buffer     = SessionBuffer()
+        self.buffer     = SessionBuffer(self.name, newline = self.newline_cli, max_buffered_lines = Settings.client["buffer_lines"])
         self.buffer_pos_end   = 0                           # 标注最后位置光标指针
         self.buffer_pos_view  = 0                           # 标注查看位置光标指针
         self.buffer_pos_view_line = -1
@@ -558,14 +558,16 @@ class Session:
         :param data: 写入的数据, 应为 str 类型
         :param newline: 是否额外增加换行符
         """
-        self.buffer.insert_text(data)
+        #self.buffer.insert_text(data)
+        self.buffer.append(data)
         self.log.log(data)
 
         if len(data) > 0 and (data[-1] == "\n"):
             self._line_count += 1
 
         if newline:
-            self.buffer.insert_text(self.newline_cli)
+            #self.buffer.insert_text(self.newline_cli)
+            self.buffer.append(self.newline_cli)
             self._line_count += 1
             self.log.log(self.newline_cli)
 
@@ -575,8 +577,9 @@ class Session:
 
         半数的数量由 Settings.client['buffer_lines'] 确定，默认为5000行。
         """
-        if (Settings.client["buffer_lines"] > 0) and (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
-            self._line_count = self.buffer.clear_half()
+        # if (Settings.client["buffer_lines"] > 0) and (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
+        #     self._line_count = self.buffer.clear_half()
+        pass
 
     def feed_data(self, data) -> None:
         """
@@ -3151,7 +3154,7 @@ class Session:
             - #cls: 清空当前会话缓冲及显示
         '''
 
-        self.buffer.text = ""
+        self.buffer.clear()
 
     @exception
     def handle_test(self, code: CodeLine, *args, **kwargs):
