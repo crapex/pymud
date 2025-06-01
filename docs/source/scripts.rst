@@ -415,7 +415,7 @@
     .. code:: Python
 
         # examples for Timer and SimpleTimer
-        from pymud import IConfig, Timer, SimpleTimer, Session
+        from pymud import IConfig, Timer, SimpleTimer, Session, timer
 
         # 定义一个配置类型
         class TimerTest(IConfig):
@@ -475,7 +475,7 @@
 
     要在会话中使用别名，可以：
 
-    - 使用PyMUD提供的 @alias 装饰器快速定义一个别名
+    - 使用PyMUD提供的 @alias 装饰器快速定义一个别名。
     - 构建一个Alias类（或其子类）的实例。SimpleAlias是系统提供的Alias的子类，用于创建简单别名。
     - 也可以自定义一个类型，继承自 Alias 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义类型实例。
     
@@ -524,7 +524,7 @@
     .. code:: Python
 
         # examples for Alias and SimpleAlias
-        from pymud import IConfig, Alias, SimpleAlias, Session
+        from pymud import IConfig, Alias, SimpleAlias, Session, alias
 
         class AliasTest(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
@@ -568,15 +568,15 @@
                 self.session.writeline(cmd)
 
             # 也可以通过在回调函数上使用装饰器实现同样的功能
-            @alias("^gp(\d+)?\s(.+)$")
-            def onali_getfromcorpse2(self, id, line, wildcards):
-                "别名get xxx from corpse xxx"
+            @alias("^gs(\d+)?\s(.+)$")
+            def onali_getfromskeleton(self, id, line, wildcards):
+                "别名get xxx from skeleton xxx"
                 index = wildcards[0]
                 item  = wildcards[1]
                 if index:
-                    cmd = f"get {item} from corpse {index}"
+                    cmd = f"get {item} from skeleton {index}"
                 else:
-                    cmd = f"get {item} from corpse"
+                    cmd = f"get {item} from skeleton"
                 self.session.writeline(cmd)
 
         # 命令行中，可以使用 #ali, #alias 操作别名，比如
@@ -596,6 +596,7 @@
 
     要在会话中使用触发器，需要：
 
+    - 使用PyMUD提供的 @trigger 装饰器快速定义一个触发器。
     - 构建一个Trigger类（或其子类）的实例。SimpleTrigger是系统提供的Trigger的子类，用于创建简单触发器。
     - 也可以自定义一个类型，继承自 Trigger 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义类型实例。
 
@@ -643,13 +644,13 @@
 6.6.3 触发器基本使用示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    下列代码中实现了多个触发器，展示了SimpleTrigger, Trigger的各种用法
+    下列代码中实现了多个触发器，展示了SimpleTrigger, Trigger，以及装饰器 @trigger 的各种用法
 
     .. code:: Python
 
         # examples for Trigger and SimpleTrigger
         import webbrowser
-        from pymud import IConfig, Trigger, SimpleTrigger, Session
+        from pymud import IConfig, Trigger, SimpleTrigger, Session, trigger
 
 
         HP_KEYS = (
@@ -667,7 +668,7 @@
         REGX_WEAR = r"^.+□(?:\x1b\[[\d;]+m)?(身|脚)\S+一[双|个|件|把](?:\x1b\[([\d;]+)m)?([^\x1b\(\)]+)(?:\x1b\[[\d;]+m)?\(.+\)"
 
         class TriggerTest(IConfig):
-            def __init__(self, session: Session):
+            def __init__(self, session: Session, *args, **kwargs):
                 self.session = session
                 
                 self._trisList = [
@@ -683,10 +684,6 @@
                     # 多行触发器使用示例
                     # 对hpbrief命令的long模式建立三行触发器，获取hpbrief内容并保存到对应的变量中
                     Trigger(self.session, id = 'tri_hpbrief', patterns = REGX_HPBRIEF, group = "sys", onSuccess = self.ontri_hpbrief),
-
-                    # ANSI触发器使用示例。如果要捕获文字中的颜色、闪烁等特性，则可以使用触发器的raw属性，即使用ANSI触发器。
-                    # 在长安爵位任务中，要同时判断路人身上的衣服和鞋子的颜色和类型时，可以使用如下触发：
-                    Trigger(self.session, patterns = REGX_WEAR, onSuccess = self.ontri_wear, raw = True)
                 ]
 
                 # 可以直接使用点访问器操纵触发器对象
@@ -697,13 +694,18 @@
             def __unload__(self):
                 # 通过delObjects从会话中移除所有触发器
                 self.session.delObjects(self._trisList)    # delObjects 支持对象列表形式
+                # 调用父类的super().__unload__()，确保装饰器创建的对象也能成功卸载
+                super().__unload__()
 
             # hpbrief触发器的成功回调调函数，该函数由系统自动调用，并传递别名的 id、键入的整行 line (多行触发模式下，会返回拼接的多行）， 匹配的结果数组 wildcards 作为参数
             def ontri_hpbrief(self, id, line, wildcards):
                 "hpbrief自动保存属性变量参数"
                 self.session.setVariables(HP_KEYS, wildcards)
 
+            # 使用@trigger装饰器定义ANSI触发器使用示例。如果要捕获文字中的颜色、闪烁等特性，则可以使用触发器的raw属性，即使用ANSI触发器。
+            # 在长安爵位任务中，要同时判断路人身上的衣服和鞋子的颜色和类型时，可以使用如下触发：
             # 身上穿着look时的成功回调
+            @trigger(REGX_WEAR, raw = True)
             def ontri_wear(self, name, line, wildcards):
                 buwei = wildcards[0]        # 身体部位，身/脚
                 color = wildcards[1]        # 颜色，30,31,34,35为深色，32,33,36,37为浅色
@@ -736,7 +738,7 @@
         from pymud import IConfig, Trigger
 
         class AsyncTriggerTest(IConfig):
-            def __init__(self, session):
+            def __init__(self, session, *args, **kwargs):
                 self.session = session
                 self._mytri = Trigger(self.session, r"^[> ]*你运功完毕，深深吸了口气，站了起来。", id = "tri_dazuo")
 
@@ -775,6 +777,7 @@
 
     要在会话中使用GMCP触发器，需要：
 
+    - 使用PyMUD提供的 @gmcp 装饰器快速定义一个GMCP触发器。
     - 创建一个GMCPTrigger类（或其子类）的实例, 并将其 id (参数名为 name) 指定为服务器的GMCP消息的标识（区分大小写）
 
 6.7.2 类型定义与构造函数
@@ -805,7 +808,7 @@
     .. code:: Python
 
         # examples for GMCPTrigger
-        from pymud import IConfig, GMCPTrigger, Session
+        from pymud import IConfig, GMCPTrigger, Session, gmcp
 
         class GMCPTest(IConfig):
             def __init__(self, session):
@@ -814,6 +817,8 @@
 
             def __unload__(self):
                 self.session.delObject(self._gmcp_status)
+                # 调用父类的super().__unload__()，确保装饰器创建的对象也能成功卸载
+                super().__unload__()
 
             ### GMCP处理函数 ###
             # 系统调用该函数时，会传递三个参数，id 为该GMCP的id, line 为GMCP收到的原始数据， wildcards 为经 eval处理后的数据。
@@ -839,6 +844,21 @@
                             if value == "false": value = False
                             elif value == "true": value = True
                             self.session.setVariable(key, value)
+
+            @gmcp("GMCP.Buff", group = "sys")
+            def ongmcp_buff(self, name, line, wildcards):
+                if isinstance(wildcards, dict):
+                    buff = self.session.getVariable("buff", list())
+                    if wildcards["is_end"] == "false": 
+                        if not wildcards["name"] in buff:
+                            buff.append(wildcards["name"])
+                    elif wildcards["name"] in buff:
+                        buff.remove(wildcards["name"])
+
+                    self.session.setVariable("buff", buff)
+                else:
+                    self.session.info(line, name)
+
 
 
 6.8 命令 (Command)
@@ -925,105 +945,145 @@
 
         # 直接继承Command和IConfig，这样在加载模块时就会自动创建该类型
         class CmdMove(Command, IConfig):
-            MAX_RETRY = 5
-
             def __init__(self, session: Session, *args, **kwargs):
-                # 将所有可能的行走命令组合成匹配模式
-                pattern = "^({0})$".format("|".join(DIRECTIONS))
-                # 给定一个默认id。用于自动创建该类型时的默认参数
+                # 将所有移动相关命令拼接为匹配的正则表达式。
+                # 当命令行输入命令，或者用exec系列函数调用发送的命令，与本Command的patterns（也就是此处的pattern）匹配时，
+                # 会触发该命令的execute函数执行，并将实际输入的命令传入execute的cmd参数
+                # 因为移动命令的pattern目前就是这些，因此在代码里将其写死，那么创建CmdMove实例对象是就无需重复指定 patterns
                 kwargs.setdefault("id", "cmd_move")
-                super().__init__(session, pattern, *args, **kwargs)
-                self.session = Session
-                self.timeout = 10
-                self._executed_cmd = ""
+                pattern = r"^({0})$".format("|".join(DIRECTIONS))
+                super().__init__(session, patterns = pattern, *args, **kwargs)
 
-                self._objs = list()
+                # 所有触发器都相同的公共参数，减少后面创建触发器时的代码输入
+                tris_kwargs_default = {
+                    "enabled"   : False,
+                    "keepEval"  : True,
+                    "priority"  : 90,
+                    "timeout"   : 5,
+                }
 
-                # 此处使用的GMCPTrigger和Trigger全部使用异步模式，因此均无需指定onSuccess
-                self._objs.append(GMCPTrigger(self.session, "GMCP.Move"))
-                self._objs.append(Trigger(self.session, REGX_ROOMNAME, id = "tri_move_succ", group = "cmdmove", keepEval = True, enabled = False))
+                # 将所有命令对象放到 _objs 数组中，用于 __unload__ 时卸载
+                # 由于在本命令中的触发器全部使用异步模式，因此所有触发器都没有配置 onSuccess 函数，保留默认即可。
+                # 因为后续所有的判断也无需使用触发器 id ，因此所有的id 都使用系统自动设置的默认值，不再配置。
+                # 异步触发器获取是否触发使用 await tri.triggered() 的方式处理
+                self._objs = [
+                    # 当移动命令成功之后，正常应该收到房间名称，因此将房间名称作为成功的触发匹配。将匹配成功的触发器组名设置为 moving.move.success 用于后续判断
+                    Trigger(self.session, REGX_ROOMNAME, group = "moving.move.success", **tris_kwargs_default)
+                ]
 
-                idx = 1
+                # 当移动失败(没路，无需重试）之后，可能收到一个表示失败的消息，目前梳理的所有失败消息都在 MOVE_FAIL 定义中列举。将所有这些消息都分别设置为触发器，表示移动失败。将所有移动失败的触发器组名设置为 moving.move.fail 用于后续判断
+                # 将创建的所有表示失败的触发器都放入 self._objs 数组，以便后面 __unload__ 能正常卸载
+                # 这些触发器也一样，都是用异步模式，因此无需配置 onSuccess 函数
                 for s in MOVE_FAIL:
-                    self._objs.append(Trigger(self.session, patterns = s, id = f"tri_move_fail{idx}", group = "cmdmove", enabled = False"))
-                    idx += 1
+                    self._objs.append(Trigger(self.session, patterns = s, group = "moving.move.fail", **tris_kwargs_default))
 
-                idx = 1
+                # 当移动失败（有路，但由于各种原因未移动成功）之后，可能收到一个表示失败（可以重试）的消息，目前梳理的所有消息都放在 MOVE_RETRY 中。
+                # 与上面类似，这种失败的触发器组名设置为 moving.move.retry 一共后续判断。
                 for s in MOVE_RETRY:
-                    self._objs.append(Trigger(self.session, patterns = s, id = f"tri_move_retry{idx}", group = "cmdmove", enabled = False"))
-                    idx += 1
+                    self._objs.append(Trigger(self.session, patterns = s, group = "moving.move.retry", **tris_kwargs_default))
 
             def __unload__(self):
+                # 卸载函数中，将所有 _objs 中的对象从会话中移除
                 self.session.delObjects(self._objs)
-                # 注意：命令的 unload 方法中，无论是否继承IConfig，都无需包括删除命令自身的命令
-                #   self.session.delObject(self)  意味着这句话不需要（不能有，会导致递归调用）
 
-            async def execute(self, cmd, *args, **kwargs):
+            # 以下内容为该Command的主执行函数。当正常触发了该命令时，pymud会自动调用该函数，并将实际命令通过cmd参数传递到函数中
+            # 因此，移动动作的所有处理均放在此函数中。
+            # 假设输入一个命令之后，服务器可能的响应有以下几种可能：
+            #   1. 该方向有出路，且移动成功，成功走到一个新的房间，因此可以收到服务器的 房间名 一行信息，此时， moving.move.success 组的这个触发器会被触发；
+            #   2. 该方向没有出路，移动失败，服务器会返回类似『你一头撞在墙上』的表示失败的信息，此时， moving.move.fail 组中的某一个触发器会被触发；
+            #   3. 该方向有出路，但由于busy或其他导致移动失败，服务器会返回类似『你正忙着呢』表示失败（但实际可以走过去）的消息，此时， moving.move.retry 组中的某一个触发器会被触发；
+            #   4. 由于角色处于昏迷状态，或者网络延迟原因，等待好长一段时间（此处给定默认值为 self.timeout = 5秒）后，都没有收到上述3中情况的任意反馈，此时，我们认为命令执行超时。
+            # 下面的处理，就是在送出命令之后，识别到底是哪一种情况，再根据情况判断后续执行操作。
+            # 因为是异步函数，增加一个 async_exception 异常处理的装饰器，在这里如果代码运行错误后，会打印到session中
+            @async_exception
+            async def execute(self, cmd, *args, **kwargs):  # type: ignore
+                # 复位本命令，请保留，暂时无需关注细节
                 self.reset()
 
+                # 定义一个重试的次数参数
                 retry_times = 0
-                self.session.enableGroup('cmdmove')
 
-                while True:
+                # 使能本命令创建的所有触发器。使用 subgroup 参数配置，让所有组名以 moving.move开头的组内的所有对象均开启 enabled
+                self.session.enableGroup(group = "moving.move", enabled = True, subgroup = True)
 
-                    tasklist = list()
-                    for tr in self._objs:
-                        tasklist.append(self.create_task(tr.triggered()))
+                # 先将结果状态设置为 NOTSET，表示 未设置
+                result = self.NOTSET
 
-                    done, pending = await self.session.waitfor(cmd, asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED"))
-
-                    for t in list(pending):
+                # 最多循环 MAX_RETRY_TIMES 次，用于处理 retry 情况
+                while retry_times < MAX_RETRY_TIMES:
+                    # 将所有触发器的异步触发状态 triggered() 生成任务，供异步触发判断使用。有关 tri.triggered() ,可以把鼠标放在下面的 tri.triggered() 上，查看文档字符串帮助
+                    # 此处使用了 Python 的列表推导语句，简化代码输入
+                    # 实际内容就是将上面 self._objs 中的每一个触发器，都调用 tri.triggered() 以生成协程对象，再使用 create_task 包裹成任务，供后续使用
+                    # 相当于这么写的代码：
+                    # tasklist = []
+                    # for tri in self._objs:
+                    #    tasklist.append(self.create_task(tri.triggered()))
+                    tasklist = [self.create_task(tri.triggered()) for tri in self._objs]
+                    
+                    # 下面这一句是关键，表示向服务器发出 cmd 命令，然后等待 tasklist 里涉及的所有触发器中的第一个被触发，或者等待时间达到 timeout 秒
+                    # self.session.waitfor 是为了简化写法。实际相当于三步命令的整合：
+                    #    await asyncio.sleep(0.05)     # 将CPU的执行时间从本函数中断0.05秒，暂时不需要关注此处细节
+                    #    self.session.writeline(cmd)   # 向服务器发送 cmd 命令
+                    #    done, pending = await asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED")  # 等待 tasklist 中的任务第一个完成（也就是触发器被触发），或者超时。此处 FIRST_COMPLETED 就是指示等待第一个完成后结束
+                    #    上面有关 asyncio.wait 的详细信息，可以参考 Python 的官方文档， asyncio 库的说明
+                    done, pending = await self.session.waitfor(cmd, asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED"))    # type: ignore
+                    # 上述代码执行完毕后，返回两个 set， done表示已完成的任务列表， pending 表示还在等待状态的任务列表
+                    
+                    # 当执行到此处时，首先，将所有还在等待状态的任务列表取消掉，因为到这里都还没有被触发，那么这些触发器在本次命令执行过程中不可能再被触发了。
+                    tasks_pending = list(pending)
+                    for t in tasks_pending:
                         self.remove_task(t)
 
-                    result = self.NOTSET
+                    # 获取已经完成的任务列表。由于set不能以下标访问内容，因此先转换为 list
                     tasks_done = list(done)
+                    
+                    # 如果 task_done 里的任务数大于0  （即被触发的触发器数量>0）。根据北侠逻辑，被触发的触发器最多只可能有1个（或者超时的话，就1个都没有）
                     if len(tasks_done) > 0:
+                        # 那么，从完成的任务中取出第1个任务，即为实际被触发的触发器
                         task = tasks_done[0]
+                        # 通过对任务调用 task.result()，可以获取该触发器的触发结果，即 tri.triggered() 的返回结果。结果包括4个数值，分别为 state, id, line, wildcards。
+                        # 其中，触发器成功触发后，返回的 state 一定为 SUCCESS，因此此处将第一个结果丢弃，仅去后3个结果，即 id, line, wildcards
+                        # id, line, wildcards三个参数，和 onSuccess 回调时，函数里收到的这三个参数内容完全一致
+                        # 因此，后面就可以通过对这3个参数的解析，判断到底是哪一个触发器被成功触发了。
+                        _, id, line, wildcards = task.result()
+                        # 先通过返回的 id 获取实际被触发的触发器
+                        tri = self.session.tris[id] 
 
-                        # 所有触发器在 onSuccess 时需要的参数，在此处都可以通过 task.result() 获取
-                        # result返回值与 await tri.triggered() 返回值完全相同
-                        # 这种返回值比onSuccess中多一个state参数，该参数在触发器中必定为 self.SUCCESS 值
-                        state, id, line, wildcards = task.result()
-                        
-                        # success
-                        if id == 'GMCP.Move':
-                            # GMCP.Move: [{"result":"true","dir":["west"],"short":"林间小屋"}]
-                            move_info = wildcards[0]
-                            if move_info["result"] == "true":
-                                roomname = move_info["short"]
-                                self.session.setVariable("roomname", roomname)
-                                result = self.SUCCESS
-                            elif move_info["result"] == "false":
-                                result = self.FAILURE
-                            
-                            break
-
-                        elif id == 'tri_move_succ':
-                            roomname = wildcards[0]
-                            self.session.setVariable("roomname", roomname)
+                        # 对触发器进行判断，看是哪一个
+                        # 如果该触发器的组名为 moving.move.success，表示收到了新的房间标题内容，即移动成功
+                        # 成功后，就不再执行 while 循环内容了，返回 SUCCESS 状态，并通过 break 中止循环
+                        if tri.group == "moving.move.success":
                             result = self.SUCCESS
                             break
-
-                        elif id.startswith('tri_move_fail'):
-                            self.error(f'执行{cmd}，移动失败，错误信息为{line}', '移动')
+                            
+                        # 如果该触发器的组名为 moving.move.fail，表示收到了 MOVE_FAIL 中的某一个内容的触发
+                        # 因为这种情况表示是该方向没有路，因此 self.error 打印出来该信息，并且返回 FAILURE
+                        # 没有路，也不需要再执行 while 循环的内容了，直接通过 break 中止循环
+                        elif tri.group == "moving.move.fail":
+                            self.error(f'执行{cmd}，移动失败，错误信息为{line}', '移动插件')
                             result = self.FAILURE
                             break
 
-                        elif id.startswith('tri_move_retry'):
+                        # 如果该触发器的组名为 moving.move.retry，表示收到了 MOVE_RETRY 中的某一个内容的触发
+                        # 因为这种情况表示是该方向有路，但本次移动失败，因此重试次数加一，并延迟2秒，然后会回到 while 循环处，再执行下一轮次
+                        # 因为有路，也不需要再执行 while 循环的内容了，直接通过 break 中止循环
+                        elif tri.group == "moving.move.retry":
                             retry_times += 1
-                            if retry_times > self.MAX_RETRY:
-                                result = self.FAILURE
-                                break
-
                             await asyncio.sleep(2)
 
+                    # 如果 task_done 里的任务为0，表示没有任何触发器被触发，此时就是超过了等待的 timeout 时间，表示超时
+                    # 当超时时，设置 TIMEOUT 标记，然后break中止循环。因为超时后，也不需要重试了。
                     else:
-                        self.warning(f'执行{cmd}超时{self.timeout}秒', '移动')  
+                        self.warning(f'执行{cmd}超时{self.timeout}秒', '移动插件')  
                         result = self.TIMEOUT
                         break
-
-                self.session.enableGroup('cmdmove', False)
+                
+                # 执行到这里，本次命令全部执行完毕，此时将所以触发器都关掉，减轻对其他命令或触发器判断的干扰
+                self.session.enableGroup(f"{PLUGIN_NAME}.move", False)
+                # 返回前面设置的的 result 值。此处的返回值，是让本 Command 被其他地方调用时，判断命令执行完后状态的标记
+                # 如果其他地方有类似  result = self.session.exec_async("w") 的命令， 返回的 result 就是此处数值
                 return result
+
 
     这种命令设计方式能带来很多益处。
     其中一个是，使用这种 Command 方式可以确保该命令被执行完成，而且还可以根据命令的返回值来判定下一步该执行操作。
@@ -1035,7 +1095,7 @@
         
         # 方式一: 直接使用session方法同步调用。由于同步调用会立即返回，因此该调用方法无发获取返回值
         self.session.exec('e')        
-        self.session.exec('s;e;s')               # 还可以在调用中同时指定多个命令。通过 CmdMove 设计中的重试机制，可以确保三步行走到对应的位置
+        self.session.exec('s;#wa 100;e;#wa 100;s')        # 还可以在调用中同时指定多个命令。通过 CmdMove 设计中的重试机制，可以确保三步行走到对应的位置
         
         # 方式二: 直接使用session方法异步调用, 该调用方法可以获取返回值, 但这样使用由于需要搜索命令，因此会存在一些性能损失
         result = await self.session.exec_async('e')       # 此处 e 会被匹配为 CmdMove 运行，因此其返回值即为 CmdMove 的 execute 方法运行的返回值。若未被匹配为某个 Command 对象，则返回 None
@@ -1346,252 +1406,433 @@
 
     .. code:: Python
 
-        def status_window(self):
-            try:
-                formatted_list = list()
+        from pymud import exception, async_exception, Session
 
-                ins_loc = self.session.getVariable("ins_loc", None)
-                tm_locs = self.session.getVariable("tm_locs", None)
-                ins = False
-                if isinstance(ins_loc, dict) and (len(ins_loc) >= 1):
-                    ins = True
-                    loc = ins_loc
+        class MyStatusWindowConfig(IConfig):
+            def __init__(self, session, *args, **kwargs):
+                super().__init__(session, *args, **kwargs)
+                self.session.status_maker = self.status_window
 
-                elif isinstance(tm_locs, list) and (len(tm_locs) == 1):
-                    ins = True
-                    loc = tm_locs[0]
+            # 创建自定义的健康条用作分隔符
+            def create_status_bar(self, current, effective, maximum, barlength = 20, barstyle = "—"):
+                from wcwidth import wcswidth
+                barline = list()
+                stylewidth = wcswidth(barstyle)
+                filled_length = int(round(barlength * current / maximum / stylewidth))
+                # 计算有效健康值部分的长度
+                effective_length = int(round(barlength * effective / maximum / stylewidth))
 
-                # line 1. char, menpai, deposit, food, water, exp, pot
-                formatted_list.append((Settings.styles["title"], "【角色】"))
-                formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
-                formatted_list.append(("", " "))
+                # 计算剩余部分长度
+                remaining_length = barlength - effective_length
 
-                # fullme time
-                fullme = int(self.session.getVariable('%fullme', 0))
-                delta = time.time() - fullme
-                formatted_list.append((Settings.styles["title"], "【FULLME】"))
-                if delta < 30 * 60:
-                    style = Settings.styles["value"]
-                elif delta < 60 * 60:
-                    style = Settings.styles["value.worse"]
-                else:
-                    style = Settings.styles["value.worst"]
-                if fullme == 0:
-                    formatted_list.append((Settings.styles["value.worst"], "从未"))
-                else:
-                    formatted_list.append((style, "{}".format(int(delta // 60))))
-                formatted_list.append(("", " "))
+                # 构造健康条
+                barline.append(("fg:lightcyan", barstyle * filled_length))
+                barline.append(("fg:yellow", barstyle * (effective_length - filled_length)))
+                barline.append(("fg:red", barstyle * remaining_length))
 
-                
-                formatted_list.append((Settings.styles["title"], "【食物】"))
-                
-                food = int(self.session.getVariable('food', '0'))
-                max_food = self.session.getVariable('max_food', 350)
-                if food < 100:
-                    style = Settings.styles["value.worst"]
-                elif food < 200:
-                    style = Settings.styles["value.worse"]
-                elif food < max_food:
-                    style = Settings.styles["value"]
-                else:
-                    style = Settings.styles["value.better"]
+                return barline
 
-                formatted_list.append((style, "{}".format(food)))
-                formatted_list.append(("", " "))
+            # 自定义状态栏窗口
+            def status_window(self):
+                from pymud.settings import Settings
+                try:
+                    formatted_list = list()
 
-                formatted_list.append((Settings.styles["title"], "【饮水】"))
-                water = int(self.session.getVariable('water', '0'))
-                max_water = self.session.getVariable('max_water', 350)
-                if water < 100:
-                    style = Settings.styles["value.worst"]
-                elif water < 200:
-                    style = Settings.styles["value.worse"]
-                elif water < max_water:
-                    style = Settings.styles["value"]
-                else:
-                    style = Settings.styles["value.better"]
-                formatted_list.append((style, "{}".format(water)))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【经验】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【潜能】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('potential'))))
-                formatted_list.append(("", " "))
+                    # line 0. hp bar
+                    jing = self.session.getVariable("jing", 0)
+                    effjing = self.session.getVariable("eff_jing", 0)
+                    maxjing = self.session.getVariable("max_jing", 0)
+                    jingli = self.session.getVariable("jingli", 0)
+                    maxjingli = self.session.getVariable("max_jingli", 0)
+                    qi = self.session.getVariable("qi", 0)
+                    effqi = self.session.getVariable("eff_qi", 0)
+                    maxqi = self.session.getVariable("max_qi", 0)
+                    neili = self.session.getVariable("neili", 0)
+                    maxneili = self.session.getVariable("max_neili", 0)
 
-                formatted_list.append((Settings.styles["title"], "【门派】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【存款】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
-                formatted_list.append(("", " "))
-                
-                # line 2. hp
-                #(jing, effjing, maxjing, jingli, maxjingli, qi, effqi, maxqi, neili, maxneili) = self.session.getVariables(("jing", "eff_jing", "max_jing", "jingli", "max_jingli", "qi", "eff_qi", "max_qi", "neili", "max_neili"))
-                jing = self.session.getVariable("jing", 0)
-                effjing = self.session.getVariable("eff_jing", 0)
-                maxjing = self.session.getVariable("max_jing", 0)
-                jingli = self.session.getVariable("jingli", 0)
-                maxjingli = self.session.getVariable("max_jingli", 0)
-                qi = self.session.getVariable("qi", 0)
-                effqi = self.session.getVariable("eff_qi", 0)
-                maxqi = self.session.getVariable("max_qi", 0)
-                neili = self.session.getVariable("neili", 0)
-                maxneili = self.session.getVariable("max_neili", 0)
-                #if jing and effjing and maxjing and effqi and maxqi and qi and jingli and maxjingli and neili and maxneili:
-                # a new-line
-                formatted_list.append(("", "\n"))
+                    barstyle = "━"
+                    screenwidth = self.session.application.get_width()
+                    barlength = screenwidth // 2 - 1
+                    span = screenwidth - 2 * barlength
+                    qi_bar = self.create_status_bar(qi, effqi, maxqi, barlength, barstyle)
+                    jing_bar = self.create_status_bar(jing, effjing, maxjing, barlength, barstyle)
 
-                formatted_list.append((Settings.styles["title"], "【精神】"))
-                if int(effjing) < int(maxjing):
-                    style = Settings.styles["value.worst"]
-                elif int(jing) < 0.8 * int(effjing):
-                    style = Settings.styles["value.worse"]
-                else:
-                    style = Settings.styles["value"]
-                
-                if maxjing == 0: 
-                    pct1 = pct2 = 0
-                else:
-                    pct1 = 100.0*float(jing)/float(maxjing)
-                    pct2 = 100.0*float(effjing)/float(maxjing)
-                formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(jing, pct1, effjing, pct2)))
+                    formatted_list.extend(qi_bar)
+                    formatted_list.append(("", " " * span))
+                    formatted_list.extend(jing_bar)
+                    formatted_list.append(("", "\n"))
 
-                formatted_list.append(("", " "))
-
-                formatted_list.append((Settings.styles["title"], "【气血】"))
-                if int(effqi) < int(maxqi):
-                    style = Settings.styles["value.worst"]
-                elif int(qi) < 0.8 * int(effqi):
-                    style = Settings.styles["value.worse"]
-                else:
-                    style = Settings.styles["value"]
-
-                if maxqi == 0: 
-                    pct1 = pct2 = 0
-                else:
-                    pct1 = 100.0*float(qi)/float(maxqi)
-                    pct2 = 100.0*float(effqi)/float(maxqi)
-                formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(qi, pct1, effqi, pct2)))
-                formatted_list.append(("", " "))
-
-                formatted_list.append((Settings.styles["title"], "【精力】"))
-                if int(jingli) < 0.6 * int(maxjingli):
-                    style = Settings.styles["value.worst"]
-                elif int(jingli) < 0.8 * int(maxjingli):
-                    style = Settings.styles["value.worse"]
-                elif int(jingli) < 1.2 * int(maxjingli):
-                    style = Settings.styles["value"]   
-                else:
-                    style = Settings.styles["value.better"]
-                
-                if maxjingli == 0: 
-                    pct = 0
-                else:
-                    pct = 100.0*float(jingli)/float(maxjingli)
-
-                formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
-                formatted_list.append(("", " "))
-
-                formatted_list.append((Settings.styles["title"], "【内力】"))
-                if int(neili) < 0.6 * int(maxneili):
-                    style = Settings.styles["value.worst"]
-                elif int(neili) < 0.8 * int(maxneili):
-                    style = Settings.styles["value.worse"]
-                elif int(neili) < 1.2 * int(maxneili):
-                    style = Settings.styles["value"]   
-                else:
-                    style = Settings.styles["value.better"]
-
-                if maxneili == 0: 
-                    pct = 0
-                else:
-                    pct = 100.0*float(neili)/float(maxneili)
-                formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(neili, maxneili, pct)))
-                formatted_list.append(("", " "))
-
-                
-
-                # a new-line
-                formatted_list.append(("", "\n"))
-                formatted_list.append((Settings.styles["title"], "【任务】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentJob)))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【状态】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentStatus)))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【持续】"))
-                formatted_list.append((Settings.styles["value"], "{}".format("开启" if self.jobmanager.always else "关闭")))
-                formatted_list.append(("", " "))
-                formatted_list.append((Settings.styles["title"], "【范围】"))
-                formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.activeJobs)))
-
-                # a new-line
-                formatted_list.append(("", "\n"))
-
-                # line 3. GPS info
-                formatted_list.append((Settings.styles["title"], "【惯导】"))
-                if ins:
-                    formatted_list.append((Settings.styles["value"], "正常"))
+                    # line 1. char, menpai, deposit, food, water, exp, pot
+                    formatted_list.append((Settings.styles["title"], "【角色】"))
+                    formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
                     formatted_list.append(("", " "))
-                    formatted_list.append((Settings.styles["title"], "【位置】"))
-                    formatted_list.append((Settings.styles["value"], f"{loc['city']} {loc['name']}({loc['id']})"))
-                else:
-                    formatted_list.append((Settings.styles["value.worst"], "丢失"))
+                
+                    formatted_list.append((Settings.styles["title"], "【食物】"))
+                    
+                    food = int(self.session.getVariable('food', '0'))
+                    max_food = self.session.getVariable('max_food', 350)
+                    if food < 100:
+                        style = Settings.styles["value.worst"]
+                    elif food < 200:
+                        style = Settings.styles["value.worse"]
+                    elif food < max_food:
+                        style = Settings.styles["value"]
+                    else:
+                        style = Settings.styles["value.better"]
+
+                    formatted_list.append((style, "{}".format(food)))
                     formatted_list.append(("", " "))
-                    formatted_list.append((Settings.styles["title"], "【位置】"))
-                    formatted_list.append((Settings.styles["value"], f"{self.session.getVariable('room')}"))
 
-                if self.session.getVariable("is_busy", False):
-                    formatted_list.append((Settings.styles["value.worse"], "【忙】"))
-                else:
-                    formatted_list.append((Settings.styles["value"], "【不忙】"))
+                    formatted_list.append((Settings.styles["title"], "【饮水】"))
+                    water = int(self.session.getVariable('water', '0'))
+                    max_water = self.session.getVariable('max_water', 350)
+                    if water < 100:
+                        style = Settings.styles["value.worst"]
+                    elif water < 200:
+                        style = Settings.styles["value.worse"]
+                    elif water < max_water:
+                        style = Settings.styles["value"]
+                    else:
+                        style = Settings.styles["value.better"]
+                    formatted_list.append((style, "{}".format(water)))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【经验】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【潜能】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('potential'))))
+                    formatted_list.append(("", " "))
 
-                if self.session.getVariable("is_fighting", False):
-                    formatted_list.append((Settings.styles["value.worse"], "【战斗】"))
-                else:
-                    formatted_list.append((Settings.styles["value"], "【空闲】"))
+                    formatted_list.append((Settings.styles["title"], "【门派】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【存款】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
+                    formatted_list.append(("", " "))
+                    
+                    # line 2. hp
+                    # a new-line
+                    formatted_list.append(("", "\n"))
 
-                if self.session.idletime > 60:
-                    formatted_list.append((Settings.styles["value.worse"], f"【发呆{self.session.idletime // 60:.0f}分钟】"))
-                else:
-                    formatted_list.append((Settings.styles["value"], "【正常】"))
+                    formatted_list.append((Settings.styles["title"], "【精神】"))
+                    if int(effjing) < int(maxjing):
+                        style = Settings.styles["value.worst"]
+                    elif int(jing) < 0.8 * int(effjing):
+                        style = Settings.styles["value.worse"]
+                    else:
+                        style = Settings.styles["value"]
+                    
+                    if maxjing == 0: 
+                        pct1 = pct2 = 0
+                    else:
+                        pct1 = 100.0*float(jing)/float(maxjing)
+                        pct2 = 100.0*float(effjing)/float(maxjing)
+                    formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(jing, pct1, effjing, pct2)))
 
-                formatted_list.append((Settings.styles["title"], "【BUFF】"))
-                buff = self.session.getVariable("buff", list())
-                #formatted_list.append((Settings.styles["value"], f"{' '.join(buff)}"))
-                #formatted_list.append(to_formatted_text(ANSI(f"{' '.join(buff)}")))
-                buff_styled = to_formatted_text(ANSI(f"{' '.join(buff)}"))
-                formatted_list.extend(buff_styled)
+                    formatted_list.append(("", " "))
 
-                # a new-line
-                formatted_list.append(("", "\n"))
+                    formatted_list.append((Settings.styles["title"], "【气血】"))
+                    if int(effqi) < int(maxqi):
+                        style = Settings.styles["value.worst"]
+                    elif int(qi) < 0.8 * int(effqi):
+                        style = Settings.styles["value.worse"]
+                    else:
+                        style = Settings.styles["value"]
 
-                def go_direction(dir, mouse_event: MouseEvent):
-                    if mouse_event.event_type == MouseEventType.MOUSE_UP:
-                        self.session.exec_command(dir)
-                if ins:
-                    formatted_list.append((Settings.styles["title"], "【路径】"))
-                    # formatted_list.append(("", "  "))
-                    links = self.mapper.FindRoomLinks(loc['id'])
-                    for link in links:
-                        dir = link.path
-                        dir_cmd = dir
-                        if dir in DIRS_ABBR.keys():
-                            dir = DIRS_ABBR[dir]
-                        else:
-                            m = re.match(r'(\S+)\((.+)\)', dir)
-                            if m:
-                                dir_cmd = m[2]
+                    if maxqi == 0: 
+                        pct1 = pct2 = 0
+                    else:
+                        pct1 = 100.0*float(qi)/float(maxqi)
+                        pct2 = 100.0*float(effqi)/float(maxqi)
+                    formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(qi, pct1, effqi, pct2)))
+                    formatted_list.append(("", " "))
 
-                        formatted_list.append((Settings.styles["link"], f"{dir}: {link.city} {link.name}({link.linkto})", functools.partial(go_direction, dir_cmd)))
+                    # 内力
+                    formatted_list.append((Settings.styles["title"], "【内力】"))
+                    if int(neili) < 0.6 * int(maxneili):
+                        style = Settings.styles["value.worst"]
+                    elif int(neili) < 0.8 * int(maxneili):
+                        style = Settings.styles["value.worse"]
+                    elif int(neili) < 1.2 * int(maxneili):
+                        style = Settings.styles["value"]   
+                    else:
+                        style = Settings.styles["value.better"]
+
+                    if maxneili == 0: 
+                        pct = 0
+                    else:
+                        pct = 100.0*float(neili)/float(maxneili)
+                    formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(neili, maxneili, pct)))
+                    formatted_list.append(("", " "))
+
+                    # 精力
+                    formatted_list.append((Settings.styles["title"], "【精力】"))
+                    if int(jingli) < 0.6 * int(maxjingli):
+                        style = Settings.styles["value.worst"]
+                    elif int(jingli) < 0.8 * int(maxjingli):
+                        style = Settings.styles["value.worse"]
+                    elif int(jingli) < 1.2 * int(maxjingli):
+                        style = Settings.styles["value"]   
+                    else:
+                        style = Settings.styles["value.better"]
+                    
+                    if maxjingli == 0: 
+                        pct = 0
+                    else:
+                        pct = 100.0*float(jingli)/float(maxjingli)
+
+                    formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
+                    formatted_list.append(("", " "))
+                    
+                    return formatted_list
+            
+                except Exception as e:
+                    return f"{e}"
+                    try:
+                        formatted_list = list()
+
+                        ins_loc = self.session.getVariable("ins_loc", None)
+                        tm_locs = self.session.getVariable("tm_locs", None)
+                        ins = False
+                        if isinstance(ins_loc, dict) and (len(ins_loc) >= 1):
+                            ins = True
+                            loc = ins_loc
+
+                        elif isinstance(tm_locs, list) and (len(tm_locs) == 1):
+                            ins = True
+                            loc = tm_locs[0]
+
+                        # line 1. char, menpai, deposit, food, water, exp, pot
+                        formatted_list.append((Settings.styles["title"], "【角色】"))
+                        formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
                         formatted_list.append(("", " "))
+
+                        # fullme time
+                        fullme = int(self.session.getVariable('%fullme', 0))
+                        delta = time.time() - fullme
+                        formatted_list.append((Settings.styles["title"], "【FULLME】"))
+                        if delta < 30 * 60:
+                            style = Settings.styles["value"]
+                        elif delta < 60 * 60:
+                            style = Settings.styles["value.worse"]
+                        else:
+                            style = Settings.styles["value.worst"]
+                        if fullme == 0:
+                            formatted_list.append((Settings.styles["value.worst"], "从未"))
+                        else:
+                            formatted_list.append((style, "{}".format(int(delta // 60))))
+                        formatted_list.append(("", " "))
+
+                        
+                        formatted_list.append((Settings.styles["title"], "【食物】"))
+                        
+                        food = int(self.session.getVariable('food', '0'))
+                        max_food = self.session.getVariable('max_food', 350)
+                        if food < 100:
+                            style = Settings.styles["value.worst"]
+                        elif food < 200:
+                            style = Settings.styles["value.worse"]
+                        elif food < max_food:
+                            style = Settings.styles["value"]
+                        else:
+                            style = Settings.styles["value.better"]
+
+                        formatted_list.append((style, "{}".format(food)))
+                        formatted_list.append(("", " "))
+
+                        formatted_list.append((Settings.styles["title"], "【饮水】"))
+                        water = int(self.session.getVariable('water', '0'))
+                        max_water = self.session.getVariable('max_water', 350)
+                        if water < 100:
+                            style = Settings.styles["value.worst"]
+                        elif water < 200:
+                            style = Settings.styles["value.worse"]
+                        elif water < max_water:
+                            style = Settings.styles["value"]
+                        else:
+                            style = Settings.styles["value.better"]
+                        formatted_list.append((style, "{}".format(water)))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【经验】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【潜能】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('potential'))))
+                        formatted_list.append(("", " "))
+
+                        formatted_list.append((Settings.styles["title"], "【门派】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【存款】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
+                        formatted_list.append(("", " "))
+                        
+                        # line 2. hp
+                        #(jing, effjing, maxjing, jingli, maxjingli, qi, effqi, maxqi, neili, maxneili) = self.session.getVariables(("jing", "eff_jing", "max_jing", "jingli", "max_jingli", "qi", "eff_qi", "max_qi", "neili", "max_neili"))
+                        jing = self.session.getVariable("jing", 0)
+                        effjing = self.session.getVariable("eff_jing", 0)
+                        maxjing = self.session.getVariable("max_jing", 0)
+                        jingli = self.session.getVariable("jingli", 0)
+                        maxjingli = self.session.getVariable("max_jingli", 0)
+                        qi = self.session.getVariable("qi", 0)
+                        effqi = self.session.getVariable("eff_qi", 0)
+                        maxqi = self.session.getVariable("max_qi", 0)
+                        neili = self.session.getVariable("neili", 0)
+                        maxneili = self.session.getVariable("max_neili", 0)
+                        #if jing and effjing and maxjing and effqi and maxqi and qi and jingli and maxjingli and neili and maxneili:
+                        # a new-line
+                        formatted_list.append(("", "\n"))
+
+                        formatted_list.append((Settings.styles["title"], "【精神】"))
+                        if int(effjing) < int(maxjing):
+                            style = Settings.styles["value.worst"]
+                        elif int(jing) < 0.8 * int(effjing):
+                            style = Settings.styles["value.worse"]
+                        else:
+                            style = Settings.styles["value"]
+                        
+                        if maxjing == 0: 
+                            pct1 = pct2 = 0
+                        else:
+                            pct1 = 100.0*float(jing)/float(maxjing)
+                            pct2 = 100.0*float(effjing)/float(maxjing)
+                        formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(jing, pct1, effjing, pct2)))
+
+                        formatted_list.append(("", " "))
+
+                        formatted_list.append((Settings.styles["title"], "【气血】"))
+                        if int(effqi) < int(maxqi):
+                            style = Settings.styles["value.worst"]
+                        elif int(qi) < 0.8 * int(effqi):
+                            style = Settings.styles["value.worse"]
+                        else:
+                            style = Settings.styles["value"]
+
+                        if maxqi == 0: 
+                            pct1 = pct2 = 0
+                        else:
+                            pct1 = 100.0*float(qi)/float(maxqi)
+                            pct2 = 100.0*float(effqi)/float(maxqi)
+                        formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(qi, pct1, effqi, pct2)))
+                        formatted_list.append(("", " "))
+
+                        formatted_list.append((Settings.styles["title"], "【精力】"))
+                        if int(jingli) < 0.6 * int(maxjingli):
+                            style = Settings.styles["value.worst"]
+                        elif int(jingli) < 0.8 * int(maxjingli):
+                            style = Settings.styles["value.worse"]
+                        elif int(jingli) < 1.2 * int(maxjingli):
+                            style = Settings.styles["value"]   
+                        else:
+                            style = Settings.styles["value.better"]
+                        
+                        if maxjingli == 0: 
+                            pct = 0
+                        else:
+                            pct = 100.0*float(jingli)/float(maxjingli)
+
+                        formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
+                        formatted_list.append(("", " "))
+
+                        formatted_list.append((Settings.styles["title"], "【内力】"))
+                        if int(neili) < 0.6 * int(maxneili):
+                            style = Settings.styles["value.worst"]
+                        elif int(neili) < 0.8 * int(maxneili):
+                            style = Settings.styles["value.worse"]
+                        elif int(neili) < 1.2 * int(maxneili):
+                            style = Settings.styles["value"]   
+                        else:
+                            style = Settings.styles["value.better"]
+
+                        if maxneili == 0: 
+                            pct = 0
+                        else:
+                            pct = 100.0*float(neili)/float(maxneili)
+                        formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(neili, maxneili, pct)))
+                        formatted_list.append(("", " "))
+
+                        
+
+                        # a new-line
+                        formatted_list.append(("", "\n"))
+                        formatted_list.append((Settings.styles["title"], "【任务】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentJob)))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【状态】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentStatus)))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【持续】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format("开启" if self.jobmanager.always else "关闭")))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【范围】"))
+                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.activeJobs)))
+
+                        # a new-line
+                        formatted_list.append(("", "\n"))
+
+                        # line 3. GPS info
+                        formatted_list.append((Settings.styles["title"], "【惯导】"))
+                        if ins:
+                            formatted_list.append((Settings.styles["value"], "正常"))
+                            formatted_list.append(("", " "))
+                            formatted_list.append((Settings.styles["title"], "【位置】"))
+                            formatted_list.append((Settings.styles["value"], f"{loc['city']} {loc['name']}({loc['id']})"))
+                        else:
+                            formatted_list.append((Settings.styles["value.worst"], "丢失"))
+                            formatted_list.append(("", " "))
+                            formatted_list.append((Settings.styles["title"], "【位置】"))
+                            formatted_list.append((Settings.styles["value"], f"{self.session.getVariable('room')}"))
+
+                        if self.session.getVariable("is_busy", False):
+                            formatted_list.append((Settings.styles["value.worse"], "【忙】"))
+                        else:
+                            formatted_list.append((Settings.styles["value"], "【不忙】"))
+
+                        if self.session.getVariable("is_fighting", False):
+                            formatted_list.append((Settings.styles["value.worse"], "【战斗】"))
+                        else:
+                            formatted_list.append((Settings.styles["value"], "【空闲】"))
+
+                        if self.session.idletime > 60:
+                            formatted_list.append((Settings.styles["value.worse"], f"【发呆{self.session.idletime // 60:.0f}分钟】"))
+                        else:
+                            formatted_list.append((Settings.styles["value"], "【正常】"))
+
+                        formatted_list.append((Settings.styles["title"], "【BUFF】"))
+                        buff = self.session.getVariable("buff", list())
+                        #formatted_list.append((Settings.styles["value"], f"{' '.join(buff)}"))
+                        #formatted_list.append(to_formatted_text(ANSI(f"{' '.join(buff)}")))
+                        buff_styled = to_formatted_text(ANSI(f"{' '.join(buff)}"))
+                        formatted_list.extend(buff_styled)
+
+                        # a new-line
+                        formatted_list.append(("", "\n"))
+
+                        def go_direction(dir, mouse_event: MouseEvent):
+                            if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                                self.session.exec_command(dir)
+                        if ins:
+                            formatted_list.append((Settings.styles["title"], "【路径】"))
+                            # formatted_list.append(("", "  "))
+                            links = self.mapper.FindRoomLinks(loc['id'])
+                            for link in links:
+                                dir = link.path
+                                dir_cmd = dir
+                                if dir in DIRS_ABBR.keys():
+                                    dir = DIRS_ABBR[dir]
+                                else:
+                                    m = re.match(r'(\S+)\((.+)\)', dir)
+                                    if m:
+                                        dir_cmd = m[2]
+
+                                formatted_list.append((Settings.styles["link"], f"{dir}: {link.city} {link.name}({link.linkto})", functools.partial(go_direction, dir_cmd)))
+                                formatted_list.append(("", " "))
+                        
+                        return formatted_list
                 
-                return formatted_list
-        
-            except Exception as e:
-                self.session.error(f"状态窗口发生错误！错误信息为： {e}")
-                return f"{e}"
+                    except Exception as e:
+                        self.session.error(f"状态窗口发生错误！错误信息为： {e}")
+                        return f"{e}"
 
 6.9 分组对象管理
 ------------------------
@@ -1599,6 +1840,74 @@
     分组对象管理是指，通过分组对象管理，可以将多个对象归为一类，便于统一管理。
     分组对象管理的基本原理是，通过创建一个对象，该对象包含多个其他对象，从而实现分组管理。
     分组对象管理的优点是，可以统一管理多个对象，便于维护。
+
+    PyMUD提供的各类对象的，包括Timer, Alias, Trigger, GMCPTrigger, Command等均具有group属性来表示其分组。
+    组可以包括子组，子组可以再包括子组。组名以点号.分隔，例如：group1.subgroup1.subsubgroup1。组的层级没有限制。
+    组的概念可以用于快速处理多个对象，例如启用/禁用一组对象、删除一组对象等。例如，以下几个组的关系：
+
+        - mygroup1
+        - mygroup1.subgroup1                # 属于 mygroup1的子组
+        - mygroup1.subgroup2                # 属于 mygroup1的子组
+        - mygroup1.subgroup2.subsubgroup1   # 属于 mygroup1.subgroup2的子组，也同样属于更高层级mygroup1的子组
+        - mygroup2
+        - mygroup2.subgroup1                # 属于 mygroup2的子组
+
+    在脚本中，成组操作对象主要提供两个函数，分别是 enableGroup 和 deleteGroup。其中，enableGroup 用于启用/禁用一组对象，deleteGroup 用于删除一组对象。
+    这两个函数都可以通过组名来指定要操作的对象组，同时也可以指定是否包含子组，以及要操作的对象类型范围。
+    以下是 enableGroup 和 deleteGroup 函数的详细说明：
+
+        ``` Python
+
+            def enableGroup(self, group: str, enable: bool, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+                pass
+            # 各参数含义:
+            # group: 要操作的组名，可以是完整的组名，也可以是部分组名。例如："group1" 或 "group1.subgroup1" 等。
+            # enable: 是否启用对象。如果为True，则启用指定的对象。如果为False，则禁用指定的对象。
+            # subgroup: 是否包含子组。如果为True，则操作包括当前组及其所有子组的对象。如果为False，则仅操作当前组的对象，不包括子组。
+            # types: 要操作的对象类型范围。可以是单个类型，也可以是类型的元组或列表。例如：Trigger, Alias, Command, Timer, GMCPTrigger 等。
+            # 示例代码：
+
+            objs = [
+                    Trigger(session, "tri1", group = "group1"),
+                    Trigger(session, "tri2", group = "group1.subgroup1"),
+                    Trigger(session, "tri3", group = "group1.subgroup2"),
+                    Alias(session, "alias1", group = "group1"),
+                    Alias(session, "alias2", group = "group1.subgroup1"),
+                    Timer(session, 5, group = "group1.subgroup1")
+                ]
+
+            #以下调用可以同时禁用group1及其子组的所有对象，因为 group1.subgroup1 和 group1.subgroup2 都属于 group1 的子组
+            session.enableGroup("group1", False)
+            #以下调用可以同时仅启用触发器tri1和别名alias1，因为通过subgroup参数限定了不传递到子组
+            session.enableGroup("group1", True, subgroup = False)
+            # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
+            session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
+            
+            def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+                pass
+            # 各参数含义:
+            # group: 要删除的组名，可以是完整的组名，也可以是部分组名。例如："group1" 或 "group1.subgroup1" 等。
+            # subgroup: 是否包含子组。如果为True，则删除指定组及其所有子组的对象。如果为False，则仅删除指定组的对象，不包括子组。
+            # types: 要删除的对象类型范围。可以是单个类型，也可以是类型的元组或列表。例如：Trigger, Alias, Command, Timer, GMCPTrigger 等。
+            # 示例代码：
+            # 删除所有属于group1的Trigger和Alias对象，包括子组如 group1.subgroup1 和 group1.subgroup2 等
+            self.session.deleteGroup("group1", True, [Trigger, Alias])
+            # 删除所有属于group1的Trigger对象，但不包括子组
+            self.session.deleteGroup("group1", False, [Trigger])
+        ```
+
+
+    在命令行中，#trigger, #alias, #timer, #gmcp, #command, #t+, #t- 等命令均可以进行组处理，用于对整组对象进行处理。各命令的语法格式类似。
+    处理组时，组名应以大于号>或者等于号=开头，紧跟组名（无空格）。当使用>时，表示操作针对当前组及所有所属子组，当使用=时，表示操作仅针对当前组。
+    例如下面代码：
+
+        ```
+            #t+ >group1 表示启用所有属于group1以及其子组的所有可管理对象，包括Trigger、Alias、Command、Timer、GMCPTrigger
+            #t- =group1.subgroup1 表示禁用所有仅属于group1.subgroup1的Trigger、Alias、Command、Timer、GMCPTrigger等对象
+            #tri >group1 off 表示禁用所有属于group1以及其子组的Trigger对象
+            #ali =group1.subgroup1 on 表示启用所有仅属于group1.subgroup1的Alias对象
+        ```
+
 
 .. _#mods: syscommand.html#modules
 .. _pymud.Session: references.html#pymud.Session

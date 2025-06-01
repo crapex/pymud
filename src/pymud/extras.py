@@ -1,9 +1,10 @@
 # External Libraries
+from functools import lru_cache
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
 from dataclasses import dataclass
-import time, re, logging
-
+import time, re, logging, linecache, os
+from typing import Optional, List, Dict
 from typing import Iterable, NamedTuple, Optional, Union, Tuple
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
@@ -236,7 +237,7 @@ class VSplitWindow(Window):
             below = total - upper - 1
             
             #if isNotMargin:
-            if isinstance(self.content, SessionBufferControl):
+            if isinstance(self.content, PyMudBufferControl):
                 b = self.content.buffer
                 if not b:
                     return y
@@ -379,7 +380,7 @@ class VSplitWindow(Window):
         if info is None:
             return
 
-        if isinstance(self.content, SessionBufferControl):
+        if isinstance(self.content, PyMudBufferControl):
             b = self.content.buffer
             if not b:
                 return
@@ -396,7 +397,7 @@ class VSplitWindow(Window):
         if info is None:
             return
 
-        if isinstance(self.content, SessionBufferControl):
+        if isinstance(self.content, PyMudBufferControl):
             b = self.content.buffer
             if not b:
                 return
@@ -520,6 +521,7 @@ class EasternMenuContainer(MenuContainer):
 
         return Window(FormattedTextControl(get_text_fragments), style="class:menu")
 
+
 @dataclass
 class SessionSelectionState:
     start_row: int = -1
@@ -549,108 +551,37 @@ class SessionSelectionState:
             return self.end_row - self.start_row + 1
         else:
             return 0
-    
 
-class SessionBuffer:
-    def __init__(
-        self, 
-        name, 
-        newline = "\n",
-        max_buffered_lines = 10000,
-        ) -> None:
 
+class BufferBase:
+    def __init__(self, name, newline = "\n", max_buffered_lines = 10000) -> None:
         self.name = name
-        self.lines = []
         self.newline = newline
-        self.isnewline = True
         self.max_buffered_lines = max_buffered_lines
-        self.selection = SessionSelectionState(-1, -1, -1, -1)
         self.start_lineno = -1
-
-    def append(self, line: str):
-        """
-        追加文本到缓冲区。
-        当文本以换行符结尾时，会自动添加到缓冲区。
-        当文本不以换行符结尾时，会自动添加到上一行。
-        """
-        newline_after_append = False
-        if line.endswith(self.newline):
-            line = line.rstrip(self.newline)
-            newline_after_append = True
-        if not self.newline in line:
-            if self.isnewline:
-                self.lines.append(line)
-            else:
-                self.lines[-1] += line
-
-        else:
-            lines = line.split(self.newline)
-            if self.isnewline:
-                self.lines.extend(lines)
-            else:
-                self.lines[-1] += lines[0]
-                self.lines.extend(lines[1:])
-
-        self.isnewline = newline_after_append
-
-        ## limit buffered lines
-        if len(self.lines) > self.max_buffered_lines:
-            diff = self.max_buffered_lines - len(self.lines)
-            del self.lines[:diff]
-            ## adjust selection
-            if self.selection.start_row >= 0:
-                self.selection.start_row -= diff
-                self.selection.end_row -= diff
-
-        get_app().invalidate()
+        self.selection = SessionSelectionState(-1, -1, -1, -1)
 
     def clear(self):
-        self.lines.clear()
-        self.selection = SessionSelectionState(-1, -1, -1, -1)
-
-        get_app().invalidate()
-
-    def loadfile(self, filename, encoding = 'utf-8', errors = 'ignore'):
-        with open(filename, 'r', encoding = encoding, errors = errors) as fp:
-            lines = fp.readlines()
-            self.clear()
-            self.lines.extend(lines)
-
-            get_app().invalidate()
+        pass
 
     @property
-    def lineCount(self):
-        return len(self.lines)
-        
-    def getLine(self, lineno):
-        if lineno < 0 or lineno >= len(self.lines):
-            return ""
-        return self.lines[lineno]
+    def lineCount(self) -> int:
+        return 0
+
+    def getLine(self, lineno: int) -> str:
+        return ""
 
     # 获取指定某行到某行的内容。当start未设置时，从首行开始。当end未设置时，到最后一行结束。
     # 注意判断首位顺序逻辑，以及给定参数是否越界
-    def getLines(self, start = None, end = None):
-        if start is None:
-            start = 0
-        if end is None:
-            end = len(self.lines) - 1
-        if start < 0:
-            start = 0
-        if end >= len(self.lines):
-            end = len(self.lines) - 1
-        if start > end:
-            return []
-        return self.lines[start:end+1]
-
-    def selection_range_at_line(self, lineno):
+    def selection_range_at_line(self, lineno: int) -> Optional[Tuple[int, int]]:
         if self.selection.is_valid():
             if self.selection.rows > 1:
                 if lineno == self.selection.start_row:
-                    return (self.selection.start_col, len(self.lines[lineno]) - 1)
+                    return (self.selection.start_col, len(self.getLine(lineno)) - 1)
                 elif lineno == self.selection.end_row:
                     return (0, self.selection.end_col)
                 elif lineno > self.selection.start_row and lineno < self.selection.end_row:
-                    return (0, len(self.lines[lineno]) - 1)
+                    return (0, len(self.getLine(lineno)) - 1)
 
             elif self.selection.rows == 1:
                 if lineno == self.selection.start_row:
@@ -665,8 +596,112 @@ class SessionBuffer:
         self.start_lineno = -1
         get_app().invalidate()
 
-class SessionBufferControl(UIControl):
-    def __init__(self, buffer: Optional[SessionBuffer]) -> None:
+
+class SessionBuffer(BufferBase):
+    def __init__(
+        self, 
+        name, 
+        newline = "\n",
+        max_buffered_lines = 10000,
+        ) -> None:
+
+        super().__init__(name, newline, max_buffered_lines)
+
+        self._lines : List[str] = []
+        self._isnewline = True
+
+    def append(self, line: str):
+        """
+        追加文本到缓冲区。
+        当文本以换行符结尾时，会自动添加到缓冲区。
+        当文本不以换行符结尾时，会自动添加到上一行。
+        """
+        newline_after_append = False
+        if line.endswith(self.newline):
+            line = line.rstrip(self.newline)
+            newline_after_append = True
+        if not self.newline in line:
+            if self._isnewline:
+                self._lines.append(line)
+            else:
+                self._lines[-1] += line
+
+        else:
+            lines = line.split(self.newline)
+            if self._isnewline:
+                self._lines.extend(lines)
+            else:
+                self._lines[-1] += lines[0]
+                self._lines.extend(lines[1:])
+
+        self._isnewline = newline_after_append
+
+        ## limit buffered lines
+        if len(self._lines) > self.max_buffered_lines:
+            diff = self.max_buffered_lines - len(self._lines)
+            del self._lines[:diff]
+            ## adjust selection
+            if self.selection.start_row >= 0:
+                self.selection.start_row -= diff
+                self.selection.end_row -= diff
+
+        get_app().invalidate()
+
+    def clear(self):
+        self._lines.clear()
+        self.selection = SessionSelectionState(-1, -1, -1, -1)
+
+        get_app().invalidate()
+
+    @property
+    def lineCount(self):
+        return len(self._lines)
+        
+    def getLine(self, lineno: int):
+        if lineno < 0 or lineno >= len(self._lines):
+            return ""
+        return self._lines[lineno]
+
+
+class LogFileBuffer(BufferBase):
+    def __init__(
+        self,
+        name,
+        filepath: Optional[str] = None,
+        ) -> None:
+
+        super().__init__(name)
+        self._lines : Dict[int, str] = {}
+        self.loadfile(filepath)
+        
+    def loadfile(self, filepath: Optional[str] = None):
+        if filepath and os.path.exists(filepath):
+            self.filepath = filepath
+        else:
+            self.filepath = None
+
+    def clear(self):
+        self.filepath = None
+
+    @property
+    def lineCount(self):
+        if not self.filepath or not os.path.exists(self.filepath):
+            return 0
+
+        with open(self.filepath, 'r', encoding = 'utf-8', errors = 'ignore') as fp:
+            return sum(1 for _ in fp)
+
+    def getLine(self, lineno: int):
+        if not self.filepath or not os.path.exists(self.filepath):
+            return ""
+
+        return linecache.getline(self.filepath, lineno).rstrip(self.newline)
+
+    def __del__(self):
+        self._lines.clear()
+
+class PyMudBufferControl(UIControl):
+    def __init__(self, buffer: Optional[BufferBase]) -> None:
         self.buffer = buffer
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
@@ -746,10 +781,14 @@ class SessionBufferControl(UIControl):
         def get_line(i: int) -> StyleAndTextTuples:
             line = buffer.getLine(i)
             # 颜色校正
+            SEARCH_LINES = 10
             thislinecolors = len(self.AVAI_COLOR_REGX.findall(line))
             if thislinecolors == 0:
                 lineno = i - 1
-                while lineno >= 0:
+                search = 0
+                while lineno >= 0 and search < SEARCH_LINES:
+                    search += 1
+
                     lastline = buffer.getLine(lineno)
                     allcolors = self.ALL_COLOR_REGX.findall(lastline)
                     
@@ -885,6 +924,9 @@ class SessionBufferControl(UIControl):
                 else:
                     # Don't handle scroll events here.
                     return NotImplemented
+            else:
+                # Don't handle scroll events here.
+                return NotImplemented
 
         # Not focused, but focusing on click events.
         else:

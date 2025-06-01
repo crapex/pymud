@@ -37,7 +37,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from wcwidth import wcwidth, wcswidth
 
 from .objects import CodeBlock
-from .extras import SessionBuffer, SessionBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
+from .extras import BufferBase, LogFileBuffer, SessionBuffer, PyMudBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
 from .modules import Plugin
 from .session import Session
 from .settings import Settings
@@ -164,7 +164,7 @@ class PyMudApp:
         self.logFileShown = ''          # 记录页显示的记录文件名
         #self.logSessionBuffer = SessionBuffer()
         #self.logSessionBuffer.name = "LOGBUFFER"
-        self.logSessionBuffer = SessionBuffer("LOGBUFFER", max_buffered_lines = -1)
+        self.logSessionBuffer = LogFileBuffer("LOGBUFFER")
 
         self.load_plugins()
 
@@ -218,7 +218,7 @@ class PyMudApp:
             show_cursor=False
         )
 
-        self.consoleView = SessionBufferControl(
+        self.consoleView = PyMudBufferControl(
             buffer = None,
             )
         
@@ -398,7 +398,7 @@ class PyMudApp:
         else:
             b = None
             
-        if isinstance(b, SessionBuffer):
+        if isinstance(b, BufferBase):
             if lines < 0:
                 if b.start_lineno < 0:
                     self.console._scroll_up()
@@ -659,7 +659,7 @@ class PyMudApp:
             if os.path.exists(filename):
                 lock = threading.RLock()
                 lock.acquire()
-                self.logSessionBuffer.loadfile(filename, encoding = 'utf-8', errors = 'ignore')
+                self.logSessionBuffer.loadfile(filename)
                 lock.release()
 
             #self.logSessionBuffer.cursor_position = len(self.logSessionBuffer.text)
@@ -751,7 +751,7 @@ class PyMudApp:
 
         elif self.showLog:
             b = self.logSessionBuffer
-            b.exit_selection()
+            #b.exit_selection()
             #b.cursor_position = len(b.text)
             #b.start_lineno = -1
             b.nosplit()
