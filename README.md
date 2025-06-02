@@ -1,13 +1,13 @@
 # PyMUD - Python原生MUD客户端
 ## 简介
 
-### 北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
-### 源代码地址: https://github.com/crapex/pymud
-### 帮助文档地址： https://pymud.readthedocs.org
-### PyPi项目地址： https://pypi.org/project/pymud
-### 由deepwiki自动生成的项目理解文档地址： https://deepwiki.com/crapex/pymud
-### PyMUD用户shanghua写的入门教程文档：https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
-### 交流QQ群：554672580
++ 北侠WIKI：  https://www.pkuxkx.net/wiki/tools/pymud
++ 源代码地址: https://github.com/crapex/pymud
++ 帮助文档地址： https://pymud.readthedocs.io
++ PyPi项目地址： https://pypi.org/project/pymud
++ 由deepwiki自动生成的项目理解文档地址： https://deepwiki.com/crapex/pymud
++ PyMUD用户shanghua写的入门教程文档：https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
++ 交流QQ群：554672580
 
 
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
@@ -23,7 +23,7 @@
 + 一次脚本开发，多平台运行。只要能在该平台上运行python，就可以运行PyMUD客户端
 + 脚本所有语法均采用Python原生语法，因此你只要会用Python，就可以自己写脚本，免去了再去学习lua、熟悉各类APP的使用的难处
 + Python拥有极为强大的文字处理能力，用于处理文本的MUD最为合适
-+ Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMud中支持
++ Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMUD中支持
 + 我自己还在玩，所以本客户端会持续进行更新:)
 
 ### 哪些人适合使用PyMUD
@@ -34,7 +34,7 @@
 
 ## 版本更新信息
 
-### 0.21.3 （2025-06-02）
+### 0.21.3 (2025-06-02)
 
 + 问题修复: 修复了当缓存行数超过规定值时，由于代码错误导致清屏的问题。
 + 功能增强: 增加清除任务时的异常保护，此时产生asyncio.CancelledError异常为正常现象，因此捕获后禁止异常处理。
@@ -43,7 +43,7 @@
 ### 0.21.2 (2025-06-01)
 
 + 问题修复: 修复了当自动重连启动时，即使会话关闭了，也会自动重连的问题。
-+ 实现调整: 重写了专用的会话缓冲、记录缓冲与PyMud缓冲显示控制器，在prompt_toolkit的原Buffer和BufferControl的基础仅提供了PYMUD所需的基础功能，以降低内存占用。
++ 实现调整: 重写了专用的会话缓冲、记录缓冲与PyMUD缓冲显示控制器，在prompt_toolkit的原Buffer和BufferControl的基础仅提供了PyMUD所需的基础功能，以降低内存占用。
   经测试，当前内存基本稳定，视会话数量和脚本情况差异，维持在几百兆左右（500M以下），且不会有大幅波动。重写后，低配置的VPS也可以稳定运行PyMUD。
 
 ### 0.21.0 (2025-05-20)
@@ -60,19 +60,19 @@
 
 + 功能新增: 新增了deleteGroup函数，用于删除指定的对象组。可同时指定组名、是否包含子组名、有效类型范围。函数定义和示例代码如下：
 
-``` Python
-    def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
-        pass
-    # 各参数含义:
-    # group: 要删除的组名，可以是完整的组名，也可以是部分组名。例如："group1" 或 "group1.subgroup1" 等。
-    # subgroup: 是否包含子组。如果为True，则删除指定组及其所有子组的对象。如果为False，则仅删除指定组的对象，不包括子组。
-    # types: 要删除的对象类型范围。可以是单个类型，也可以是类型的元组或列表。例如：Trigger, Alias, Command, Timer, GMCPTrigger 等。
-    # 示例代码：
-    # 删除所有属于group1的Trigger和Alias对象，包括子组如 group1.subgroup1 和 group1.subgroup2 等
-    self.session.deleteGroup("group1", True, [Trigger, Alias])
-    # 删除所有属于group1的Trigger对象，但不包括子组
-    self.session.deleteGroup("group1", False, [Trigger])
-```
+    ``` Python
+        def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
+            pass
+        # 各参数含义:
+        # group: 要删除的组名，可以是完整的组名，也可以是部分组名。例如："group1" 或 "group1.subgroup1" 等。
+        # subgroup: 是否包含子组。如果为True，则删除指定组及其所有子组的对象。如果为False，则仅删除指定组的对象，不包括子组。
+        # types: 要删除的对象类型范围。可以是单个类型，也可以是类型的元组或列表。例如：Trigger, Alias, Command, Timer, GMCPTrigger 等。
+        # 示例代码：
+        # 删除所有属于group1的Trigger和Alias对象，包括子组如 group1.subgroup1 和 group1.subgroup2 等
+        self.session.deleteGroup("group1", True, [Trigger, Alias])
+        # 删除所有属于group1的Trigger对象，但不包括子组
+        self.session.deleteGroup("group1", False, [Trigger])
+    ```
 
 + 功能新增: 对 #trigger, #alias, #timer, #gmcp, #command, #t+, #t- 等命令新增了组处理选项，用于对整组对象进行处理。各命令的语法格式类似。
   处理组时，组名应以大于号>或者等于号=开头，紧跟组名（无空格）。当使用>时，表示操作针对当前组及所有所属子组，当使用=时，表示操作仅针对当前组。
@@ -112,7 +112,7 @@
 + 功能新增: #load / #unload 现在支持当前会话对插件的临时启用和禁用，实现方式为调用插件里的PLUGIN_SESSION_CREATE和PLUGIN_SESSION_DESTROYE函数。群文件的moving.py插件写法可以支持。
 + 功能调整: 各会话变量保存的.mud文件，统一移到save子目录下。原来当前目录下的.mud文件，在对应会话重新加载时会自动移动，无需人工处理。
 + 功能新增: 增加了国际化(i18n)支持，原生开发语言为中文简体，目前使用AI翻译生成了英文。应用语言通过Settings中新增的language配置来控制，默认为"chs"，可以在pymud.cfg中覆盖该配置。其值目前可以为"chs"、"eng"。自行翻译的语言可以在pymud/lang目录下下新增语言文件，文件名为i18n_加语言代码，例如"i18n_chs.py"表示可以使用"chs"语言，其中使用Python字典方式定义了所有需动态显示的文本内容。
-+ 功能新增: 新增了使用元类型及装饰器来管理Pymud对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
++ 功能新增: 新增了使用元类型及装饰器来管理PyMUD对象，包括Alias, Trigger, Timer, GMCPTrigger四种可以使用对应的装饰器，@alias, @trigger, @timer, @gmcp来直接在标记函数上创建。可以参考本版本中的pkuxkx.py文件写法和注意事项。
 + 功能新增: 新增了两个装饰器，@exception和@async_exception，用于捕获异常并调用session.error进行显示。@exception用于捕获同步异常，@async_exception用于捕获异步异常。参考如下：
 ``` Python
     from pymud import Command, Trigger, IConfig, exception, async_exception
@@ -148,7 +148,7 @@
 + 功能增强: 对几乎所有函数的参数进行了类型标注，增加了类型检查，提高了代码的可读性和可维护性，也便于自行编写脚本时的提示。
 + 功能增强: 为Session类型增加了commandHistory属性，用于查询发送到服务器的命令历史。保存的命令历史的数量由pymud.cfg中的client["history_records"]控制，默认为500。当该值为0时，不会保存命令历史。为-1时，会保存所有命令历史。
 + 功能调整: #help命令时，增加了上下两行分隔符显示，以便明显区分帮助输出和游戏输出。
-+ 功能增强: 当前pymud界面中显示的版本号会自动从pyproject.toml中读取，以确保版本号的准确性和唯一性。
++ 功能增强: 当前PyMUD界面中显示的版本号会自动从pyproject.toml中读取，以确保版本号的准确性和唯一性。
 + 问题修复: 修复了代码中的部分编码错误。新版Python中能容忍一些错误，但老版本不行。经修复，当前代码支持的Python版本已测试3.8确保可用。建议使用3.10或更高版本的Python。
 + 问题修复: 删除了extras.py中多余的MenuItem类型定义，该定义与prompt_toolkit中的MenuItem定义冲突。
 + 问题修复: 调整了众多代码中未检查对象是否为None即调用、使用的局部变量可能未经过初始化和赋值路径等的情况，保证程序运行的健壮性。
@@ -178,7 +178,7 @@
 ### 0.20.1 (2024-11-16)
 + 功能调整: 会话中触发器匹配实现进行部分调整，减少循环次数以提高响应速度
 + 功能调整: #test / #show 触发器测试功能调整，现在会对使能的和未使能的触发器均进行匹配测试。其中，#show 命令仅测试，而 #test 命令会导致触发器真正响应。
-+ 功能新增: pymud对象新增了一个持续运行的1s的周期定时任务。该任务中会刷新页面显示。可以使用 session.application.addTimerTickCallback 和 session.application.removeTimerTickCallback 来注册和解除定时器回调。
++ 功能新增: PyMUD对象新增了一个持续运行的1s的周期定时任务。该任务中会刷新页面显示。可以使用 session.application.addTimerTickCallback 和 session.application.removeTimerTickCallback 来注册和解除定时器回调。
 
 ### 0.20.0 (2024-08-25)
 + 功能调整: 将模块主入口函数从__main__.py中移动到main.py中，以使可以在当前目录下，可直接使用pymud，也可使用python -m pymud启动
@@ -201,16 +201,16 @@
 + 问题修复: 修复部分正则表达式书写错误问题
 + 功能新增: Session类新增waitfor函数，用于执行一段代码后立即等待某个触发器的情况，简化原三行代码写法
 
-``` Python
-    # 原来为确保await triggered的任务在输入前等待，有时候需要这么写：
-    task = self.create_task(self.tri1.triggered())
-    await asyncio.sleep(0.05)
-    self.session.writeline('dazuo')
-    await task
+    ``` Python
+        # 原来为确保await triggered的任务在输入前等待，有时候需要这么写：
+        task = self.create_task(self.tri1.triggered())
+        await asyncio.sleep(0.05)
+        self.session.writeline('dazuo')
+        await task
 
-    # 现在可以一句话简写：
-    await self.session.waitfor('dazuo', self.create_task(self.tri1.triggered()))
-```
+        # 现在可以一句话简写：
+        await self.session.waitfor('dazuo', self.create_task(self.tri1.triggered()))
+    ```
 
 + 功能调整: Session类的addTriggers等方法接受的dict中，会将对象本身id作为会话处理id。当该id与key不一致时，会同时显示警告。
 + 功能新增: Session类新增addObject, addObjects, delObject, delObjects用于操作别名、定时器、触发器、GMCP触发器、命令等对象。
@@ -347,7 +347,7 @@
 + 功能修改：Timer实现进行修改，以确保一个定时器仅创建一个任务。
 + 功能调整：Timer对象在复位Session对象时，也同时复位。目的是确保reload时不重新创建定时器任务。
 + 功能调整：在会话连接时，不再复位Session有关对象信息。该复位活动仅在连接断开时和脚本重新加载时进行。
-+ 功能调整：启动PYMUD时，会将控制台标题设置为PYMUD+版本号。
++ 功能调整：启动PyMUD时，会将控制台标题设置为PyMUD+版本号。
 + 问题修复：修复会话特定脚本模块会被其他会话加载的bug。
 + 问题修复：修复定时器Timer中的bug。
 
@@ -355,7 +355,7 @@
 本版对模块功能进行了整体调整，支持加载/卸载/重载/预加载多个模块，具体内容如下：
 + 当模块中存在名为Configuration类时，以主模块形式加载，即：自动创建该Configuration类的实例（与原脚本相同）
 + 当模块中不存在名为Configuration类时，以子模块形式加载，即：仅加载该模块，但不会创建Configuration的实例
-+ #load命令支持同时加载多个模块，模块名以半角逗号（,）隔开即可。此时按给定的名称顺序逐一加载。如：#load mod1,mod2
++ \#load命令支持同时加载多个模块，模块名以半角逗号（,）隔开即可。此时按给定的名称顺序逐一加载。如：#load mod1,mod2
 + 增加#unload命令，卸载卸载名称模块，同时卸载多个模块时，模块名以半角逗号（,）隔开即可。卸载时，如果该模块有Configuration类，会自动调用其__del__方法
 + 修改reload命令功能，当不带参数时，重新加载所有已加载模块，带参数时，首先尝试重新加载指定名称模块，若模块中不存在该名称模块，则重新加载指定名称的插件。若存在同名模块和插件，则仅重新加载插件（建议不要让插件和模块同名）
 + 增加#modules（简写为#mods）命令，可以列出所有已经加载的模块清单
@@ -406,13 +406,14 @@
 + 功能增加：增加#py指令，可以直接在命令行中写代码并执行。执行的上下文环境为当前环境，即self代表当前session。例如，#py self.writeline("xixi")相当于直接在脚本会话中调用发送xixi指令
 + 功能新增：新增插件（Plugins）功能。将自动读取pymud模块目录的plugins子目录以及当前脚本目录的plugins子目录下的.py文件，若发现遵照插件规范脚本，将自动加载该模块到pymud。可以使用#plugins查看所有被加载的插件，可以直接带参数插件名（如#plugins myplugin）查看插件的详细信息（自动打印插件的__doc__属性，即写在文件最前面的字符串常量）插件文件中必须有以下定义：
 
-|名称|类型|状态|含义|
-|-|-|-|-|
-|PLUGIN_NAME|str|必须有|插件唯一名称|
-|PLUGIN_DESC|dict|必须有|插件描述信息的详情，必要关键字包含VERSION（版本）、AUTHOR（作者）、RELEASE_DATE（发布日期）、DESCRIPTION（简要描述）|
-|PLUGIN_PYMUD_START|func(app)|函数定义必须有，函数体可以为空|PYMUD自动读取并加载插件时自动调用的函数， app为PyMudApp（pymud管理类）。该函数仅会在程序运行时，自动加载一次|
-|PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
-|PLUGIN_SESSION_DESTROY|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
+    |名称|类型|状态|含义|
+    |-|-|-|-|
+    |PLUGIN_NAME|str|必须有|插件唯一名称|
+    |PLUGIN_DESC|dict|必须有|插件描述信息的详情，必要关键字包含VERSION（版本）、AUTHOR（作者）、RELEASE_DATE（发布日期）、DESCRIPTION（简要描述）|
+    |PLUGIN_PYMUD_START|func(app)|函数定义必须有，函数体可以为空|PyMUD自动读取并加载插件时自动调用的函数， app为PyMudApp（PyMUD管理类）。该函数仅会在程序运行时，自动加载一次|
+    |PLUGIN_SESSION_CREATE|func(session)|函数定义必须有，函数体可以为空|在会话中加载插件时自动调用的函数， session为加载插件的会话。该函数在每一个会话创建时均被自动加载一次|
+    |PLUGIN_SESSION_DESTROY|func(session)|函数定义必须有，函数体可以为空|在会话中卸载插件时自动调用的函数， session为卸载插件的会话。卸载在每一个会话关闭时均被自动运行一次。|
+    |PLUGIN_PYMUD_DESTROY|func(app)|函数定义必须有，函数体可以为空|在PyMUD程序退出时自动调用的函数， app为PyMUD管理类。该函数仅会在程序运行时，自动卸载一次|
 
 + 功能修改：对session自动加载mud文件中变量失败时的异常进行管理，此时将不加载变量，自动继续进行
 + 功能修改：所有匹配类对象的匹配模式patterns支持动态修改，涉及Alias，Trigger，Command。修改方式为直接对其patterns属性赋值。如tri.patterns = aNewPattern
