@@ -571,16 +571,6 @@ class Session:
             self._line_count += 1
             self.log.log(self.newline_cli)
 
-    def clear_half(self):
-        """
-        清除半数缓冲。 **脚本中无需调用。**
-
-        半数的数量由 Settings.client['buffer_lines'] 确定，默认为5000行。
-        """
-        # if (Settings.client["buffer_lines"] > 0) and (self._line_count >= 2 * Settings.client["buffer_lines"]) and self.buffer.document.is_cursor_at_the_end:
-        #     self._line_count = self.buffer.clear_half()
-        pass
-
     def feed_data(self, data) -> None:
         """
         由协议对象调用，将收到的远程数据加入会话缓冲。永远只会传递1个字节的数据，以bytes形式。 **脚本中无需调用。**
@@ -695,7 +685,6 @@ class Session:
 
         # 将数据写入缓存添加到此处
         if len(self.display_line) > 0:
-            self.clear_half()
             self.writetobuffer(self.display_line)
 
     def set_exception(self, exc: Exception):
