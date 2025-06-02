@@ -793,12 +793,14 @@ class Command(MatchObject):
         """
         复位命令，并取消和清除所有本对象管理的任务。
         """
+        try:
+            super().reset()
 
-        super().reset()
-
-        for task in list(self._tasks):
-            if isinstance(task, asyncio.Task) and (not task.done()):
-                self.remove_task(task)
+            for task in list(self._tasks):
+                if isinstance(task, asyncio.Task) and (not task.done()):
+                    self.remove_task(task)
+        except:
+            pass
 
     async def execute(self, cmd, *args, **kwargs) -> Any:
         """

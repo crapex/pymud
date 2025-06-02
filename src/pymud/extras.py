@@ -638,7 +638,7 @@ class SessionBuffer(BufferBase):
 
         ## limit buffered lines
         if len(self._lines) > self.max_buffered_lines:
-            diff = self.max_buffered_lines - len(self._lines)
+            diff = len(self._lines) - self.max_buffered_lines
             del self._lines[:diff]
             ## adjust selection
             if self.selection.start_row >= 0:
@@ -720,7 +720,7 @@ class PyMudBufferControl(UIControl):
         # Default reset. (Doesn't have to be implemented.)
         pass
 
-    def preferred_width(self, max_available_width: int) -> int | None:
+    def preferred_width(self, max_available_width: int) -> Optional[int]:
         return None
 
     def is_focusable(self) -> bool:

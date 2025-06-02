@@ -736,8 +736,14 @@ class Session:
         :param task: 由本会话管理的一个 asyncio.Task 对象
         :param msg: 本意是用来反馈 task.cancel() 时的消息，但为了保持兼容低版本Python环境，该参数并未使用。
         """
-        result = task.cancel()
-        self._tasks.discard(task)
+
+        result = True
+        try:
+            result = task.cancel()
+            self._tasks.discard(task)
+            
+        except asyncio.CancelledError:
+            pass
 
         return result
 
