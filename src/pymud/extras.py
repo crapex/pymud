@@ -1,39 +1,24 @@
 # External Libraries
-from functools import lru_cache
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
 from dataclasses import dataclass
-import time, re, logging, linecache, os
+import time, re, linecache, os
 from typing import Optional, List, Dict
-from typing import Iterable, NamedTuple, Optional, Union, Tuple
+from typing import Iterable, Optional, Tuple
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.formatted_text import to_formatted_text, fragment_list_to_text
+from prompt_toolkit.formatted_text import to_formatted_text
 from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
 from prompt_toolkit.layout.controls import UIContent, UIControl
-from prompt_toolkit.layout.processors import Processor, Transformation
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.document import Document
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.layout.controls import UIContent, FormattedTextControl
-from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
-from prompt_toolkit.selection import SelectionType
-from prompt_toolkit.buffer import Buffer, ValidationState
-from prompt_toolkit.utils import Event
 
-from prompt_toolkit.filters import (
-    FilterOrBool,
-)
 from prompt_toolkit.formatted_text import (
     StyleAndTextTuples,
     to_formatted_text,
 )
-from prompt_toolkit.formatted_text.utils import fragment_list_to_text
-from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.key_binding.key_bindings import KeyBindingsBase
 from prompt_toolkit.layout.containers import (
     Window,
     WindowAlign,
@@ -42,12 +27,6 @@ from prompt_toolkit.layout.controls import (
     
     FormattedTextControl,
 )
-from prompt_toolkit.layout.processors import (
-    Processor,
-    TransformationInput,
-    Transformation
-)
-from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Button, MenuContainer, MenuItem
@@ -56,7 +35,6 @@ from prompt_toolkit.widgets.base import Border
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Screen, WritePosition
 from prompt_toolkit.layout.utils import explode_text_fragments
 from prompt_toolkit.formatted_text.utils import (
-    fragment_list_to_text,
     fragment_list_width,
 )
 
@@ -236,7 +214,6 @@ class VSplitWindow(Window):
             upper = (total - 1) // 2
             below = total - upper - 1
             
-            #if isNotMargin:
             if isinstance(self.content, PyMudBufferControl):
                 b = self.content.buffer
                 if not b:
@@ -261,7 +238,6 @@ class VSplitWindow(Window):
 
                     else:
                         # 若内容行数大于屏幕行数，则倒序复制，确保即使有自动折行时，最后一行也保持在屏幕最底部
-
                         y = total
                         lineno = line_count
 
@@ -273,13 +249,10 @@ class VSplitWindow(Window):
                             line = ui_content.get_line(lineno)
                             visible_line_to_row_col[y] = (lineno, horizontal_scroll)
                             copy_line(line, lineno, 0, y, is_input=True)
-
                     
                 else:
                     # 有split window
                     
-
-
                     # 先复制下半部分，倒序复制，确保即使有自动折行时，最后一行也保持在屏幕最底部
                     y = total
                     lineno = line_count
@@ -298,7 +271,7 @@ class VSplitWindow(Window):
                     # 复制上半部分，正序复制，确保即使有自动折行时，第一行也保持在屏幕最顶部
                     y = -vertical_scroll_2
                     lineno = start_lineno
-                    while y <= below and lineno < line_count:
+                    while y < below and lineno < line_count:
                         line = ui_content.get_line(lineno)
                         visible_line_to_row_col[y] = (lineno, horizontal_scroll)
                         x = 0
@@ -385,7 +358,7 @@ class VSplitWindow(Window):
             if not b:
                 return
             start_lineno = b.start_lineno
-            if (start_lineno >= 0) and (start_lineno < b.lineCount - len(info.displayed_lines)):
+            if (start_lineno >= 0) and (start_lineno < b.lineCount - (len(info.displayed_lines) - 1) // 2):
                 b.start_lineno = b.start_lineno + 1
             else:
                 b.start_lineno = -1
@@ -409,7 +382,8 @@ class VSplitWindow(Window):
                 b.start_lineno = 0
 
             else:
-                b.start_lineno = b.lineCount - len(info.displayed_lines) - 1
+                b.start_lineno = b.lineCount - (len(info.displayed_lines) - 1) // 2
+
 
 
 class EasternButton(Button):
@@ -532,14 +506,14 @@ class SessionSelectionState:
         if self.start_row >= 0 and self.end_row >= 0 and self.start_col >= 0 and self.end_col >= 0:
             if (self.start_row == self.end_row) and (self.start_col == self.end_col):
                 return False
-            elif self.start_row > self.end_row:
-                srow, scol = self.end_row, self.end_col
-                erow, ecol = self.start_row, self.start_col
-                self.start_row, self.end_row = srow, erow
-                self.start_col, self.end_col = scol, ecol
-            elif self.start_row == self.end_row and self.start_col > self.end_col:
-                scol, ecol = self.end_col, self.start_col
-                self.start_col, self.end_col = scol, ecol
+            # elif self.start_row > self.end_row:
+            #     srow, scol = self.end_row, self.end_col
+            #     erow, ecol = self.start_row, self.start_col
+            #     self.start_row, self.end_row = srow, erow
+            #     self.start_col, self.end_col = scol, ecol
+            # elif self.start_row == self.end_row and self.start_col > self.end_col:
+            #     scol, ecol = self.end_col, self.start_col
+            #     self.start_col, self.end_col = scol, ecol
 
             return True
 
@@ -548,9 +522,49 @@ class SessionSelectionState:
     @property
     def rows(self):
         if self.is_valid():
-            return self.end_row - self.start_row + 1
+            return abs(self.end_row - self.start_row) + 1
         else:
             return 0
+
+    @property
+    def actual_start_row(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.start_row
+            else:
+                return self.end_row
+
+        return -1
+    
+    @property
+    def actual_start_col(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.start_col
+            else:
+                return self.end_col
+        
+        return -1
+
+    @property
+    def actual_end_row(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.end_row
+            else:
+                return self.start_row
+
+        return -1
+
+    @property
+    def actual_end_col(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.end_col
+            else:
+                return self.start_col
+
+        return -1
 
 
 class BufferBase:
@@ -560,6 +574,8 @@ class BufferBase:
         self.max_buffered_lines = max_buffered_lines
         self.start_lineno = -1
         self.selection = SessionSelectionState(-1, -1, -1, -1)
+
+        self.mouse_point = Point(-1, -1)
 
     def clear(self):
         pass
@@ -576,12 +592,13 @@ class BufferBase:
     def selection_range_at_line(self, lineno: int) -> Optional[Tuple[int, int]]:
         if self.selection.is_valid():
             if self.selection.rows > 1:
-                if lineno == self.selection.start_row:
-                    return (self.selection.start_col, len(self.getLine(lineno)) - 1)
-                elif lineno == self.selection.end_row:
-                    return (0, self.selection.end_col)
-                elif lineno > self.selection.start_row and lineno < self.selection.end_row:
-                    return (0, len(self.getLine(lineno)) - 1)
+                
+                if lineno == self.selection.actual_start_row:
+                    return (self.selection.actual_start_col, len(self.getLine(lineno)))
+                elif lineno == self.selection.actual_end_row:
+                    return (0, self.selection.actual_end_col)
+                elif lineno > self.selection.actual_start_row and lineno < self.selection.actual_end_row:
+                    return (0, len(self.getLine(lineno)))
 
             elif self.selection.rows == 1:
                 if lineno == self.selection.start_row:
@@ -705,8 +722,9 @@ class PyMudBufferControl(UIControl):
         self.buffer = buffer
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
-        self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
-        self.SINGLE_LINES = set("┌└├┬┼┴╭╰─")
+        self.FULL_BLOCKS = set("▂▃▅▆▇▄█━◇◆")
+        self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
+        self.SINGLE_LINES_LEFT = set("┨┘┐┤")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
         self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
         self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
@@ -732,17 +750,32 @@ class PyMudBufferControl(UIControl):
 
     def width_correction(self, line: str) -> str:
         new_str = []
-        for ch in line:
-            new_str.append(ch)
+        for idx, ch in enumerate(line):
+     
             if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
+                
                 if ch in self.FULL_BLOCKS:
-                    new_str.append(ch)
+                    new_str.append(ch * 2)
                 elif ch in self.SINGLE_LINES:
+                    new_str.append(ch)
                     new_str.append("─")
                 elif ch in self.DOUBLE_LINES:
+                    new_str.append(ch)
                     new_str.append("═")
+                elif ch in self.SINGLE_LINES_LEFT:
+                    new_str.append("─")
+                    new_str.append(ch)
+                elif idx == len(line) - 1:
+                    new_str.append(" ")
+                    new_str.append(ch)
                 else:
+                    new_str.append(ch)
                     new_str.append(' ')
+            else:
+                new_str.append(ch)
+
+        # 添加一个不可见字符，用于允许选择行时选到最后一个字符
+        new_str.append("\u200B")
 
         return "".join(new_str)
     
@@ -750,17 +783,26 @@ class PyMudBufferControl(UIControl):
         return line.replace("\r", "").replace("\x00", "")
     
     def tab_correction(self, line: str):
-        return line.replace("\t", " " * Settings.client["tabstop"])
+        from .session import Session
+        while "\t" in line:
+            tab_index = line.find("\t")
+            left, right = line[:tab_index], line[tab_index + 1:]
+            left_width = get_cwidth(Session.PLAIN_TEXT_REGX.sub("", left))
+            tab_width = Settings.client["tabstop"] - (left_width % Settings.client["tabstop"])
+            line = left + " " * tab_width + right
+
+        return line
 
     def line_correction(self, line: str):
         # 处理\r符号（^M）
         line = self.return_correction(line)
-        # 处理Tab(\r)符号（^I）
-        line = self.tab_correction(line)
         
         # 美化（解决中文英文在Console中不对齐的问题）
         if Settings.client["beautify"]:
             line = self.width_correction(line)
+
+        # 处理Tab(\r)符号（^I）对齐
+        line = self.tab_correction(line)
 
         return line
 
@@ -876,6 +918,7 @@ class PyMudBufferControl(UIControl):
 
             if buffer:
                 # Set the selection position.
+                buffer.mouse_point = position
                 if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                     buffer.exit_selection()
                     buffer.selection.start_row = position.y
@@ -886,9 +929,10 @@ class PyMudBufferControl(UIControl):
                     and mouse_event.button == MouseButton.LEFT
                 ):
                     # Click and drag to highlight a selection
-                    if buffer.selection.start_row >= 0:
+                    if buffer.selection.start_row >= 0 and not (position.y == 0 and position.x == 0):
                         buffer.selection.end_row = position.y
                         buffer.selection.end_col = position.x
+                    
 
                 elif mouse_event.event_type == MouseEventType.MOUSE_UP:
                     # When the cursor was moved to another place, select the text.
@@ -897,7 +941,7 @@ class PyMudBufferControl(UIControl):
                     # the cursor can never be after the text, so the cursor
                     # will be repositioned automatically.)
                     
-                    if buffer.selection.start_row >= 0:
+                    if buffer.selection.start_row >= 0 and position.y >= 0:
                         buffer.selection.end_row = position.y
                         buffer.selection.end_col = position.x
 

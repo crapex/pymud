@@ -1,4 +1,4 @@
-import logging, asyncio, datetime, traceback
+import logging, datetime
 from asyncio import BaseTransport, Protocol
 from .settings import Settings
 

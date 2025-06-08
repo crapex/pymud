@@ -1,4 +1,4 @@
-import sys, functools, traceback
+import functools, traceback
 from typing import Union, Optional, List
 
 def print_exception(session, e: Exception):

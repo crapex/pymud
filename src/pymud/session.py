@@ -3,7 +3,7 @@ from pathlib import Path
 from collections.abc import Iterable
 from collections import OrderedDict
 from prompt_toolkit.utils import get_cwidth
-from wcwidth import wcswidth, wcwidth
+from wcwidth import wcswidth
 from typing import Union, Optional, Any, List, Tuple, Dict, Type
 from .logger import Logger
 from .extras import DotDict, SessionBuffer
@@ -11,7 +11,7 @@ from .protocol import MudClientProtocol
 from .modules import ModuleInfo, Plugin
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
 from .settings import Settings
-from .decorators import exception, async_exception
+from .decorators import exception
 
 class Session:
     """

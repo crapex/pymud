@@ -15,7 +15,7 @@ class Settings:
     "APP 简要描述"
     __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-05-27"
+    __release__   = "2025-06-08"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -58,7 +58,7 @@ class Settings:
         "naws_width"        : 150,                  # 客户端NAWS宽度
         "naws_height"       : 40,                   # 客户端NAWS高度
         "newline"           : "\n",                 # 客户端换行符
-        "tabstop"           : 4,                    # 制表符改成空格
+        "tabstop"           : 8,                    # 制表符改成空格
         "seperator"         : ";",                  # 多个命令分隔符（默认;）
         "appcmdflag"        : "#",                  # app命令标记（默认#）
         

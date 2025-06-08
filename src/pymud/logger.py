@@ -1,4 +1,4 @@
-import os, re, datetime, threading, pathlib
+import datetime, threading
 from queue import SimpleQueue, Empty
 from pathlib import Path
 from .settings import Settings

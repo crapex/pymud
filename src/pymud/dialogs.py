@@ -1,9 +1,9 @@
 import asyncio, webbrowser
-from typing import Any, Callable, Iterable, List, Tuple, Union
-from prompt_toolkit.layout import AnyContainer, ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollablePane, ScrollOffsets
-from prompt_toolkit.widgets import Button, Dialog, Label, MenuContainer, MenuItem, TextArea, SystemToolbar, Frame, RadioList 
-from prompt_toolkit.layout.dimension import Dimension, D
-from prompt_toolkit import ANSI, HTML
+from typing import Any
+from prompt_toolkit.layout import AnyContainer, VSplit, HSplit, Window, WindowAlign
+from prompt_toolkit.widgets import Dialog, Label, TextArea, Frame, RadioList 
+from prompt_toolkit.layout.dimension import D
+from prompt_toolkit import HTML
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
 from prompt_toolkit.application.current import get_app

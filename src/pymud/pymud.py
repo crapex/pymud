@@ -1,15 +1,13 @@
-import asyncio, functools, re, os, webbrowser, threading
+import asyncio, functools, os, webbrowser, threading
 from datetime import datetime
-from pathlib import Path
-from prompt_toolkit.shortcuts import set_title, radiolist_dialog
+from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
 from prompt_toolkit import HTML
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.application import Application
-from prompt_toolkit.filters import Condition
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign, ScrollbarMargin, NumberedMargin, to_dimension
+from prompt_toolkit.filters import Condition, is_true, to_filter
+from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import D
@@ -18,26 +16,14 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Label, TextArea
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.cursor_shapes import CursorShape
-from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
+from prompt_toolkit.key_binding import KeyBindings, KeyPress, KeyPressEvent
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.filters import (
-    Condition,
-    is_true,
-    to_filter,
-)
-from prompt_toolkit.formatted_text import (
-    Template,
-)
-from prompt_toolkit.layout.processors import (
-    DisplayMultipleCursors,
-    HighlightSearchProcessor,
-    HighlightSelectionProcessor,
-)
+from prompt_toolkit.formatted_text import Template
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from wcwidth import wcwidth, wcswidth
+from wcwidth import wcswidth
 
 from .objects import CodeBlock
-from .extras import BufferBase, LogFileBuffer, SessionBuffer, PyMudBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
+from .extras import BufferBase, LogFileBuffer, PyMudBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
 from .modules import Plugin
 from .session import Session
 from .settings import Settings
@@ -516,16 +502,17 @@ class PyMudApp:
         b = self.consoleView.buffer
         if b and b.selection.is_valid():
             if not raw:
-                if b.selection.start_row == b.selection.end_row:
-                    if b.selection.end_col - b.selection.start_col == len(b.getLine(b.selection.start_row)):
+                #if b.selection.start_row == b.selection.end_row:
+                if b.selection.rows == 1:
+                    if b.selection.actual_end_col - b.selection.actual_start_col >= len(b.getLine(b.selection.start_row)):
                         # 单行且选中了整行，此时不校正显示位置匹配
-                        line = b.getLine(b.selection.start_row)
+                        line = b.getLine(b.selection.actual_start_row)
                     else:
                         # 单行且选中了部分内容，此时校正显示位置匹配
-                        line = self.consoleView.line_correction(b.getLine(b.selection.start_row))
+                        line = self.consoleView.line_correction(b.getLine(b.selection.actual_start_row))
 
-                    start = max(0, b.selection.start_col)
-                    end = min(len(line), b.selection.end_col)
+                    start = max(0, b.selection.actual_start_col)
+                    end = min(len(line) + 1, b.selection.actual_end_col)
                     line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
@@ -535,7 +522,7 @@ class PyMudApp:
                 else:
                     # 多行只认行
                     lines = []
-                    for row in range(b.selection.start_row, b.selection.end_row + 1):
+                    for row in range(b.selection.actual_start_row, b.selection.actual_end_row + 1):
                         line = b.getLine(row)
                         line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
@@ -545,9 +532,10 @@ class PyMudApp:
 
             else:
                 # RAW模式，直接复制原始内容
-                if b.selection.start_row == b.selection.end_row:
+                #if b.selection.start_row == b.selection.end_row:
+                if b.selection.rows == 1:
                     # 单行情况
-                    line = b.getLine(b.selection.start_row)
+                    line = b.getLine(b.selection.actual_start_row)
                     self.app.clipboard.set_text(line)
                     self.set_status(Settings.gettext("msg_copy", line))
                     if self.current_session:
@@ -556,7 +544,7 @@ class PyMudApp:
                 else:
                     # 多行只认行
                     lines = []
-                    for row in range(b.selection.start_row, b.selection.end_row + 1):
+                    for row in range(b.selection.actual_start_row, b.selection.actual_end_row + 1):
                         line = b.getLine(row)
                         lines.append(line)
                     copy_raw_text = "\n".join(lines)
@@ -924,7 +912,14 @@ class PyMudApp:
         if not self._mouse_support:
             mouse_support = Settings.gettext("status_mouseinh") + " "
 
+        mouse = "0, 0"
+
         if self.current_session:
+            buffer = self.current_session.buffer
+            if buffer:
+                position = buffer.mouse_point
+                mouse = f"{position.y}, {position.x}"
+
             if self.current_session._ignore:
                 tri_status = Settings.gettext("status_ignore") + " "
 
