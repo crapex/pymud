@@ -271,7 +271,7 @@ class VSplitWindow(Window):
                     # 复制上半部分，正序复制，确保即使有自动折行时，第一行也保持在屏幕最顶部
                     y = -vertical_scroll_2
                     lineno = start_lineno
-                    while y < below and lineno < line_count:
+                    while y <= upper and lineno < line_count:
                         line = ui_content.get_line(lineno)
                         visible_line_to_row_col[y] = (lineno, horizontal_scroll)
                         x = 0
@@ -358,7 +358,7 @@ class VSplitWindow(Window):
             if not b:
                 return
             start_lineno = b.start_lineno
-            if (start_lineno >= 0) and (start_lineno < b.lineCount - (len(info.displayed_lines) - 1) // 2):
+            if (start_lineno >= 0) and (start_lineno < b.lineCount - (info.window_height - 1) // 2):
                 b.start_lineno = b.start_lineno + 1
             else:
                 b.start_lineno = -1
@@ -381,9 +381,8 @@ class VSplitWindow(Window):
             elif start_lineno == 0:
                 b.start_lineno = 0
 
-            else:
-                b.start_lineno = b.lineCount - (len(info.displayed_lines) - 1) // 2
-
+            elif b.start_lineno < 0 and b.lineCount >= info.window_height:
+                b.start_lineno = b.lineCount - (info.window_height - 1) // 2
 
 
 class EasternButton(Button):
@@ -503,21 +502,7 @@ class SessionSelectionState:
     start_col: int = -1
     end_col: int = -1
     def is_valid(self):
-        if self.start_row >= 0 and self.end_row >= 0 and self.start_col >= 0 and self.end_col >= 0:
-            if (self.start_row == self.end_row) and (self.start_col == self.end_col):
-                return False
-            # elif self.start_row > self.end_row:
-            #     srow, scol = self.end_row, self.end_col
-            #     erow, ecol = self.start_row, self.start_col
-            #     self.start_row, self.end_row = srow, erow
-            #     self.start_col, self.end_col = scol, ecol
-            # elif self.start_row == self.end_row and self.start_col > self.end_col:
-            #     scol, ecol = self.end_col, self.start_col
-            #     self.start_col, self.end_col = scol, ecol
-
-            return True
-
-        return False
+        return abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col) > 0
 
     @property
     def rows(self):
@@ -665,10 +650,11 @@ class SessionBuffer(BufferBase):
         get_app().invalidate()
 
     def clear(self):
+        self.exit_selection()
+        self._isnewline = True
         self._lines.clear()
-        self.selection = SessionSelectionState(-1, -1, -1, -1)
+        self.nosplit()
 
-        get_app().invalidate()
 
     @property
     def lineCount(self):
@@ -722,7 +708,7 @@ class PyMudBufferControl(UIControl):
         self.buffer = buffer
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
-        self.FULL_BLOCKS = set("▂▃▅▆▇▄█━◇◆")
+        self.FULL_BLOCKS = set("▂▃▅▆▇▄█━")
         self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
         self.SINGLE_LINES_LEFT = set("┨┘┐┤")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
@@ -753,9 +739,9 @@ class PyMudBufferControl(UIControl):
         for idx, ch in enumerate(line):
      
             if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
-                
                 if ch in self.FULL_BLOCKS:
-                    new_str.append(ch * 2)
+                    new_str.append(ch)
+                    new_str.append(ch)
                 elif ch in self.SINGLE_LINES:
                     new_str.append(ch)
                     new_str.append("─")
@@ -773,9 +759,6 @@ class PyMudBufferControl(UIControl):
                     new_str.append(' ')
             else:
                 new_str.append(ch)
-
-        # 添加一个不可见字符，用于允许选择行时选到最后一个字符
-        new_str.append("\u200B")
 
         return "".join(new_str)
     
@@ -803,6 +786,8 @@ class PyMudBufferControl(UIControl):
 
         # 处理Tab(\r)符号（^I）对齐
         line = self.tab_correction(line)
+
+        line += " "    # 最后添加一个空格，用于允许选择行时选到最后一个字符
 
         return line
 
