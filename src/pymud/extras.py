@@ -502,7 +502,11 @@ class SessionSelectionState:
     start_col: int = -1
     end_col: int = -1
     def is_valid(self):
-        return abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col) > 0
+        return  (self.start_row >= 0) and \
+                (self.start_col >= 0) and \
+                (self.end_row >= 0) and \
+                (self.end_col >= 0) and \
+                abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col) > 0
 
     @property
     def rows(self):
@@ -737,8 +741,8 @@ class PyMudBufferControl(UIControl):
     def width_correction(self, line: str) -> str:
         new_str = []
         for idx, ch in enumerate(line):
-     
             if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
+                
                 if ch in self.FULL_BLOCKS:
                     new_str.append(ch)
                     new_str.append(ch)
@@ -751,12 +755,15 @@ class PyMudBufferControl(UIControl):
                 elif ch in self.SINGLE_LINES_LEFT:
                     new_str.append("─")
                     new_str.append(ch)
-                elif idx == len(line) - 1:
-                    new_str.append(" ")
-                    new_str.append(ch)
                 else:
-                    new_str.append(ch)
-                    new_str.append(' ')
+                    right = line[idx+1:]
+                    right_len = fragment_list_width(to_formatted_text(ANSI(right)))
+                    if right_len == 0:
+                        new_str.append(" ")
+                        new_str.append(ch)
+                    else:
+                        new_str.append(ch)
+                        new_str.append(' ')
             else:
                 new_str.append(ch)
 
@@ -790,6 +797,43 @@ class PyMudBufferControl(UIControl):
         line += " "    # 最后添加一个空格，用于允许选择行时选到最后一个字符
 
         return line
+
+    def fragment_correction(self, fragments: StyleAndTextTuples):
+        """
+        处理ANSI标记，包括颜色标记，下划线标记等
+        """
+        new_fragments = []
+        frag_count = len(fragments)
+        for i  in range(0, frag_count):
+            style, text, *_ = fragments[i]
+            new_text = []
+
+            for j, ch in enumerate(text):
+                if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
+                    if ch in self.FULL_BLOCKS:
+                        new_text.append(ch * 2)
+                    elif ch in self.SINGLE_LINES:
+                        new_text.append(ch)
+                        new_text.append("─")
+                    elif ch in self.DOUBLE_LINES:
+                        new_text.append(ch)
+                        new_text.append("═")
+                    elif ch in self.SINGLE_LINES_LEFT:
+                        new_text.append("─")
+                        new_text.append(ch)
+                    elif (i == frag_count - 1) and (j == len(ch) - 1):
+                        new_text.append(" ")
+                        new_text.append(ch)
+                    else:
+                        new_text.append(ch)
+                        new_text.append(' ')
+                else:
+                    new_text.append(ch)
+
+            fragments[i] = (style, "".join(new_text))
+            
+        return fragments
+
 
     def create_content(self, width: int, height: int) -> UIContent:
         """
@@ -838,9 +882,14 @@ class PyMudBufferControl(UIControl):
             
             # 其他校正
             line = self.line_correction(line)
+            #line = self.return_correction(line)
 
             # 处理ANSI标记（生成FormmatedText）
             fragments = to_formatted_text(ANSI(line))
+            #fragments = explode_text_fragments(fragments)
+
+            # if Settings.client["beautify"]:
+            #     fragments = self.fragment_correction(fragments)
 
             # 选择内容标识
             selected_fragment = " class:selected "
@@ -930,9 +979,8 @@ class PyMudBufferControl(UIControl):
                         buffer.selection.end_row = position.y
                         buffer.selection.end_col = position.x
 
-                        if buffer.selection.start_row == buffer.selection.end_row and buffer.selection.start_col == buffer.selection.end_col:
-                            buffer.selection = SessionSelectionState(-1, -1, -1, -1)
-
+                    if not buffer.selection.is_valid():
+                        buffer.exit_selection()
 
                     # Select word around cursor on double click.
                     # Two MOUSE_UP events in a short timespan are considered a double click.
