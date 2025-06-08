@@ -639,7 +639,7 @@ class SessionBuffer(BufferBase):
         self._isnewline = newline_after_append
 
         ## limit buffered lines
-        if len(self._lines) > self.max_buffered_lines:
+        if self.start_lineno < 0 and len(self._lines) > self.max_buffered_lines:
             diff = len(self._lines) - self.max_buffered_lines
             del self._lines[:diff]
             ## adjust selection
