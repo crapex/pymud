@@ -1084,12 +1084,8 @@ class PyMudApp:
         "命令行回车按键处理"
         cmd_line = buffer.text
         space_index = cmd_line.find(" ")
-        
-        if len(cmd_line) == 0:
-            if self.current_session:
-                self.current_session.writeline("")
-        
-        elif cmd_line[0] != Settings.client["appcmdflag"]:
+
+        if (len(cmd_line) >= 1) and (cmd_line[0] != Settings.client["appcmdflag"]):
             if self.current_session:
                 self.current_session.last_command = cmd_line
 
@@ -1101,6 +1097,7 @@ class PyMudApp:
             if self.current_session:
                 if len(cmd_line) == 0:
                     self.current_session.writeline("")
+        
                 else:
                     try:
                         self.current_session.log.log(f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n")

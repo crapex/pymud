@@ -626,6 +626,7 @@ class SessionBuffer(BufferBase):
         if line.endswith(self.newline):
             line = line.rstrip(self.newline)
             newline_after_append = True
+            
         if not self.newline in line:
             if self._isnewline:
                 self._lines.append(line)
@@ -659,6 +660,8 @@ class SessionBuffer(BufferBase):
         self._lines.clear()
         self.nosplit()
 
+    def forceNewline(self):
+        self._isnewline = True
 
     @property
     def lineCount(self):
@@ -713,9 +716,11 @@ class PyMudBufferControl(UIControl):
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
         self.FULL_BLOCKS = set("▂▃▅▆▇▄█━")
+        self.TABLE_LINES  = set("┠┌└├┬┼┴╭╰─┨┘┐┤╮╯╔╚╠╦╪╩═╗╝╣┃││║")
         self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
-        self.SINGLE_LINES_LEFT = set("┨┘┐┤")
+        self.SINGLE_LINES_LEFT = set("┨┘┐┤╮╯")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
+        self.DOUBLE_LINES_LEFT = set("╗╝╣")
         self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
         self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
         self._color_start = ""
@@ -737,7 +742,6 @@ class PyMudBufferControl(UIControl):
         """
         return False
 
-
     def width_correction(self, line: str) -> str:
         new_str = []
         for idx, ch in enumerate(line):
@@ -755,10 +759,13 @@ class PyMudBufferControl(UIControl):
                 elif ch in self.SINGLE_LINES_LEFT:
                     new_str.append("─")
                     new_str.append(ch)
+                elif ch in self.DOUBLE_LINES_LEFT:
+                    new_str.append("═")
+                    new_str.append(ch)
                 else:
-                    right = line[idx+1:]
+                    right = str.rstrip(line[idx+1:])
                     right_len = fragment_list_width(to_formatted_text(ANSI(right)))
-                    if right_len == 0:
+                    if ((idx == len(line) - 1) or (right_len == 0)) and (ch in self.TABLE_LINES):
                         new_str.append(" ")
                         new_str.append(ch)
                     else:
@@ -797,43 +804,6 @@ class PyMudBufferControl(UIControl):
         line += " "    # 最后添加一个空格，用于允许选择行时选到最后一个字符
 
         return line
-
-    def fragment_correction(self, fragments: StyleAndTextTuples):
-        """
-        处理ANSI标记，包括颜色标记，下划线标记等
-        """
-        new_fragments = []
-        frag_count = len(fragments)
-        for i  in range(0, frag_count):
-            style, text, *_ = fragments[i]
-            new_text = []
-
-            for j, ch in enumerate(text):
-                if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
-                    if ch in self.FULL_BLOCKS:
-                        new_text.append(ch * 2)
-                    elif ch in self.SINGLE_LINES:
-                        new_text.append(ch)
-                        new_text.append("─")
-                    elif ch in self.DOUBLE_LINES:
-                        new_text.append(ch)
-                        new_text.append("═")
-                    elif ch in self.SINGLE_LINES_LEFT:
-                        new_text.append("─")
-                        new_text.append(ch)
-                    elif (i == frag_count - 1) and (j == len(ch) - 1):
-                        new_text.append(" ")
-                        new_text.append(ch)
-                    else:
-                        new_text.append(ch)
-                        new_text.append(' ')
-                else:
-                    new_text.append(ch)
-
-            fragments[i] = (style, "".join(new_text))
-            
-        return fragments
-
 
     def create_content(self, width: int, height: int) -> UIContent:
         """
@@ -899,8 +869,10 @@ class PyMudBufferControl(UIControl):
 
             if selection_at_line:
                 from_, to = selection_at_line
-                # from_ = source_to_display(from_)
-                # to = source_to_display(to)
+                total_display = fragment_list_width(fragments)
+                if to == len(buffer.getLine(i)):
+                    to = total_display
+
 
                 fragments = explode_text_fragments(fragments)
 
@@ -909,12 +881,14 @@ class PyMudBufferControl(UIControl):
                     # visualize the selection.
                     return [(selected_fragment, " ")]
                 else:
-                    for i in range(from_, to):
+                    for i in range(from_, min(to, total_display+1)):
                         if i < len(fragments):
                             old_fragment, old_text, *_ = fragments[i]
                             fragments[i] = (old_fragment + selected_fragment, old_text)
-                        elif i == len(fragments):
-                            fragments.append((selected_fragment, " "))
+                        # elif i == len(fragments):
+                        #     fragments.append((selected_fragment, " "))
+
+
 
             return fragments
 
