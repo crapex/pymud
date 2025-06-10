@@ -715,12 +715,14 @@ class PyMudBufferControl(UIControl):
         self.buffer = buffer
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
-        self.FULL_BLOCKS = set("▂▃▅▆▇▄█━")
-        self.TABLE_LINES  = set("┠┌└├┬┼┴╭╰─┨┘┐┤╮╯╔╚╠╦╪╩═╗╝╣┃││║")
+        self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
+        self.TABLE_LINES  = set("┃││║┃")
         self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
         self.SINGLE_LINES_LEFT = set("┨┘┐┤╮╯")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
         self.DOUBLE_LINES_LEFT = set("╗╝╣")
+        self.THICK_LINES = set("┏┗━")
+        self.THICK_LINES_LEFT = set("┓┛ ")
         self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
         self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
         self._color_start = ""
@@ -756,18 +758,28 @@ class PyMudBufferControl(UIControl):
                 elif ch in self.DOUBLE_LINES:
                     new_str.append(ch)
                     new_str.append("═")
-                elif ch in self.SINGLE_LINES_LEFT:
-                    new_str.append("─")
+                elif ch in self.THICK_LINES:
                     new_str.append(ch)
-                elif ch in self.DOUBLE_LINES_LEFT:
-                    new_str.append("═")
-                    new_str.append(ch)
+                    new_str.append("━")
                 else:
                     right = str.rstrip(line[idx+1:])
                     right_len = fragment_list_width(to_formatted_text(ANSI(right)))
-                    if ((idx == len(line) - 1) or (right_len == 0)) and (ch in self.TABLE_LINES):
-                        new_str.append(" ")
-                        new_str.append(ch)
+                    if (idx == len(line) - 1) or (right_len == 0):
+                        if ch in self.SINGLE_LINES_LEFT:
+                            new_str.append("─")
+                            new_str.append(ch)
+                        elif ch in self.DOUBLE_LINES_LEFT:
+                            new_str.append("═")
+                            new_str.append(ch)
+                        elif ch in self.THICK_LINES_LEFT:
+                            new_str.append("━")
+                            new_str.append(ch)
+                        elif ch in self.TABLE_LINES:
+                            new_str.append(" ")
+                            new_str.append(ch)
+                        else:
+                            new_str.append(ch)
+                            new_str.append(' ')
                     else:
                         new_str.append(ch)
                         new_str.append(' ')

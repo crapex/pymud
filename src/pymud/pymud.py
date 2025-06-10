@@ -672,7 +672,7 @@ class PyMudApp:
                     dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt", self.current_session.name)}</style>'))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
-                        self.current_session.disconnect()
+                        self.current_session.disconnect() 
 
                         # 增加延时等待确保会话关闭
                         wait_time = 0
@@ -696,12 +696,16 @@ class PyMudApp:
                 self.current_session = None
                 #self.consoleView.buffer = SessionBuffer()
                 self.consoleView.buffer = None
-                self.sessions.pop(name)
+                closesession = self.sessions.pop(name)
+                del closesession
                 #self.set_status(f"会话 {name} 已关闭")
                 if len(self.sessions.keys()) > 0:
                     new_sess = list(self.sessions.keys())[0]
                     self.activate_session(new_sess)
                     #self.set_status(f"当前会话已切换为 {self.current_session.name}")
+
+                import gc
+                gc.collect()
 
         asyncio.ensure_future(coroutine()) # type: ignore
 

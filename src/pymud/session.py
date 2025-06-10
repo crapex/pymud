@@ -810,12 +810,12 @@ class Session:
         else:
             if Settings.client["echo_input"]:
                 self.writetobuffer(f"\x1b[32m{line}\x1b[0m", True)
-            elif len(line) == 0:
-                # 当向服务器仅送出空行时，本地强制后续显示换行
-                self.buffer.forceNewline()
+
             else:
                 self.log.log(f"\x1b[32m{line}\x1b[0m\n")
 
+            # 当输入任意命令后，本地强制新行
+            self.buffer.forceNewline()
             self.record_command(line)
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
