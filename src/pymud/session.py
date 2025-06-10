@@ -814,8 +814,10 @@ class Session:
             else:
                 self.log.log(f"\x1b[32m{line}\x1b[0m\n")
 
-            # 当输入任意命令后，本地强制新行
-            self.buffer.forceNewline()
+            # 当输入空行命令后，本地强制新行
+            if len(line) == 0:
+                self.buffer.forceNewline()
+
             self.record_command(line)
             cmd = line + self.newline
             self.write(cmd.encode(self.encoding, Settings.server["encoding_errors"]))
