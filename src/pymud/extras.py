@@ -834,7 +834,7 @@ class PyMudBufferControl(UIControl):
         def get_line(i: int) -> StyleAndTextTuples:
             line = buffer.getLine(i)
             # 颜色校正
-            SEARCH_LINES = 10
+            SEARCH_LINES = 50
             thislinecolors = len(self.AVAI_COLOR_REGX.findall(line))
             if thislinecolors == 0:
                 lineno = i - 1

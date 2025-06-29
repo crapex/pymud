@@ -37,20 +37,21 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.20.4
 特点
 ^^^^^^^^^
 
-- 原生纯Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>`_ 及其依赖库（wcwidth, pygments, pyperclip）外，不需要其他第三方库支持
-- 使用原生asyncio库进行网络和事务处理，支持async/await语法的原生异步操作（PyMUD最大特色）。原生异步意味着可以支持很多其他异步库，例如可以使用aiohttp来进行网络页面访问而不产生阻塞等等:)
-- 基于控制台的全屏UI界面设计（无需图形环境，如linux下的X环境）。同时支持鼠标操作（可触摸设备上支持触摸屏操作）
-- 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
-- 解决了99%情况下，北大侠客行中文对不齐，也就是看不清字符画的问题（因为我没有走遍所有地方，不敢保证100%）
-- 真正的支持多session会话，支持命令和鼠标切换会话
-- 原生支持多种服务器端编码方式，不论是GBK、BIG5、还是UTF-8
-- 支持NWAS、MTTS协商，支持GMCP、MSDP、MSSP协议。暂不支持MXP
-- 一次脚本开发，多平台运行。Windows, Linux, MacOS, Android（基于termux）, iOS（基于iSH）。可部署在docker和云端，只要能在该平台上运行Python，就可以运行PyMUD客户端
-- 脚本所有语法均采用Python原生语法，因此你只要会用Python，就可以自己写脚本，免去了再去学习lua、熟悉各类APP的使用的难处
-- 全开源代码，因此脚本也可以很方便的使用visual studio code等工具进行调试，可以设置断点、查看变量等
-- Python拥有极为强大的文字处理能力，用于处理文本的MUD最为合适
-- Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMUD中支持
-- 我自己还在玩，所以本客户端会持续进行更新:)
++ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>`_ 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
++ 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
++ 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作），极低资源需求，在单核1GB内存的Linux VPS上也可流畅运行
++ 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
++ 解决了99%情况下，北大侠客行中文对不齐，也就是看不清字符画的问题
++ 真正的支持多session会话，支持命令或鼠标切换会话
++ 原生支持多种服务器端编码方式，不论是GBK、BIG5、还是UTF-8
++ 支持NWAS、MTTS协商，支持GMCP、MSDP、MSSP协议
++ 一次脚本开发，多平台运行。只要能在该平台上运行python，就可以运行PyMUD客户端
++ 脚本所有语法均采用Python原生语法，因此你只要会用Python，就可以自己写脚本，免去了再去学习lua、熟悉各类APP的使用的难处
++ 全开源代码，因此脚本也可以很方便的使用visual studio code等工具进行调试，可以设置断点、查看变量等
++ Python拥有极为强大的文字处理能力，用于处理文本的MUD最为合适
++ Python拥有极为丰富的第三方库，能支持的第三方库，就能在PyMUD中支持
++ 多语言支持框架已搭好，目前提供中文、英文支持，可以自己增加翻译后的其他语言版本
++ 我自己还在玩，所以本客户端会持续进行更新:)
 
 **美化对齐的字符画**
 

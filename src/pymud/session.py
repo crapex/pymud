@@ -237,9 +237,9 @@ class Session:
 
             self.onConnected()
 
-        except Exception as exc:
+        except Exception as ex:
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.error(Settings.gettext("msg_connection_fail", now, exec))
+            self.error(Settings.gettext("msg_connection_fail", now, ex))
             self._state     = "EXCEPTION"
 
             if Settings.client["auto_reconnect"]:
@@ -674,7 +674,7 @@ class Session:
                 else:
                     state = tri.match(tri_line, docallback = True)
 
-                if state.result == Trigger.SUCCESS:
+                if state and state.result == Trigger.SUCCESS:
                     if tri.oneShot:                     # 仅执行一次的trigger，匹配成功后，删除该Trigger（从触发器列表中移除）
                         self._triggers.pop(tri.id)
 
@@ -687,13 +687,13 @@ class Session:
         if len(self.display_line) > 0:
             self.writetobuffer(self.display_line)
 
-    def set_exception(self, exc: Exception):
+    def set_exception(self, ex: Exception):
         """
         由协议对象调用，处理异常。 **脚本中无需调用。**
 
-        :param exc: 异常对象
+        :param ex: 异常对象
         """
-        self.error(Settings.gettext("msg_connection_fail", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), exc))
+        self.error(Settings.gettext("msg_connection_fail", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ex))
 
 
     def create_task(self, coro, *args, name: Optional[str] = None) -> asyncio.Task:
@@ -1026,7 +1026,7 @@ class Session:
 
         for command in self._commands.values():
             state = command.match(cmdtext)
-            if state.result == Command.SUCCESS:
+            if state and state.result == Command.SUCCESS:
                 notHandle = False
                 # 命令的任务名称采用命令id，以便于后续查错
                 self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
@@ -1043,7 +1043,7 @@ class Session:
  
             for alias in avai_alis:               
                 state = alias.match(cmdtext)
-                if state.result == Alias.SUCCESS:
+                if state and state.result == Alias.SUCCESS:
                     notHandle = False
                     if alias.oneShot:
                         self.delAlias(alias.id)
@@ -1071,7 +1071,7 @@ class Session:
 
         for command in avai_cmds:
             state = command.match(cmdtext)
-            if state.result == Command.SUCCESS:
+            if state and state.result == Command.SUCCESS:
                 # 命令的任务名称采用命令id，以便于后续查错
                 result = await self.create_task(command.execute(cmdtext), name = "task-{0}".format(command.id))
                 notHandle = False
@@ -1088,7 +1088,7 @@ class Session:
  
             for alias in avai_alis:               
                 state = alias.match(cmdtext)
-                if state.result == Alias.SUCCESS:
+                if state and state.result == Alias.SUCCESS:
                     notHandle = False
                     if alias.oneShot:
                         self.delAlias(alias.id)
@@ -2182,6 +2182,8 @@ class Session:
         使用:
             - #var: 列出本会话所有变量
             - #var {name}: 列出本会话中名称为{name}的变量的值
+            - #var prefix*: 列出本会话中名称以prefix开头的所有变量的值
+            - #var *suffix: 列出本会话中名称以suffix结尾的所有变量的值
             - #var {name} {value}: 将本会话中名称为{name}的变量设置值为{value}，若不存在则创建
 
         参数:
@@ -2211,7 +2213,28 @@ class Session:
 
                 for line in lines:
                     self.writetobuffer(line, newline = True)
-                    
+            
+            elif args[0].endswith("*"):
+                filter_vars = DotDict()
+                for key in self._variables.keys():
+                    if key.startswith(args[0][:-1]):
+                        filter_vars[key] = self._variables[key]
+                
+                lines = self.buildDisplayLines(filter_vars, f" VARIABLES START WITH [{args[0][:-1]}] IN SESSION {self.name} ")
+
+                for line in lines:
+                    self.writetobuffer(line, newline = True)
+
+            elif args[0].startswith("*"):
+                filter_vars = DotDict()
+                for key in self._variables.keys():
+                    if key.endswith(args[0][1:]):
+                        filter_vars[key] = self._variables[key]
+                
+                lines = self.buildDisplayLines(filter_vars, f" VARIABLES END WITH [{args[0][1:]}] IN SESSION {self.name} ")
+                for line in lines:
+                    self.writetobuffer(line, newline = True)
+
             else:
                 self.warning(Settings.gettext("msg_no_object", args[0], Settings.gettext("variable")))
             

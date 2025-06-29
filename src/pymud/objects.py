@@ -537,6 +537,7 @@ class MatchObject(BaseObject):
     def reset(self):
         "复位事件，用于async执行未等待结果时，对事件的复位。仅异步有效。"
         self.event.clear()
+        self.state = BaseObject.State(self.NOTSET, self.id, "", tuple())
 
     def set(self):
         "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"
@@ -621,9 +622,11 @@ class MatchObject(BaseObject):
                     self.event.set()
                     
             self.state = state
-            return state
+            #return state
         except Exception as e:
             print_exception(self.session, e)
+        
+        return self.state
     
     async def matched(self) -> BaseObject.State:
         """
@@ -637,9 +640,10 @@ class MatchObject(BaseObject):
             await self.event.wait()
             self.reset()
 
-            return self.state
         except Exception as e:
             print_exception(self.session, e)
+        
+        return self.state
     
     def __detailed__(self) -> str:
         group = f'group = "{self.group}" ' if self.group else ''

@@ -68,6 +68,15 @@ def init_pymud_env(args):
     system = "unknown"
     lang = detect_system_language()
     if lang == "chs":
+        val = input(f"检测到你的系统语言为中文，是否确认使用中文进行初始化？直接回车确认选择中文，若要选择英文，请键入 eng 后再回车:")
+        if val == "eng":
+            lang = "eng"
+    elif lang == "eng":
+        val = input(f"The language of your system ISNOT Chinese, do you want to initialize pymud in English? Press Enter to confirm, or type chs and then press Enter to initialize pymud in Chinese:")
+        if val == "chs":
+            lang = "chs"
+        
+    if lang == "chs":
         print(f"欢迎使用PyMUD, 版本{Settings.__version__}. 使用PyMUD时, 建议建立一个新目录（任意位置），并将自己的脚本以及配置文件放到该目录下.")
         print("即将开始为首次运行初始化环境...")
         
@@ -202,7 +211,7 @@ def main():
     subparsers = parser.add_subparsers(help = 'init用于初始化运行环境')
 
     par_init = subparsers.add_parser('init', description = '初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.')
-    par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, default = '.', help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
+    par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
     par_init.set_defaults(func = init_pymud_env)
 
     parser.add_argument('-d', '--debug', dest = 'debug', action = 'store_true', default = False, help = '指定以调试模式进入PyMUD。此时，系统log等级将设置为logging.NOTSET, 所有log数据均会被记录。默认不启用。')

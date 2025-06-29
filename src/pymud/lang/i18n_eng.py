@@ -292,6 +292,8 @@ TRANSLATION = {
         Usage:
             - #var: List all variables in this session.
             - #var {name}: List the value of the variable named {name} in this session.
+            - #var prefix*: List the values of the variables which names start with prefix.
+            - #var *suffix: List the values of the variables which names end with suffix.
             - #var {name} {value}: Set the value of the variable named {name} in this session to {value}, create it if it does not exist.
 
         Parameters:

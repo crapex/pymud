@@ -15,7 +15,7 @@ class Settings:
     "APP 简要描述"
     __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-06-10"
+    __release__   = "2025-06-29"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
