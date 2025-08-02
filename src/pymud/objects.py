@@ -537,7 +537,7 @@ class MatchObject(BaseObject):
     def reset(self):
         "复位事件，用于async执行未等待结果时，对事件的复位。仅异步有效。"
         self.event.clear()
-        self.state = BaseObject.State(self.NOTSET, self.id, "", tuple())
+        # self.state = BaseObject.State(self.NOTSET, self.id, "", tuple())
 
     def set(self):
         "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"

@@ -90,6 +90,8 @@ class PyMudApp:
                 elif key == "language":
                     Settings.language = cfg_data[key]
 
+
+        self._background_tasks = set()
         self._mouse_support = True
         self._plugins  = DotDict()              # 增加 插件 字典
         self._globals  = DotDict()              # 增加所有session使用的全局变量
@@ -130,6 +132,11 @@ class PyMudApp:
         except:
             clipboard = None
 
+        if Settings.client["cursor"] and Settings.client["cursor"] in ["BLOCK", "BEAM", "UNDERLINE", "BLINKING_BLOCK", "BLINKING_BEAM", "BLINKING_UNDERLINE"]:
+            cursor_shape = CursorShape(Settings.client["cursor"])
+        else:
+            cursor_shape = CursorShape.BLINKING_BEAM
+
         self.app = Application(
             layout = Layout(self.root_container, focused_element=self.commandLine),
             enable_page_navigation_bindings=True,
@@ -139,7 +146,7 @@ class PyMudApp:
             color_depth=ColorDepth.TRUE_COLOR,
             clipboard=clipboard,
             key_bindings=self.keybindings,
-            cursor=CursorShape.BLINKING_UNDERLINE
+            cursor=cursor_shape
         )
 
         set_title("{} {}".format(Settings.__appname__, Settings.__version__))
@@ -153,6 +160,15 @@ class PyMudApp:
         self.logSessionBuffer = LogFileBuffer("LOGBUFFER")
 
         self.load_plugins()
+
+    def create_background_task(self, coro):
+        "创建后台任务。后台任务在应用退出前，必须全部等待其完成，用于清理和释放对象、资源。"
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(coro)
+        task.add_done_callback(self._background_tasks.discard)
+        self._background_tasks.add(task)
+
+        return task
 
     async def onSystemTimerTick(self):
         while True:
@@ -835,7 +851,7 @@ class PyMudApp:
 
                 else:
                     return
-                
+
             self.app.exit()
 
         asyncio.ensure_future(coroutine())
@@ -1219,9 +1235,10 @@ class PyMudApp:
             if isinstance(plugin, Plugin):
                 plugin.onAppDestroy(self)
 
+        await asyncio.wait(self._background_tasks, timeout = 5, return_when = asyncio.ALL_COMPLETED)
+
     def run(self):
         "运行本程序"
-        #self.app.run(set_exception_handler = False)
         asyncio.run(self.run_async())
 
     def get_width(self):
@@ -1255,9 +1272,8 @@ class PyMudApp:
                         file_name = file[:-3]
                         plugin = Plugin(file_name, file_path)
                         self._plugins[plugin.name] = plugin
-                        # plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
+                        self.set_status(Settings.gettext("msg_invalid_plugins", file, e))
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -1270,9 +1286,8 @@ class PyMudApp:
                         file_name = file[:-3]
                         plugin = Plugin(file_name, file_path)
                         self._plugins[plugin.name] = plugin
-                        plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
+                        self.set_status(Settings.gettext("msg_invalid_plugins", file, e))
 
     def reload_plugin(self, plugin: Plugin):
         "重新加载指定插件"
