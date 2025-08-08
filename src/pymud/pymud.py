@@ -680,23 +680,27 @@ class PyMudApp:
             #self.set_status(Settings.text["session_changed"].format(session.name))
             self.app.invalidate()
 
-    def close_session(self):
+    def close_session(self, name = None, prompt = True):
         "关闭当前会话。若当前会话处于连接状态，将弹出对话框以确认。"
-        async def coroutine():
-            if self.current_session:
-                if self.current_session.connected:
-                    dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt", self.current_session.name)}</style>'))
-                    result = await self.show_dialog_as_float(dlgQuery)
+        async def coroutine(session):
+            if session:
+                if session.connected:
+                    if prompt:
+                        dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt", session.name)}</style>'))
+                        result = await self.show_dialog_as_float(dlgQuery)
+                    else:
+                        result = True
+
                     if result:
-                        self.current_session.disconnect() 
+                        session.disconnect() 
 
                         # 增加延时等待确保会话关闭
                         wait_time = 0
-                        while self.current_session.connected:
+                        while session.connected:
                             await asyncio.sleep(0.1)
                             wait_time += 1
                             if wait_time > 100:
-                                self.current_session.onDisconnected(None)
+                                session.onDisconnected(None)
                                 break
                             
                     else:
@@ -704,12 +708,12 @@ class PyMudApp:
 
                 for plugin in self._plugins.values():
                     if isinstance(plugin, Plugin):
-                        plugin.onSessionDestroy(self.current_session)
+                        plugin.onSessionDestroy(session)
 
-                name = self.current_session.name
-                self.current_session.closeLoggers()
-                self.current_session.clean()
-                self.current_session = None
+                name = session.name
+                session.closeLoggers()
+                session.clean()
+                session = None
                 #self.consoleView.buffer = SessionBuffer()
                 self.consoleView.buffer = None
                 closesession = self.sessions.pop(name)
@@ -723,7 +727,16 @@ class PyMudApp:
                 import gc
                 gc.collect()
 
-        asyncio.ensure_future(coroutine()) # type: ignore
+        if name is None:
+            session = self.current_session
+        elif name in self.sessions.keys():
+            session = self.sessions[name]
+        else:
+            session = None
+            if self.current_session:
+                self.current_session.warning(Settings.gettext("session_not_exists", name))
+
+        asyncio.ensure_future(coroutine(session)) # type: ignore
 
     # 菜单选项操作 - 开始
 
@@ -764,10 +777,13 @@ class PyMudApp:
             #b.start_lineno = -1
             b.nosplit()
 
-    def act_close_session(self):
+    def act_close_session(self, name = None, prompt = True):
         "菜单: 关闭当前会话"
-        if self.current_session:
-            self.close_session()
+        if self.current_session and (name is None or self.current_session.name == name):
+            self.close_session(self.current_session.name, prompt)
+
+        elif name in self.sessions.keys():
+            self.close_session(name, prompt)
 
         elif self.showLog:
             self.showLog = False

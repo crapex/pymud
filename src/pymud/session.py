@@ -903,7 +903,10 @@ class Session:
         elif cl.code[0] == "#":
             ## handle # command codes
             cmd = cl.code[1]
-            if cmd.isnumeric():
+            if cmd == "session":
+                self.application.handle_session(*cl.code[2:])
+
+            elif cmd.isnumeric():
                 times = 0
                 try:
                     times = int(cmd)
@@ -967,7 +970,10 @@ class Session:
         elif cl.code[0] == "#":
             ## handle # command codes
             cmd = cl.code[1]
-            if cmd.isnumeric():
+            if cmd == "session":
+                self.application.handle_session(*cl.code[2:])
+
+            elif cmd.isnumeric():
                 times = 0
                 try:
                     times = int(cmd)
@@ -1955,9 +1961,23 @@ class Session:
             - #exit
             - #session
         '''
+        param = list(code.code)
 
+        if "-f" in param:
+            prompt = False
+            param.remove("-f")
+        elif "--force" in param:
+            prompt = False
+            param.remove("--force")
+        else:
+            prompt = True
+
+        if len(param) >= 3:
+            session_name = param[2]
+        else:
+            session_name = self.name
         #self.application.close_session()
-        self.application.act_close_session()
+        self.application.act_close_session(session_name, prompt)
 
     async def handle_wait(self, code: CodeLine, *args, **kwargs):
         '''

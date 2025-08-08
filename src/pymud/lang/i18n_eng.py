@@ -41,6 +41,7 @@ TRANSLATION = {
         "warning"           : "Warning",
         "warning_exit"      : "Application Exit Warning",
         "session_close_prompt" : "Session {0} is still connected, confirm to close?",
+        "session_not_exists" : "Session {0} does not exist!",
         "app_exit_prompt"   : "There are still {0} sessions {1} connected, confirm to close?",
 
         "msg_beautify"      : "Beautify display is now",

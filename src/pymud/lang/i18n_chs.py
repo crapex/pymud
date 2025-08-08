@@ -41,6 +41,7 @@ TRANSLATION = {
         "warning"           : "警告",
         "warning_exit"      : "程序退出警告",
         "session_close_prompt" : "当前会话 {0} 还处于连接状态，确认要关闭？",
+        "session_not_exists" : "会话 {0} 不存在！",
         "app_exit_prompt"   : "尚有 {0} 个会话 {1} 还处于连接状态，确认要关闭？",
 
         "msg_beautify"      : "显示美化已",
