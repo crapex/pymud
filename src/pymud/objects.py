@@ -3,7 +3,7 @@ MUD会话(session)中, 支持的对象列表
 """
 
 import asyncio, logging, re
-from typing import Union, List, Tuple
+from typing import Type, Union, List, Tuple
 from collections.abc import Iterable
 from collections import namedtuple
 from typing import Any
@@ -351,6 +351,11 @@ class BaseObject:
 
         self.session.addObject(self)
 
+        try:
+            super().__init__(session, *args, **kwargs)
+        except TypeError:
+            super().__init__()
+
     @property
     def enabled(self):
         "可读写属性，使能或取消使能本对象"
@@ -477,7 +482,7 @@ class MatchObject(BaseObject):
     """
 
     __abbr__ = "mob"
-    def __init__(self, session, patterns, *args, **kwargs):
+    def __init__(self, session, *args, **kwargs):
         self.ignoreCase    = kwargs.get("ignoreCase", False)          # 忽略大小写，非默认
         self.isRegExp      = kwargs.get("isRegExp", True)             # 正则表达式，默认
         self.expandVar     = kwargs.get("expandVar", True)            # 扩展变量（将变量用值替代），默认
@@ -488,9 +493,13 @@ class MatchObject(BaseObject):
         self.lines = []
         self.event = asyncio.Event()
 
-        self.patterns = patterns
+        # self.patterns = patterns
+        self.patterns      = kwargs.pop("patterns", "")
 
-        super().__init__(session, patterns = patterns, *args, **kwargs)
+        if "session" in kwargs:
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(session = session, *args, **kwargs)
 
     def __del__(self):
         pass
@@ -658,6 +667,11 @@ class Alias(MatchObject):
     
     __abbr__ = "ali"
 
+    def __init__(self, session, patterns, *args, **kwargs):
+        if not "patterns" in kwargs.keys():
+            kwargs["patterns"] = patterns
+        super().__init__(session, *args, **kwargs)
+
 class SimpleAlias(Alias):
     """
     简单别名 SimpleAlias 类型，继承自 Alias, 包含了 Alias 的全部功能， 并使用 CodeBlock 对象创建了 onSuccess 的使用场景。
@@ -693,7 +707,7 @@ class Trigger(MatchObject):
     __abbr__ = "tri"
 
     def __init__(self, session, patterns: Union[str, Union[Tuple[str], List[str]]], *args, **kwargs):
-        super().__init__(session, patterns, *args, **kwargs)
+        super().__init__(session, patterns = patterns, *args, **kwargs)
         self._task = None
 
     async def triggered(self):
@@ -747,23 +761,38 @@ class Command(MatchObject):
     :param patterns: 匹配模式
     """
     __abbr__ = "cmd"
-    def __init__(self, session, patterns, *args, **kwargs):
-        super().__init__(session, patterns, sync = False, *args, **kwargs)
+    def __init__(self, session = None, patterns = None, *args, **kwargs):
         self._tasks = set()
+        if session is None and 'session' in kwargs:
+            session = kwargs.pop("session")
 
+        if not "patterns" in kwargs.keys():
+            kwargs["patterns"] = patterns
+
+        kwargs["sync"] = False
+
+        super().__init__(session, *args, **kwargs)
+        
     def __unload__(self):
         """
         当从会话中移除任务时，会自动调用该函数。
         可以将命令管理的各子类对象在此处清除。
         该函数需要在子类中覆盖重写。
         """
-        pass
+        # 调用父类的__unload__方法，确保MRO链中的所有__unload__都被调用
+        try:
+            super().__unload__()
+        except (AttributeError, TypeError):
+            pass
 
     def unload(self):
         """
         与__unload__方法相同，子类仅需覆盖一种方法就可以
         """
-        pass
+        try:
+            super().unload()
+        except (AttributeError, TypeError):
+            pass
 
     def create_task(self, coro, *args, name = None):
         """
@@ -834,7 +863,7 @@ class SimpleCommand(Command):
     MAX_RETRY = 20
 
     def __init__(self, session, patterns: str, succ_tri, *args, **kwargs):
-        super().__init__(session, patterns, succ_tri, *args, **kwargs)
+        super().__init__(session, patterns, *args, **kwargs)
         self._succ_tris = list()
         self._fail_tris = list()
         self._retry_tris = list()

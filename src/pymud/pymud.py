@@ -1,5 +1,7 @@
+import platform
 import asyncio, functools, os, webbrowser, threading
 from datetime import datetime
+from prompt_toolkit.clipboard import InMemoryClipboard
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
@@ -16,7 +18,7 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Label, TextArea
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.cursor_shapes import CursorShape
-from prompt_toolkit.key_binding import KeyBindings, KeyPress, KeyPressEvent
+from prompt_toolkit.key_binding import KeyBindings, KeyPress, KeyPressEvent, merge_key_bindings
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.formatted_text import Template
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -106,8 +108,6 @@ class PyMudApp:
         self.keybindings.add(Keys.ControlZ, is_global = True)(self.hide_history)
         self.keybindings.add(Keys.ControlC, is_global = True)(self.copy_selection)      # Control-C 复制文本
         self.keybindings.add(Keys.ControlR, is_global = True)(self.copy_selection)      # Control-R 复制带有ANSI标记的文本（适用于整行复制）
-        self.keybindings.add(Keys.Right, is_global = True)(self.complete_autosuggest)   # 右箭头补完建议
-        self.keybindings.add(Keys.Backspace)(self.delete_selection)
         self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
         self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
         self.keybindings.add(Keys.ShiftLeft, is_global = True)(self.change_session)    # Shift-左右箭头切换当前会话
@@ -115,7 +115,7 @@ class PyMudApp:
         self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
         self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
 
-        used_keys = [Keys.PageUp, Keys.PageDown, Keys.ControlZ, Keys.ControlC, Keys.ControlR, Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.ControlLeft, Keys.ControlRight, Keys.Backspace, Keys.Delete, Keys.F1, Keys.F2]
+        used_keys = [Keys.PageUp, Keys.PageDown, Keys.ControlZ, Keys.ControlC, Keys.ControlR, Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.ControlLeft, Keys.ControlRight, Keys.Backspace, Keys.Tab, Keys.Delete, Keys.F1, Keys.F2]
 
         for key, binding in Settings.keys.items():
             if (key not in used_keys) and binding and isinstance(binding, str):
@@ -130,7 +130,7 @@ class PyMudApp:
             clipboard.set_text("test pyperclip")
             clipboard.set_text("")
         except:
-            clipboard = None
+            clipboard = InMemoryClipboard()
 
         if Settings.client["cursor"] and Settings.client["cursor"] in ["BLOCK", "BEAM", "UNDERLINE", "BLINKING_BLOCK", "BLINKING_BEAM", "BLINKING_UNDERLINE"]:
             cursor_shape = CursorShape(Settings.client["cursor"])
@@ -198,12 +198,87 @@ class PyMudApp:
         self.commandLine = TextArea(
             prompt=self.get_input_prompt, 
             multiline = False, 
-            accept_handler = self.enter_pressed, 
             height=D(min=1), 
             auto_suggest = AutoSuggestFromHistory(), 
             focus_on_click=True,
             name = "input",
             )
+
+        # 为 commandLine 添加独立的 key_bindings。不使用 accept_handler 处理回车时间，而是自定义按键事件处理
+
+        cmdKeybinding = KeyBindings()
+
+        @cmdKeybinding.add(Keys.Any)
+        @cmdKeybinding.add(Keys.Enter)
+        @cmdKeybinding.add(Keys.Left)
+        @cmdKeybinding.add(Keys.Right)
+        @cmdKeybinding.add(Keys.Tab)
+        @cmdKeybinding.add(Keys.Up)
+        @cmdKeybinding.add(Keys.Down)
+        @cmdKeybinding.add(Keys.Backspace)
+        def _(event: KeyPressEvent):
+            buffer = event.current_buffer
+            if buffer.name == "input":
+                key = event.key_sequence[-1].key
+                keydata = event.key_sequence[-1].data
+                if key == Keys.Enter:
+                    buffer.append_to_history()
+                    self.enter_pressed(buffer)
+                    return
+
+                elif key == Keys.Left:
+                    buffer.exit_selection()
+                    buffer.cursor_left()
+                    return
+
+                elif key == Keys.Right:
+                    buffer.exit_selection()
+                    if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
+                        s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
+                        if s:
+                            buffer.insert_text(s.text, fire_event = False)
+                    else:
+                        buffer.cursor_right()
+
+                    return
+                elif key == Keys.Tab:
+                    if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
+                        s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
+                        if s:
+                            buffer.insert_text(s.text, fire_event = False)
+
+                    return
+
+                elif key == Keys.Up:
+                    buffer.exit_selection()
+                    if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
+                        s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
+                        if s:
+                            buffer.insert_text(s.text, fire_event = False)
+
+                    buffer.history_backward()
+                    return
+
+                elif key == Keys.Down:
+                    buffer.exit_selection()
+                    buffer.history_forward()
+                    return
+
+                elif key == Keys.Backspace:
+                    if buffer.selection_state:
+                        buffer.cut_selection()
+                        buffer.exit_selection()
+                    else:
+                        buffer.delete_before_cursor(1)
+                    return
+
+                elif buffer.selection_state:
+                    buffer.cut_selection()
+                    buffer.exit_selection()
+
+                buffer.insert_text(keydata, fire_event = False)
+
+        self.commandLine.control.key_bindings = cmdKeybinding
 
         self.status_bar = VSplit(
             [
@@ -352,7 +427,7 @@ class PyMudApp:
 
                 MenuItem(
                     "",    # 增加一个空名称MenuItem，单机后焦点移动至命令行输入处，阻止右侧空白栏点击响应
-                    handler = lambda : self.app.layout.focus(self.commandLine)
+                    handler = lambda : self.app.layout.focus("input")
                 )
             ],
             floats=[
@@ -459,16 +534,6 @@ class PyMudApp:
         else:
             b.delete_before_cursor(1)
 
-    def complete_autosuggest(self, event: KeyPressEvent):
-        """快捷键右箭头→: 自动完成建议"""
-        b = event.current_buffer
-        if (b.cursor_position == len(b.text)) and b.auto_suggest:
-            s = b.auto_suggest.get_suggestion(b, b.document)
-            if s:
-                b.insert_text(s.text, fire_event=False)
-        else:
-            b.cursor_right()
-
     def change_session(self, event: KeyPressEvent):
         """快捷键Ctrl/Shift+左右箭头: 切换会话"""
         if self.current_session:
@@ -528,7 +593,7 @@ class PyMudApp:
                         line = self.consoleView.line_correction(b.getLine(b.selection.actual_start_row))
 
                     start = max(0, b.selection.actual_start_col)
-                    end = min(len(line) + 1, b.selection.actual_end_col)
+                    end = min(len(line)+1, b.selection.actual_end_col)
                     line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
@@ -891,6 +956,8 @@ class PyMudApp:
             else:
                 self.activate_session(name)
 
+        self.app.layout.focus("input")
+
     def get_frame_title(self):
         "顶部会话标题选项卡"
         if len(self.sessions.keys()) == 0:
@@ -1119,7 +1186,6 @@ class PyMudApp:
     def enter_pressed(self, buffer: Buffer):
         "命令行回车按键处理"
         cmd_line = buffer.text
-        space_index = cmd_line.find(" ")
 
         if (len(cmd_line) >= 1) and (cmd_line[0] != Settings.client["appcmdflag"]):
             if self.current_session:
@@ -1153,12 +1219,18 @@ class PyMudApp:
 
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:
+            # 调用 buffer.reset 才会将内容处理到history中
+            buffer.reset()
+
+            buffer.text = cmd_line
             buffer.cursor_position = 0
             buffer.start_selection()
             buffer.cursor_right(len(cmd_line))
+
             return True
-        
+
         else:
+            buffer.reset()
             return False
 
     @property

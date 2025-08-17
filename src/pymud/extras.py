@@ -1,6 +1,6 @@
 # External Libraries
 from unicodedata import east_asian_width
-from wcwidth import wcwidth
+from wcwidth import wcwidth, wcswidth
 from dataclasses import dataclass
 import time, re, linecache, os
 from typing import Optional, List, Dict
@@ -466,10 +466,10 @@ class EasternMenuContainer(MenuContainer):
                             )
                         else:
                             # 主要改动在这里，其他地方都未更改.
-                            adj_width = menu.width + 3 - (get_cwidth(item.text) - len(item.text))
+                            # adj_width = menu.width + 3 - (get_cwidth(item.text) - len(item.text))
                             yield (
                                 style,
-                                f" {item.text}".ljust(adj_width),
+                                DStr(f" {item.text}").ljust(menu.width + 3),
                                 mouse_handler,
                             )
 
@@ -1035,4 +1035,35 @@ class DotDict(dict):
         self.update(state)
 
 
-        
+# 构建一个DStr类型，替代str类型进行显示对齐操作。该类型在str的基础上，len方法返回其显示宽度，ljust/rjust/center均以显示宽度返回对齐的字符串。
+
+class DStr(str):
+    """增强的字符串类型，使用显示宽度进行对齐操作"""
+    
+    def __len__(self):
+        """返回字符串的显示宽度，而不是字符数量"""
+        return wcswidth(self.__str__())
+    
+    def ljust(self, width, fillchar=' '):
+        """左对齐字符串，使用显示宽度进行计算"""
+        display_len = len(self)  # 使用重写的len方法获取显示宽度
+        if display_len >= width:
+            return self
+        return self + fillchar * (width - display_len)
+    
+    def rjust(self, width, fillchar=' '):
+        """右对齐字符串，使用显示宽度进行计算"""
+        display_len = len(self)  # 使用重写的len方法获取显示宽度
+        if display_len >= width:
+            return self
+        return fillchar * (width - display_len) + self
+    
+    def center(self, width, fillchar=' '):
+        """居中对齐字符串，使用显示宽度进行计算"""
+        display_len = len(self)  # 使用重写的len方法获取显示宽度
+        if display_len >= width:
+            return self
+        spaces = width - display_len
+        left = spaces // 2
+        right = spaces - left
+        return fillchar * left + self + fillchar * right

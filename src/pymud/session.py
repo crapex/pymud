@@ -6,7 +6,7 @@ from prompt_toolkit.utils import get_cwidth
 from wcwidth import wcswidth
 from typing import Union, Optional, Any, List, Tuple, Dict, Type
 from .logger import Logger
-from .extras import DotDict, SessionBuffer
+from .extras import DotDict, SessionBuffer, DStr
 from .protocol import MudClientProtocol
 from .modules import ModuleInfo, Plugin
 from .objects import BaseObject, Trigger, Alias, Command, Timer, SimpleAlias, SimpleTrigger, SimpleTimer, GMCPTrigger, CodeBlock, CodeLine
@@ -2105,12 +2105,14 @@ class Session:
 
         var_keys = sorted(vars_simple.keys())
         for key in var_keys:
-            if len(key) < KEY_WIDTH:
-                name = key.rjust(KEY_WIDTH)
+            dkey = DStr(key.__repr__())
+            if len(dkey) < KEY_WIDTH:
+                name = dkey.rjust(KEY_WIDTH)
             else:
-                name = key.rjust(KEY_WIDTH + VAR_WIDTH)
+                # 当key的显示宽度大于等于KEY_WIDTH时，使用更大的宽度
+                name = dkey.rjust(KEY_WIDTH + VAR_WIDTH)
 
-            value_dis = vars_simple[key].__repr__()
+            value_dis = DStr(vars_simple[key].__repr__())
             var_display = "{0} = {1}".format(name, value_dis)
             
             if (cursor + wcswidth(var_display) > totalWidth) or (var_count >= vars_per_line):
@@ -2140,7 +2142,7 @@ class Session:
 
         var_keys = sorted(vars_complex.keys())
         for key in var_keys:
-            name = key.rjust(KEY_WIDTH)
+            name = DStr(key.__repr__()).rjust(KEY_WIDTH)
             value_dis = vars_complex[key].__repr__()
             allow_len = totalWidth - left_margin - KEY_WIDTH - 3 - right_margin
             line = "{0}{1} = ".format(" " * left_margin, name.rjust(KEY_WIDTH))
@@ -2156,7 +2158,7 @@ class Session:
                         allow_len_subvalue = allow_len - max_len - 4
                         if wcswidth(subvalue_dis) > allow_len_subvalue:
                             subvalue_lines = self.splitByPrintableWidth(subvalue_dis, allow_len_subvalue)
-                            line += "{0}: ".format(k.ljust(max_len))
+                            line += "{0}: ".format(DStr(k).ljust(max_len))
                             for subline in subvalue_lines:
                                 line += subline
                                 display_lines.append(line)
@@ -2164,7 +2166,7 @@ class Session:
 
                             line = " " * (left_margin + KEY_WIDTH + 4)
                         else:
-                            val_line = "{0}: {1}".format(k.ljust(max_len), subvalue_dis)
+                            val_line = "{0}: {1}".format(DStr(k).ljust(max_len), subvalue_dis)
                             line += val_line
                             display_lines.append(line)
                             line = " " * (left_margin + KEY_WIDTH + 4)
@@ -2887,28 +2889,25 @@ class Session:
             mod = module_names.strip()
             self._load_module(mod)
 
+    @exception
     def _load_module(self, module_name):
         "加载指定名称模块"
-        try:
-            if module_name in self.application.plugins.keys():
-                plugin = self.application.plugins[module_name]
-                if isinstance(plugin, Plugin):
-                    plugin.onSessionCreate(self)
-                    self.info(Settings.gettext("msg_plugin_loaded", module_name))
 
-            elif module_name not in self._modules.keys():
-                self._modules[module_name] = ModuleInfo(module_name, self)
+        if module_name in self.application.plugins.keys():
+            plugin = self.application.plugins[module_name]
+            if isinstance(plugin, Plugin):
+                plugin.onSessionCreate(self)
+                self.info(Settings.gettext("msg_plugin_loaded", module_name))
 
-            else:
-                mod = self._modules[module_name]
-                if isinstance(mod, ModuleInfo):
-                    mod.reload()
+        elif module_name not in self._modules.keys():
+            self._modules[module_name] = ModuleInfo(module_name, self)
 
-        except Exception as e:
-            import traceback
-            self.error(Settings.gettext("msg_module_load_fail", module_name, e, type(e)))
-            self.error(Settings.gettext("msg_exception_traceback", traceback.format_exc()))
+        else:
+            mod = self._modules[module_name]
+            if isinstance(mod, ModuleInfo):
+                mod.reload()
 
+    @exception
     def unload_module(self, module_names):
         """
         模块卸载函数。卸载模块时，将自动调用模块中名称为Configuration类对象的unload方法。
@@ -2943,6 +2942,7 @@ class Session:
         else:
             self.warning(Settings.gettext("msg_module_not_loaded", module_name))
 
+    @exception
     def reload_module(self, module_names = None):
         """
         模块重新加载函数。

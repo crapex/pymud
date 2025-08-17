@@ -61,9 +61,13 @@ class ModuleInfo:
     def _unload(self):
         from .objects import BaseObject, Command
         for key, config in self._config.items():
-            if isinstance(config, Command):
+            # 如果本身就是 IConfig， 那么不能形成递归调用，不再判断是否为Command
+            if isinstance(config, IConfigBase):
+                config.__unload__()
+                
+            elif isinstance(config, Command):
                 # Command 对象在从会话中移除时，自动调用其 unload 系列方法，因此不能产生递归
-                self.session.delObject(config)
+                self.session.delCommand(config.id)
             
             else:
 
@@ -126,9 +130,13 @@ class IConfigBase(metaclass = PymudMeta):
     该类型相当于原来的IConfig类，唯一区别时，模块加载时，不会对本类型创建实例对象。
     主要用于对插件中定义的Command提供装饰器写法支持，因为这些Command是在会话构建时创建，因此不能在模块加载时自动创建，也就不能继承自IConfig。
     """
-    def __init__(self, session, *args, **kwargs):
+    def __init__(self, session = None, *args, **kwargs):
         from .session import Session
         from .objects import Alias, Trigger, Timer, GMCPTrigger
+
+        if session is None and "session" in kwargs:
+            session = kwargs.pop("session")
+
         if isinstance(session, Session):
             self.session = session
         self.__inline_objects__ = DotDict()
@@ -157,12 +165,31 @@ class IConfigBase(metaclass = PymudMeta):
                             gmcp = GMCPTrigger(self.session, name = deco.kwargs.get("id"), *deco.args, **deco.kwargs, onSuccess = func)
                             self.__inline_objects__[gmcp.id] = gmcp
 
+        try:
+            super().__init__(session, *args, **kwargs)
+        except TypeError:
+            super().__init__()
+
     def __unload__(self):
-        from .objects import BaseObject
+        from .objects import BaseObject, Command
         if self.session:
-            self.session.delObjects(self.__inline_objects__)
-            if isinstance(self, BaseObject):
-                self.session.delObject(self)
+            try:
+                self.session.delObjects(self.__inline_objects__)
+                if isinstance(self, Command):
+                    # 如果本身既是Command又是IConfig，不能多次调用自身的__unload__
+                    self.session.delCommand(self.id)
+                elif isinstance(self, BaseObject):
+                    self.session.delObject(self)
+                    
+            except Exception as e:
+                print_exception(self.session, e)
+
+        # 调用父类的__unload__方法，确保MRO链中的所有__unload__都被调用
+        try:
+            super().__unload__()
+        except (AttributeError, TypeError):
+            # 如果父类没有__unload__方法或调用出错，忽略错误
+            pass
 
     @property
     def objs(self) -> DotDict:
@@ -182,6 +209,9 @@ class IConfig(IConfigBase):
     在应用自动创建 IConfig 实例时，除 session 参数外，还会传递一个 reload 参数 （bool类型），表示是首次加载还是重新加载特性。
     可以从kwargs 中获取该参数，并针对性的设计相应代码。例如，重新加载相关联的其他模块等。
     """
+    def __init__(self, session, patterns = None, *args, **kwargs):
+        kwargs["patterns"] = patterns
+        super().__init__(session, *args, **kwargs)
         
 class Plugin:
     """
