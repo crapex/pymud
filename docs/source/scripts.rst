@@ -88,20 +88,24 @@
             # 一个主模块配置类型
             class MyConfig(IConfig):
                 def __init__(self, session: Session, *args, **kwargs):
-                    self.session = session
+                    super().__init__(session, *args, **kwargs)
                     reload = kwargs.get('reload', False)
 
                 def __unload__(self):
-                    pass
+                    super().__unload__()
 
-            # 另一个主模块配置类型，该类型既是一个自定义触发器，也是一个配置类型
-            # 该配置在模块加载时也会自动创建，因此会话中会自动添加该触发器对象
-            class MyCustomTrigger(Trigger, IConfig):
+            # 另一个主模块配置类型，该类型既是一个自定义命令，也是一个配置类型
+            # 该配置在模块加载时也会自动创建，因此会话中会自动添加该命令对象
+            class MyCommand(Command, IConfig):
                 def __init__(self, session: Session, *args, **kwargs):
                     id = kwargs.get('id', 'my_default_triid')
-                    super(Trigger, self).__init__(session, r'^[> ]*你嘻嘻地笑了起', onSuccess = self.ontri, id = id)
 
-                def ontri(self, id, name, wildcards):
+                    super().__init__(session, "myinput", *args, **kwargs)
+
+                def __unload__(self):
+                    super().__unload__()
+
+                async def execute(self, cmd, *args, **kwargs):
                     self.session.exec("smile")
     
     PyMUD插件:
@@ -136,16 +140,17 @@
 
             class MyConfig(IConfig):
                 def __init__(self, session: Session, *args, **kwargs):
-                    self.session = session
+                    super().__init__(session, *args, **kwargs)
 
-                self.objs = [
-                    SimpleAlias(session, r'^gta$', 'get all;xixi'),
-                    SimpleTimer(session, 'xixi', timeout = 10),
-                    TestTrigger(session)
-                ]
-                
-            def __unload__(self):
-                self.session.delObjects(self.objs)
+                    self.objs = [
+                        SimpleAlias(session, r'^gta$', 'get all;xixi'),
+                        SimpleTimer(session, 'xixi', timeout = 10),
+                        TestTrigger(session)
+                    ]
+                    
+                def __unload__(self):
+                    self.session.delObjects(self.objs)
+                    super().__unload__()
 
         以下是测试步骤：
             模块的加载与卸载:
@@ -213,9 +218,12 @@
         
         class MyConfig(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
-                self.session = session
+                super().__init__(session, *args, **kwargs)
                 self._opVariables()
                 
+            def __unload__(self):
+                super().__unload__()
+
             def _opVariables(self):
                 # 系统变量 %line 的使用，直接在 SimpleTrigger 中使用
                 tri = SimpleTrigger(self.session, r".+告诉你:.+", "#message %line")
@@ -345,15 +353,17 @@
         # 主脚本函数，调用hook来向远程服务器发送信息
 
         import webbrowser
-        from pymud import Session, Trigger, IConfig
+        from pymud import Session, IConfig, trigger
 
         class MyConfig(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
-                self.session = session
-                tri_webpage = Trigger(self.session, id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', group = "sys", onSuccess = self.ontri_webpage)
-                self.session.addTrigger(tri_webpage)
+                super().__init__(session, *args, **kwargs)
+                
+            def __unload__(self):
+                super().__unload__()
 
-            def ontri_webpage(self, name, line, wildcards):
+            @trigger(id = 'tri_webpage', patterns = r'^http://fullme.pkuxkx.net/robot.php.+$', group = "sys")
+            def ontri_webpage(self, id, line, wildcards):
                 # 使用 session.getGlobal 来获取全局变量 hooked 的值。当不存在该变量时，返回给定默认值False
                 hooked = self.session.getGlobal("hooked", False)
                 if not hooked:
@@ -669,7 +679,7 @@
 
         class TriggerTest(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
-                self.session = session
+                super().__init__(session, *args, **kwargs)
                 
                 self._trisList = [
                     # 简单触发器使用示例: 
@@ -739,11 +749,12 @@
 
         class AsyncTriggerTest(IConfig):
             def __init__(self, session, *args, **kwargs):
-                self.session = session
+                super().__init__(session, *args, **kwargs)
                 self._mytri = Trigger(self.session, r"^[> ]*你运功完毕，深深吸了口气，站了起来。", id = "tri_dazuo")
 
             def __unload__(self):
                 self.session.delObject(self._mytri)
+                super().__unload__()
 
             async def dazuo_always(self):
                 # 本函数仅用来说明异步触发器的使用示例，若不通过Command进行实现的话，该函数在实际过程中无法被调用触发
@@ -811,8 +822,8 @@
         from pymud import IConfig, GMCPTrigger, Session, gmcp
 
         class GMCPTest(IConfig):
-            def __init__(self, session):
-                self.session = session
+            def __init__(self, session, *args, **kwargs):
+                super().__init__(session, *args, **kwargs)
                 self._gmcp_status = GMCPTrigger(self.session, "GMCP.Status", group = "sys", onSuccess = self.ongmcp_status)
 
             def __unload__(self):
@@ -1412,6 +1423,9 @@
             def __init__(self, session, *args, **kwargs):
                 super().__init__(session, *args, **kwargs)
                 self.session.status_maker = self.status_window
+
+            def __unload__(self):
+                super().__unload__()
 
             # 创建自定义的健康条用作分隔符
             def create_status_bar(self, current, effective, maximum, barlength = 20, barstyle = "—"):

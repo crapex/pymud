@@ -2,7 +2,7 @@
 MUD会话(session)中, 支持的对象列表
 """
 
-import asyncio, logging, re
+import asyncio, logging, re, json
 from typing import Type, Union, List, Tuple
 from collections.abc import Iterable
 from collections import namedtuple
@@ -446,8 +446,7 @@ class GMCPTrigger(BaseObject):
 
     def __call__(self, value) -> Any:
         try:
-            #import json
-            value_exp = eval(value)
+            value_exp = json.loads(value)
         except:
             value_exp = value
 

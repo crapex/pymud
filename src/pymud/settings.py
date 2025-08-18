@@ -79,6 +79,8 @@ class Settings:
         "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         "status_width"      : 30,                   # 右侧状态栏的宽度
         "status_height"     : 6,                    # 下侧状态栏的高度
+
+        "split_ratio"       : 0.5,                  # 分屏比例
     }
     "客户端的默认配置信息"
 

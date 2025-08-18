@@ -58,6 +58,7 @@
     ``` Python
         class MyTestConfig(IConfig):
             def __init__(self, session, *args, **kwargs):
+                super().__init__(session, *args, **kwargs)
                 self._objs = [
                     Trigger(session, "tri1", group = "group1"),
                     Trigger(session, "tri2", group = "group1.subgroup1"),

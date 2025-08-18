@@ -209,10 +209,14 @@ class VSplitWindow(Window):
         def copy() -> int:
             y = -vertical_scroll_2        
             lineno = vertical_scroll
-            
             total = write_position.height
-            upper = (total - 1) // 2
-            below = total - upper - 1
+            
+            # 防止没有 ratio 参数，或者被配置为不合适的值
+            ratio = Settings.client.get("split_ratio", 0.5)
+            if ratio < 0.15 or ratio > 0.85:
+                ratio = 0.5
+
+            upper = int(total * ratio) - 1
             
             if isinstance(self.content, PyMudBufferControl):
                 b = self.content.buffer
@@ -257,12 +261,12 @@ class VSplitWindow(Window):
                     y = total
                     lineno = line_count
 
-                    while y > below and lineno >= 0:
+                    while y > upper and lineno >= 0:
                         lineno -= 1
                         # Take the next line and copy it in the real screen.
                         display_lines = ui_content.get_height_for_line(lineno, width, None)
                         y -= display_lines
-                        if y <= below:
+                        if y <= upper:
                             break
                         line = ui_content.get_line(lineno)
                         visible_line_to_row_col[y] = (lineno, horizontal_scroll)
@@ -762,27 +766,32 @@ class PyMudBufferControl(UIControl):
                     new_str.append(ch)
                     new_str.append("━")
                 else:
-                    right = str.rstrip(line[idx+1:])
-                    right_len = fragment_list_width(to_formatted_text(ANSI(right)))
-                    if (idx == len(line) - 1) or (right_len == 0):
-                        if ch in self.SINGLE_LINES_LEFT:
-                            new_str.append("─")
-                            new_str.append(ch)
-                        elif ch in self.DOUBLE_LINES_LEFT:
-                            new_str.append("═")
-                            new_str.append(ch)
-                        elif ch in self.THICK_LINES_LEFT:
-                            new_str.append("━")
-                            new_str.append(ch)
-                        elif ch in self.TABLE_LINES:
-                            new_str.append(" ")
-                            new_str.append(ch)
-                        else:
-                            new_str.append(ch)
-                            new_str.append(' ')
-                    else:
-                        new_str.append(ch)
-                        new_str.append(' ')
+                    new_str.append(ch)
+                    new_str.append(" ")
+
+                # 恢复为统一右侧添加补充显示字符，以下为往左添加字符的代码，暂保留注释
+                # else:
+                #     right = str.rstrip(line[idx+1:])
+                #     right_len = fragment_list_width(to_formatted_text(ANSI(right)))
+                #     if (idx == len(line) - 1) or (right_len == 0):
+                #         if ch in self.SINGLE_LINES_LEFT:
+                #             new_str.append("─")
+                #             new_str.append(ch)
+                #         elif ch in self.DOUBLE_LINES_LEFT:
+                #             new_str.append("═")
+                #             new_str.append(ch)
+                #         elif ch in self.THICK_LINES_LEFT:
+                #             new_str.append("━")
+                #             new_str.append(ch)
+                #         elif ch in self.TABLE_LINES:
+                #             new_str.append(" ")
+                #             new_str.append(ch)
+                #         else:
+                #             new_str.append(ch)
+                #             new_str.append(' ')
+                #     else:
+                #         new_str.append(ch)
+                #         new_str.append(' ')
             else:
                 new_str.append(ch)
 

@@ -328,10 +328,15 @@ class Session:
         示例:
             .. code:: python
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)
+
                         self.session.status_maker = self.mystatus
+
+                    def __unload__(self):
+                        super().__unload__()
 
                     def mystatus(self):
                         '可返回AnyFormattedText类型的对象。具体参见 prompt_toolkit 。'
@@ -352,10 +357,15 @@ class Session:
         示例:
             .. code:: Python
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)
+
                         self.session.event_connected = self.onSessionConnected
+
+                    def __unload__(self):
+                        super().__unload__()
 
                     def onSessionConnected(self, session):
                         session.info("Connected!")
@@ -597,7 +607,7 @@ class Session:
         由协议对象调用，处理收到远程 GMCP 数据。 **脚本中无需调用。**
 
         :param name: 收到的GMCP数据的 name
-        :param value: 收到的GMCP数据的 value。 该数据值类型为 字符串形式执行过eval后的结果
+        :param value: 收到的GMCP数据的 value。 该数据值类型为 字符串形式使用json读取后的结果
 
         **注** 当未通过GMCPTrigger对某个name的GMCP数据进行处理时，会通过session.info将该GMCP数据打印出来以供调试。
         当已有GMCPTrigger处理该name的GMCP数据时，则不会再打印此信息。
@@ -707,11 +717,16 @@ class Session:
 
         示例:
             .. code:: Python
+                
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)    
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
                         self.session.create_task(self.async_example())
+
+                    def __unload__(self):
+                        super().__unload__()
 
                     async def async_example(self):
                         await asyncio.sleep(1)
@@ -1312,19 +1327,9 @@ class Session:
     def addObject(self, obj: BaseObject):
         """
         向会话中增加单个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类
+        目前，已无需在脚本中调用该函数，对象创建时，将自动添加到会话。
 
         :param obj: 特定对象本身，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
-
-        示例:
-            .. code:: Python
-
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
-                    
-                        self.session.addObject(SimpleAlias(session, r'^gta$', 'get all'),)
-                        self.session.addObject(SimpleTrigger(session, r'^[> ]*你嘻嘻地笑了起来.+', 'haha'))
-                        self.session.addObject(SimpleTimer(session, 'xixi', timeout = 10))
 
         """
         self._addObject(obj)
@@ -1332,23 +1337,9 @@ class Session:
     def addObjects(self, objs: Union[Union[List[BaseObject], Tuple[BaseObject]], Dict[str, BaseObject]]):
         """
         向会话中增加多个对象，可直接添加 Alias, Trigger, GMCPTrigger, Command, Timer 或它们的子类的元组、列表或者字典(保持兼容性)
+        目前，已无需在脚本中调用该函数，对象创建时，将自动添加到会话。
 
         :param objs: 多个特定对象组成的元组、列表或者字典，可以为 Alias, Trigger, GMCPTrigger, Command, Timer 或其子类
-
-        示例:
-            .. code:: Python
-
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
-                    
-                        self.objs = [
-                            SimpleAlias(session, r'^gta$', 'get all;xixi'),
-                            SimpleTrigger(session, r'^[> ]*你嘻嘻地笑了起来.+', 'haha'),
-                            SimpleTimer(session, 'xixi', timeout = 10)
-                        ]
-
-                        self.session.addObjects(self.objs)
 
         """
         self._addObjects(objs)
@@ -1389,20 +1380,20 @@ class Session:
         示例:
             .. code:: Python
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)
+                        self.ali = SimpleAlias(session, r'^gta$', 'get all', id = 'my_ali1')
 
-                        ali = SimpleAlias(session, r'^gta$', 'get all', id = 'my_ali1')
-                        
-                        # 以下几种方式均可将该别名添加到会话
-                        session.addObject(ali)
-                        session.addAlias(ali)
-
+                    def __unload__(self):
                         # 以下三种方式均可以删除该别名
-                        session.delObject(ali)
-                        session.delAlias(ali)
+                        session.delObject(self.ali)
+                        session.delAlias(self.ali)
                         session.delAlias("my_ali1")
+
+                        # 还需调用父类unload函数，确保装饰器对象可正常卸载
+                        super().__unload__()
 
         """
         if isinstance(obj, Alias):
@@ -1435,8 +1426,10 @@ class Session:
 
         .. code:: Python
 
-            class Configuration:
-                def __init__(self, session):
+            from pymud import IConfig
+            class MyConfig(IConfig):
+                def __init__(self, session, *args, **kwargs):
+                    super().__init__(session, *args, **kwargs)
                     self.session = session
                 
                     self.objs = [
@@ -1445,11 +1438,12 @@ class Session:
                         SimpleTimer(session, 'xixi', timeout = 10)
                     ]
 
-                    self.session.addObjects(self.objs)
 
                 def __unload__(self):
                     "卸载本模块时，删除所有本模块添加的对象"
                     self.session.delObjects(self.objs)
+                    # 需调用父类卸载，以确保装饰器对象被正常卸载
+                    super().__unload__()
 
         """
         if isinstance(objs, list) or isinstance(objs, tuple):
@@ -1465,30 +1459,16 @@ class Session:
 
     def addAliases(self, alis):
         """
-        向会话中增加多个别名
+        向会话中增加多个别名。该函数当前已无需在脚本中使用。
 
         :param alis: 多个别名的字典。字典 key 应为每个别名的 id。
 
-        示例:
-            .. code:: Python
-
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
-                        self._aliases = dict()
-
-                        self._initAliases()
-
-                    def _initAliases(self):
-                        self._aliases['my_ali1'] = SimpleAlias(self.session, "n", "north", id = "my_ali1")
-                        self._aliases['my_ali2'] = SimpleAlias(self.session, "s", "south", id = "my_ali2")
-                        self.session.addAliases(self._aliases)
         """
         self._addObjects(alis)
 
     def addCommands(self, cmds):
         """
-        向会话中增加多个命令。使用方法与 addAliases 类似。
+        向会话中增加多个命令。使用方法与 addAliases 类似。该函数当前已无需在脚本中使用。
 
         :param cmds: 多个命令的字典。字典 key 应为每个命令的 id。
         """
@@ -1496,7 +1476,7 @@ class Session:
 
     def addTriggers(self, tris):
         """
-        向会话中增加多个触发器。使用方法与 addAliases 类似。
+        向会话中增加多个触发器。使用方法与 addAliases 类似。该函数当前已无需在脚本中使用。
 
         :param tris: 多个触发器的字典。字典 key 应为每个触发器的 id。
         """
@@ -1504,7 +1484,7 @@ class Session:
 
     def addGMCPs(self, gmcps):
         """
-        向会话中增加多个GMCPTrigger。使用方法与 addAliases 类似。
+        向会话中增加多个GMCPTrigger。使用方法与 addAliases 类似。该函数当前已无需在脚本中使用。
 
         :param gmcps: 多个GMCPTrigger的字典。字典 key 应为每个GMCPTrigger的 id。
         """
@@ -1512,7 +1492,7 @@ class Session:
 
     def addTimers(self, tis):
         """
-        向会话中增加多个定时器。使用方法与 addAliases 类似。
+        向会话中增加多个定时器。使用方法与 addAliases 类似。该函数当前已无需在脚本中使用。
 
         :param tis: 多个定时器的字典。字典 key 应为每个定时器的 id。
         """
@@ -1520,7 +1500,7 @@ class Session:
 
     def addAlias(self, ali):
         """
-        向会话中增加一个别名。
+        向会话中增加一个别名。该函数当前已无需在脚本中使用。
 
         :param ali: 要增加的别名对象，应为 Alias 类型或其子类
         """
@@ -1528,7 +1508,7 @@ class Session:
 
     def addCommand(self, cmd):
         """
-        向会话中增加一个命令。
+        向会话中增加一个命令。该函数当前已无需在脚本中使用。
 
         :param cmd: 要增加的命令对象，应为 Command 类型或其子类
         """
@@ -1536,7 +1516,7 @@ class Session:
 
     def addTrigger(self, tri: Trigger):
         """
-        向会话中增加一个触发器。
+        向会话中增加一个触发器。该函数当前已无需在脚本中使用。
 
         :param tri: 要增加的触发器对象，应为 Trigger 类型或其子类
         """
@@ -1544,7 +1524,7 @@ class Session:
 
     def addTimer(self, ti: Timer):
         """
-        向会话中增加一个定时器。
+        向会话中增加一个定时器。该函数当前已无需在脚本中使用。
 
         :param ti: 要增加的定时器对象，应为 Timer 类型或其子类
         """
@@ -1552,7 +1532,7 @@ class Session:
 
     def addGMCP(self, gmcp: GMCPTrigger):
         """
-        向会话中增加一个GMCP触发器。
+        向会话中增加一个GMCP触发器。该函数当前已无需在脚本中使用。
 
         :param gmcp: 要增加的GMCP触发器对象，应为 GMCPTrigger 类型或其子类
         """
@@ -1568,16 +1548,19 @@ class Session:
         示例:
             .. code:: Python
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)
 
-                        ali = Alias(session, "s", "south", id = "my_ali1")
-                        session.addAlias(ali)
+                        self.ali = Alias(session, "s", "south", id = "my_ali1")
 
+                    def __unload__(self):
                         # 以下两行语句均可以删除该别名
                         session.delAlias("my_ali1")
                         session.delAlias(ali)
+                        # 调用父类卸载以确保装饰器对象可正常卸载
+                        super().__unload__()
         """
         if isinstance(ali, Alias):
             self._delObject(ali.id, Alias)
@@ -1593,19 +1576,23 @@ class Session:
         示例:
             .. code:: Python
 
-                class Configuration:
-                    def __init__(self, session):
-                        self.session = session
+                from pymud import IConfig
+                class MyConfig(IConfig):
+                    def __init__(self, session, *args, **kwargs):
+                        super().__init__(session, *args, **kwargs)
                         self._aliases = dict()
 
                         self._aliases["my_ali1"] = Alias(session, "s", "south", id = "my_ali1")
                         self._aliases["my_ali2"] = Alias(session, "n", "north", id = "my_ali2")
-                        
-                        session.addAliases(self._aliase)
 
+                    def __unload__(self):
                         # 以下两行语句均可以删除两个别名
                         session.delAliases(self._aliases)
                         session.delAliases(self._aliases.keys())
+
+                        # 调用父类卸载以确保装饰器对象正常卸载
+                        super().__unload__()
+
         """
         for ali in ali_es:
             self.delAlias(ali)

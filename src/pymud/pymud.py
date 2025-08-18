@@ -1,5 +1,6 @@
 import platform
 import asyncio, functools, os, webbrowser, threading
+from functools import partial
 from datetime import datetime
 from prompt_toolkit.clipboard import InMemoryClipboard
 from prompt_toolkit.shortcuts import set_title
@@ -106,12 +107,18 @@ class PyMudApp:
         self.keybindings.add(Keys.PageUp, is_global = True)(self.page_up)
         self.keybindings.add(Keys.PageDown, is_global = True)(self.page_down)
         self.keybindings.add(Keys.ControlZ, is_global = True)(self.hide_history)
-        self.keybindings.add(Keys.ControlC, is_global = True)(self.copy_selection)      # Control-C 复制文本
-        self.keybindings.add(Keys.ControlR, is_global = True)(self.copy_selection)      # Control-R 复制带有ANSI标记的文本（适用于整行复制）
-        self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
-        self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
-        self.keybindings.add(Keys.ShiftLeft, is_global = True)(self.change_session)    # Shift-左右箭头切换当前会话
-        self.keybindings.add(Keys.ShiftRight, is_global = True)(self.change_session)   # 适配 MacOS系统
+        self.keybindings.add(Keys.ControlC, is_global = True)(partial(self.copy_selection, raw = False))      # Control-C 复制文本
+        self.keybindings.add(Keys.ControlR, is_global = True)(partial(self.copy_selection, raw = True))      # Control-R 复制带有ANSI标记的文本（适用于整行复制）
+        self.keybindings.add(Keys.ControlLeft, is_global = True)(partial(self.change_session, right = False))   # Control-左右箭头切换当前会话
+        self.keybindings.add(Keys.ControlRight, is_global = True)(partial(self.change_session, right = True))
+        self.keybindings.add(Keys.ShiftLeft, is_global = True)(partial(self.change_session, right = False))    # Shift-左右箭头切换当前会话
+        self.keybindings.add(Keys.ShiftRight, is_global = True)(partial(self.change_session, right = True))   # 适配 MacOS系统
+        self.keybindings.add(Keys.Escape, Keys.Left, is_global = True)(partial(self.change_session, right = False))
+        self.keybindings.add(Keys.Escape, Keys.Right, is_global = True)(partial(self.change_session, right = True))
+        self.keybindings.add(Keys.Escape, "+", is_global = True)(partial(self.split_screen, increase = True))
+        self.keybindings.add(Keys.Escape, "-", is_global = True)(partial(self.split_screen, increase = False))
+        self.keybindings.add(Keys.ShiftUp, is_global = True)(partial(self.split_screen, increase = False))
+        self.keybindings.add(Keys.ShiftDown, is_global = True)(partial(self.split_screen, increase = True))
         self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
         self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
 
@@ -424,11 +431,12 @@ class PyMudApp:
                         MenuItem(Settings.gettext("about"), handler = self.act_about)
                     ]
                 ),
-
-                MenuItem(
-                    "",    # 增加一个空名称MenuItem，单机后焦点移动至命令行输入处，阻止右侧空白栏点击响应
-                    handler = lambda : self.app.layout.focus("input")
-                )
+                # 有时候光标会停留在此处，导致点击其他地方时无法聚焦到input栏
+                # 没有这个空白菜单时，点击右侧空白处，也会导致帮助菜单响应。要权衡。
+                # MenuItem(
+                #     "",    # 增加一个空名称MenuItem，单机后焦点移动至命令行输入处，阻止右侧空白栏点击响应
+                #     handler = lambda : self.app.layout.focus("input")
+                # )
             ],
             floats=[
                 Float(
@@ -519,11 +527,20 @@ class PyMudApp:
         """快捷键Ctrl+Z: 关闭历史行显示"""
         self.act_nosplit()
 
-    def copy_selection(self, event: KeyPressEvent)-> None:
+    def split_screen(self, event: KeyPressEvent, increase: bool = True):
+        """快捷键Alt +/-: 分屏"""
+        if increase:
+            Settings.client["split_ratio"] = min(0.85, Settings.client.get("split_ratio", 0.5) + 0.05)
+        else:
+            Settings.client["split_ratio"] = max(0.15, Settings.client.get("split_ratio", 0.5) - 0.05)
+
+        self.invalidate()
+
+    def copy_selection(self, event: KeyPressEvent, raw: bool = False)-> None:
         """快捷键Ctrl+C/Ctrl+R: 复制选择内容。根据按键不同选择文本复制方式和RAW复制方式"""
-        if event.key_sequence[-1].key == Keys.ControlC:
-            self.copy()
-        elif event.key_sequence[-1].key == Keys.ControlR:
+        if not raw:
+            self.copy(raw = False)
+        else:
             self.copy(raw = True)
 
     def delete_selection(self, event: KeyPressEvent):
@@ -534,7 +551,7 @@ class PyMudApp:
         else:
             b.delete_before_cursor(1)
 
-    def change_session(self, event: KeyPressEvent):
+    def change_session(self, event: KeyPressEvent, right: bool = True):
         """快捷键Ctrl/Shift+左右箭头: 切换会话"""
         if self.current_session:
             current = self.current_session.name
@@ -542,7 +559,7 @@ class PyMudApp:
             idx = keys.index(current)
             count = len(keys)
 
-            if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
+            if right:
                 if idx < count - 1:
                     new_key = keys[idx+1]
                     self.activate_session(new_key)
@@ -550,14 +567,14 @@ class PyMudApp:
                 elif (idx == count -1) and self.showLog:
                     self.showLogInTab()
 
-            elif (event.key_sequence[-1].key == Keys.ControlLeft) or (event.key_sequence[-1].key == Keys.ShiftLeft):
+            else:
                 if idx > 0:
                     new_key = keys[idx-1]
                     self.activate_session(new_key)
 
         else:
             if self.showLog:
-                if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
+                if right:
                     keys = list(self.sessions.keys())
                     if len(keys) > 0:
                         new_key = keys[-1]
