@@ -2,7 +2,7 @@
 MUD会话(session)中, 支持的对象列表
 """
 
-import asyncio, logging, re, json
+import asyncio, logging, re, ast, json, codecs
 from typing import Type, Union, List, Tuple
 from collections.abc import Iterable
 from collections import namedtuple
@@ -65,7 +65,7 @@ class CodeLine:
             
             if arg:
                 code_params.append(arg)
-                if arg[0] in ("@", "%"):
+                if arg[0] in ("%", Settings.client["var_eval"]):
                     hasvar = True
 
             syncmode = "dontcare"
@@ -137,8 +137,8 @@ class CodeLine:
                 new_code.append(item_val)
                 new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
-            # 非系统变量，@开头，在变量明前加@引用
-            elif item[0] == "@":
+            # 非系统变量，默认为@开头，在变量明前加@引用
+            elif item[0] == Settings.client["var_eval"]:
                 item_val = session.getVariable(item[1:], "")
                 new_code.append(item_val)
                 new_code_str = new_code_str.replace(item, f"{item_val}", 1)
@@ -444,10 +444,12 @@ class GMCPTrigger(BaseObject):
         self.reset()
         return state
 
-    def __call__(self, value) -> Any:
+    def __call__(self, value: str) -> Any:
         try:
-            value_exp = json.loads(value)
-        except:
+            #value_exp = value.replace("\\x1b", "\u001b")
+            value_exp = json.loads(value, strict = False)
+            #value_exp = ast.literal_eval(value)
+        except Exception as e:
             value_exp = value
 
         self.line  = value

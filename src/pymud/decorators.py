@@ -1,3 +1,4 @@
+from asyncio import iscoroutinefunction
 import functools, traceback
 from typing import Union, Optional, List
 
@@ -6,43 +7,58 @@ def print_exception(session, e: Exception):
     from .settings import Settings
     from .session import Session
     if isinstance(session, Session):
-        # tb = sys.exc_info()[2]
-        # frames = traceback.extract_tb(tb)
-        # frame = frames[-1]
-        # session.error(Settings.gettext("exception_traceback", frame.filename, frame.lineno, frame.name), Settings.gettext("script_error"))
-        # if frame.line:
-        #     session.error(f"    {frame.line}", Settings.gettext("script_error"))
-
-        # session.error(Settings.gettext("exception_message", type(e).__name__, e), Settings.gettext("script_error"))
-        # session.error("===========================", Settings.gettext("script_error"))
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
 
 def exception(func):
-    """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        from .objects import BaseObject
-        from .modules import ModuleInfo, IConfig
-        from .session import Session
-        from .settings import Settings
-        try:
-            return func(self, *args, **kwargs)
-        except Exception as e:
-            # 调用类的错误处理方法
-            if isinstance(self, Session):
-                session = self
-            elif isinstance(self, (BaseObject, IConfig, ModuleInfo)):
-                session = self.session
-            else:
-                session = None
-                
-            if isinstance(session, Session):
-                print_exception(session, e)
-                #session.error(Settings.gettext("exception_message", e, type(e)))
-                #session.error(Settings.gettext("exception_traceback", traceback.format_exc()))
-            else:
-                raise  # 当没有会话时，选择重新抛出异常
-    return wrapper
+    """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。可以用于同步方法和异步方法。"""
+    if not iscoroutinefunction(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            from .objects import BaseObject
+            from .modules import ModuleInfo, IConfig
+            from .session import Session
+            try:
+                return func(self, *args, **kwargs)
+            except Exception as e:
+                # 调用类的错误处理方法
+                if isinstance(self, Session):
+                    session = self
+                elif isinstance(self, (BaseObject, IConfig, ModuleInfo)):
+                    session = self.session
+                else:
+                    session = None
+                    
+                if isinstance(session, Session):
+                    print_exception(session, e)
+                    #session.error(Settings.gettext("exception_message", e, type(e)))
+                    #session.error(Settings.gettext("exception_traceback", traceback.format_exc()))
+                else:
+                    raise  # 当没有会话时，选择重新抛出异常
+
+        return wrapper
+    else:
+        @functools.wraps(func)
+        async def async_wrapper(self, *args, **kwargs):
+            from .objects import BaseObject
+            from .modules import ModuleInfo, IConfig
+            from .session import Session
+            try:
+                return await func(self, *args, **kwargs)
+            except Exception as e:
+                if isinstance(self, Session):
+                    session = self
+                elif isinstance(self, (BaseObject, IConfig, ModuleInfo)):
+                    session = self.session
+                else:
+                    session = None
+
+                if isinstance(session, Session):
+                    print_exception(session, e)
+
+                else:
+                    raise  # 当没有会话时，选择重新抛出异常
+
+        return async_wrapper
 
 def async_exception(func):
     """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""

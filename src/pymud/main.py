@@ -7,8 +7,14 @@ CFG_TEMPLATE = {
     "language" : "chs",                             # 语言设置，默认为简体中文
 
     "client": {
+        
+        "cursor"            : "BLINKING_BEAM",      # 光标形状
         "buffer_lines"      : 5000,                 # 保留缓冲行数
-
+        
+        "seperator"         : ";",                  # 多个命令分隔符（默认;）
+        "appcmdflag"        : "#",                  # app命令标记（默认#）
+        "var_eval"          : "@",                  # 变量取值标记
+        
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
         "auto_reconnect"    : False,                # 在会话异常断开之后，是否自动重连
@@ -16,15 +22,16 @@ CFG_TEMPLATE = {
         "var_autosave"      : True,                 # 断开时自动保存会话变量
         "var_autoload"      : True,                 # 初始化时自动加载会话变量
 
+        "remain_last_input" : False,
+        "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
-        "history_records"   : 500, 
-
-        "status_divider"    : False,                 # 是否显示状态栏的分隔线
-        "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
-        "status_height"     : 4,                    # 下侧状态栏的高度
-        "status_width"      : 30,                   # 右侧状态栏的宽度
         
+        "status_divider"    : True,                 # 是否显示状态栏的分隔线
+        "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
+        "status_width"      : 30,                   # 右侧状态栏的宽度
+        "status_height"     : 5,                    # 下侧状态栏的高度
 
+        "split_ratio"       : 0.5,                  # 分屏比例
     },
 
     "sessions" : {

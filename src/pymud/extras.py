@@ -42,7 +42,15 @@ from .settings import Settings
 
 class VSplitWindow(Window):
     "修改的分块窗口，向上翻页时，下半部保持最后数据不变"
- 
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 增加一个属性，记录分割偏移量
+        self.split_offset = 0
+
+    def move_split(self, offset: int):
+        self.split_offset += offset
+
     def _copy_body(
         self,
         ui_content: UIContent,
@@ -217,7 +225,15 @@ class VSplitWindow(Window):
                 ratio = 0.5
 
             upper = int(total * ratio) - 1
+            # 上下各最少保留3行内容
+            if self.split_offset < 2 - 1 * upper:
+                self.split_offset = 2 - 1 * upper
+
+            elif self.split_offset > total - upper - 5:
+                self.split_offset = total - upper - 5
             
+            upper = upper + self.split_offset
+
             if isinstance(self.content, PyMudBufferControl):
                 b = self.content.buffer
                 if not b:

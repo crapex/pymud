@@ -283,7 +283,7 @@ class PyMudApp:
                     buffer.cut_selection()
                     buffer.exit_selection()
 
-                buffer.insert_text(keydata, fire_event = False)
+                buffer.insert_text(keydata)
 
         self.commandLine.control.key_bindings = cmdKeybinding
 
@@ -530,9 +530,11 @@ class PyMudApp:
     def split_screen(self, event: KeyPressEvent, increase: bool = True):
         """快捷键Alt +/-: 分屏"""
         if increase:
-            Settings.client["split_ratio"] = min(0.85, Settings.client.get("split_ratio", 0.5) + 0.05)
+            #Settings.client["split_ratio"] = min(0.85, Settings.client.get("split_ratio", 0.5) + 0.05)
+            self.console.move_split(1)
         else:
-            Settings.client["split_ratio"] = max(0.15, Settings.client.get("split_ratio", 0.5) - 0.05)
+            self.console.move_split(-1)
+            #Settings.client["split_ratio"] = max(0.15, Settings.client.get("split_ratio", 0.5) - 0.05)
 
         self.invalidate()
 

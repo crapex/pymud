@@ -53,7 +53,8 @@ class Settings:
     "MUD协议所需的的默认MNES(Mud New-Environment Standard)配置信息"
 
     client = {
-        "cursor"           : "BLINKING_BEAM",      # 光标形状
+        "var_eval"          : "@",                  # 变量取值标记
+        "cursor"            : "BLINKING_BEAM",      # 光标形状
         "buffer_lines"      : 5000,                 # 保留缓冲行数
         
         "naws_width"        : 150,                  # 客户端NAWS宽度
