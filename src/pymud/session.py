@@ -1346,7 +1346,9 @@ class Session:
 
     def _delObject(self, id, cls: type):
         if cls == Alias:
-            self._aliases.pop(id, None)
+            obj = self._aliases.pop(id, None)
+            if isinstance(obj, BaseObject):
+                obj.reset()
         elif cls == Command:
             cmd = self._commands.pop(id, None)
             if isinstance(cmd, Command):
@@ -1355,14 +1357,17 @@ class Session:
                 cmd.__unload__()
 
         elif cls == Trigger:
-            self._triggers.pop(id, None)
+            obj = self._triggers.pop(id, None)
+            if isinstance(obj, BaseObject):
+                obj.reset()
         elif cls == Timer:
             timer = self._timers.pop(id, None)
             if isinstance(timer, Timer):
                 timer.enabled = False
         elif cls == GMCPTrigger:
-            self._gmcp.pop(id, None)
-
+            obj = self._gmcp.pop(id, None)
+            if isinstance(obj, BaseObject):
+                obj.reset()
 
     def _delObjects(self, ids: Iterable, cls: type):
         "删除多个指定元素"
@@ -1396,6 +1401,9 @@ class Session:
                         super().__unload__()
 
         """
+        if isinstance(obj, BaseObject):
+            obj.reset()
+
         if isinstance(obj, Alias):
             self._aliases.pop(obj.id, None)
         elif isinstance(obj, Command):
@@ -1605,6 +1613,7 @@ class Session:
         """
         if isinstance(cmd, Command):
             cmd.reset()
+            cmd.__unload__()
             self._delObject(cmd.id, Command)
         elif isinstance(cmd, str) and (cmd in self._commands.keys()):
             self._commands[cmd].reset()
@@ -2093,10 +2102,10 @@ class Session:
         var_keys = sorted(vars_simple.keys())
         for key in var_keys:
             dkey = DStr(key.__repr__())
-            if len(dkey) < KEY_WIDTH:
+            if len(dkey) <= KEY_WIDTH:
                 name = dkey.rjust(KEY_WIDTH)
             else:
-                # 当key的显示宽度大于等于KEY_WIDTH时，使用更大的宽度
+                # 当key的显示宽度大于KEY_WIDTH时，使用更大的宽度
                 name = dkey.rjust(KEY_WIDTH + VAR_WIDTH)
 
             value_dis = DStr(vars_simple[key].__repr__())

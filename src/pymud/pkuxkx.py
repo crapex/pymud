@@ -1,7 +1,7 @@
 # 示例脚本：如何在PyMud中玩PKUXKX
 
-import webbrowser
-from pymud import Session, IConfig, alias, trigger, timer, gmcp, Alias, Trigger, Timer, SimpleTrigger, SimpleAlias
+import webbrowser, asyncio
+from pymud import Session, IConfig, alias, trigger, timer, gmcp, exception, Trigger, SimpleTrigger, SimpleAlias, GMCPTrigger, Command
 
 # 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑。支持多脚本加载
 # 本示例脚本对PyMud支持的变量(Variable)、触发器(Trigger，包含单行与多行触发)、别名(Alias)、定时器(Timer)进行了代码示例
@@ -65,6 +65,14 @@ class MyConfig(IConfig):
     def ontri_multideco(self, id, line, wildcards):
         self.session.info("触发器触发，ID: {0}, 内容: {1}, 匹配项: {2}".format(id, line, wildcards), "测试")
 
+    @trigger("^[> ]*西门.*")
+    async def ontri_westgate(self, id, line, wildcards):
+        time = 0
+        while time < 3:
+            self.session.info("I'm at west gate.")
+            await asyncio.sleep(2)
+            time += 1
+
     # 多行触发器示例
     @trigger([r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$'], group = "sys")
     def ontri_hpbrief_3lines(self, id, line, wildcards):
@@ -123,29 +131,36 @@ class MyConfig(IConfig):
 
         return barline
 
-    # 自定义状态栏窗口
+    # 自定义状态栏窗口。该函数会被渲染框架高频调用，请注意不要在该函数中 info 或者执行其他输出信息！！！
     def status_window(self):
-        from pymud.settings import Settings
+        styles = {
+            "title"         : "bold",
+            "value"         : "lightgreen",
+            "value.better"  : "lightcyan",
+            "value.worse"   : "yellow",
+            "value.worst"   : "red"
+        }
+        
         try:
             formatted_list = list()
 
             # line 0. hp bar
-            jing = self.session.getVariable("jing", 0)
-            effjing = self.session.getVariable("eff_jing", 0)
-            maxjing = self.session.getVariable("max_jing", 0)
-            jingli = self.session.getVariable("jingli", 0)
-            maxjingli = self.session.getVariable("max_jingli", 0)
-            qi = self.session.getVariable("qi", 0)
-            effqi = self.session.getVariable("eff_qi", 0)
-            maxqi = self.session.getVariable("max_qi", 0)
-            neili = self.session.getVariable("neili", 0)
-            maxneili = self.session.getVariable("max_neili", 0)
+            jing        = int(self.session.getVariable("jing", 0))
+            effjing     = int(self.session.getVariable("eff_jing", 1))
+            maxjing     = int(self.session.getVariable("max_jing", 1))
+            jingli      = int(self.session.getVariable("jingli", 0))
+            maxjingli   = int(self.session.getVariable("max_jingli", 1))
+            qi          = int(self.session.getVariable("qi", 0))
+            effqi       = int(self.session.getVariable("eff_qi", 1))
+            maxqi       = int(self.session.getVariable("max_qi", 1))
+            neili       = int(self.session.getVariable("neili", 0))
+            maxneili    = int(self.session.getVariable("max_neili", 1))
 
             barstyle = "━"
             screenwidth = self.session.application.get_width()
             barlength = screenwidth // 2 - 1
             span = screenwidth - 2 * barlength
-            qi_bar = self.create_status_bar(qi, effqi, maxqi, barlength, barstyle)
+            qi_bar   = self.create_status_bar(qi, effqi, maxqi, barlength, barstyle)
             jing_bar = self.create_status_bar(jing, effjing, maxjing, barlength, barstyle)
 
             formatted_list.extend(qi_bar)
@@ -154,123 +169,123 @@ class MyConfig(IConfig):
             formatted_list.append(("", "\n"))
 
             # line 1. char, menpai, deposit, food, water, exp, pot
-            formatted_list.append((Settings.styles["title"], "【角色】"))
-            formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
+            formatted_list.append((styles["title"], "【角色】"))
+            formatted_list.append((styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
             formatted_list.append(("", " "))
           
-            formatted_list.append((Settings.styles["title"], "【食物】"))
+            formatted_list.append((styles["title"], "【食物】"))
             
-            food = int(self.session.getVariable('food', '0'))
-            max_food = self.session.getVariable('max_food', 350)
+            food      = int(self.session.getVariable('food', '0'))
+            max_food  = int(self.session.getVariable('max_food', 350))
             if food < 100:
-                style = Settings.styles["value.worst"]
+                style = styles["value.worst"]
             elif food < 200:
-                style = Settings.styles["value.worse"]
+                style = styles["value.worse"]
             elif food < max_food:
-                style = Settings.styles["value"]
+                style = styles["value"]
             else:
-                style = Settings.styles["value.better"]
+                style = styles["value.better"]
 
             formatted_list.append((style, "{}".format(food)))
             formatted_list.append(("", " "))
 
-            formatted_list.append((Settings.styles["title"], "【饮水】"))
-            water = int(self.session.getVariable('water', '0'))
-            max_water = self.session.getVariable('max_water', 350)
+            formatted_list.append((styles["title"], "【饮水】"))
+            water       = int(self.session.getVariable('water', '0'))
+            max_water   = int(self.session.getVariable('max_water', 350))
             if water < 100:
-                style = Settings.styles["value.worst"]
+                style = styles["value.worst"]
             elif water < 200:
-                style = Settings.styles["value.worse"]
+                style = styles["value.worse"]
             elif water < max_water:
-                style = Settings.styles["value"]
+                style = styles["value"]
             else:
-                style = Settings.styles["value.better"]
+                style = styles["value.better"]
             formatted_list.append((style, "{}".format(water)))
             formatted_list.append(("", " "))
-            formatted_list.append((Settings.styles["title"], "【经验】"))
-            formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
+            formatted_list.append((styles["title"], "【经验】"))
+            formatted_list.append((styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
             formatted_list.append(("", " "))
-            formatted_list.append((Settings.styles["title"], "【潜能】"))
-            formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('potential'))))
+            formatted_list.append((styles["title"], "【潜能】"))
+            formatted_list.append((styles["value"], "{}".format(self.session.getVariable('potential'))))
             formatted_list.append(("", " "))
 
-            formatted_list.append((Settings.styles["title"], "【门派】"))
-            formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
+            formatted_list.append((styles["title"], "【门派】"))
+            formatted_list.append((styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
             formatted_list.append(("", " "))
-            formatted_list.append((Settings.styles["title"], "【存款】"))
-            formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
+            formatted_list.append((styles["title"], "【存款】"))
+            formatted_list.append((styles["value"], "{}".format(self.session.getVariable('deposit'))))
             formatted_list.append(("", " "))
             
             # line 2. hp
             # a new-line
             formatted_list.append(("", "\n"))
 
-            formatted_list.append((Settings.styles["title"], "【精神】"))
-            if int(effjing) < int(maxjing):
-                style = Settings.styles["value.worst"]
-            elif int(jing) < 0.8 * int(effjing):
-                style = Settings.styles["value.worse"]
+            formatted_list.append((styles["title"], "【精神】"))
+            if effjing < maxjing:
+                style = styles["value.worst"]
+            elif jing < 0.8 * effjing:
+                style = styles["value.worse"]
             else:
-                style = Settings.styles["value"]
+                style = styles["value"]
             
             if maxjing == 0: 
                 pct1 = pct2 = 0
             else:
-                pct1 = 100.0*float(jing)/float(maxjing)
-                pct2 = 100.0*float(effjing)/float(maxjing)
+                pct1 = 100.0 * jing / maxjing
+                pct2 = 100.0 * effjing / maxjing
             formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(jing, pct1, effjing, pct2)))
 
             formatted_list.append(("", " "))
 
-            formatted_list.append((Settings.styles["title"], "【气血】"))
-            if int(effqi) < int(maxqi):
-                style = Settings.styles["value.worst"]
-            elif int(qi) < 0.8 * int(effqi):
-                style = Settings.styles["value.worse"]
+            formatted_list.append((styles["title"], "【气血】"))
+            if effqi < maxqi:
+                style = styles["value.worst"]
+            elif qi < 0.8 * effqi:
+                style = styles["value.worse"]
             else:
-                style = Settings.styles["value"]
+                style = styles["value"]
 
             if maxqi == 0: 
                 pct1 = pct2 = 0
             else:
-                pct1 = 100.0*float(qi)/float(maxqi)
-                pct2 = 100.0*float(effqi)/float(maxqi)
+                pct1 = 100.0 * qi / maxqi
+                pct2 = 100.0 * effqi / maxqi
             formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(qi, pct1, effqi, pct2)))
             formatted_list.append(("", " "))
 
             # 内力
-            formatted_list.append((Settings.styles["title"], "【内力】"))
-            if int(neili) < 0.6 * int(maxneili):
-                style = Settings.styles["value.worst"]
-            elif int(neili) < 0.8 * int(maxneili):
-                style = Settings.styles["value.worse"]
-            elif int(neili) < 1.2 * int(maxneili):
-                style = Settings.styles["value"]   
+            formatted_list.append((styles["title"], "【内力】"))
+            if neili < 0.6 * maxneili:
+                style = styles["value.worst"]
+            elif  neili < 0.8 * maxneili:
+                style = styles["value.worse"]
+            elif neili < 1.2 * maxneili:
+                style = styles["value"]   
             else:
-                style = Settings.styles["value.better"]
+                style = styles["value.better"]
 
             if maxneili == 0: 
                 pct = 0
             else:
-                pct = 100.0*float(neili)/float(maxneili)
+                pct = 100.0 * neili / maxneili
             formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(neili, maxneili, pct)))
             formatted_list.append(("", " "))
 
             # 精力
-            formatted_list.append((Settings.styles["title"], "【精力】"))
-            if int(jingli) < 0.6 * int(maxjingli):
-                style = Settings.styles["value.worst"]
-            elif int(jingli) < 0.8 * int(maxjingli):
-                style = Settings.styles["value.worse"]
-            elif int(jingli) < 1.2 * int(maxjingli):
-                style = Settings.styles["value"]   
+            formatted_list.append((styles["title"], "【精力】"))
+            if jingli < 0.6 * maxjingli:
+                style = styles["value.worst"]
+            elif jingli < 0.8 * maxjingli:
+                style = styles["value.worse"]
+            elif jingli < 1.2 * maxjingli:
+                style = styles["value"]   
             else:
-                style = Settings.styles["value.better"]
+                style = styles["value.better"]
             
             if maxjingli == 0: 
                 pct = 0
             else:
-                pct = 100.0*float(jingli)/float(maxjingli)
+                pct = 100.0 * jingli / maxjingli
 
             formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
             formatted_list.append(("", " "))
@@ -279,3 +294,186 @@ class MyConfig(IConfig):
     
         except Exception as e:
             return f"{e}"
+        
+
+class CmdScore(Command, IConfig):
+    def __init__(self, session, *args, **kwargs):
+        kwargs.setdefault("id", "cmd.score")
+        super().__init__(session, "^(score|sc)$", *args, **kwargs)
+
+    def __unload__(self):
+        super().__unload__()
+
+    @trigger(r'^┌[─]+人物详情[─┬]+┐$', id = "cmd.score.start", group = "cmd.score")
+    def start(self, name, line, wildcards):
+        self.session.enableGroup("cmd.score", types = [Trigger])
+
+    @trigger(r'^└[─┴]+[^└─┴┘]+[─]+┘$', id = "cmd.score.end", group = "cmd.score")
+    def stop(self, name, line, wildcards):
+        self.session.enableGroup("cmd.score", enabled = False, types = [Trigger])
+
+    @trigger(r'^│\s+(?:(\S+)\s)+(\S+)\((\S+)\)\s+│.+│$', group = "cmd.score")
+    def charinfo(self, name, line, wildcards):
+        # 从此行获取角色id和名称信息
+        self.session.setVariables(["name", "id"], [wildcards[1], wildcards[2].lower()])
+
+    def getmenpai(self):
+        menpai = self.session.getVariable("family/family_name")
+        menpai_abbr = "NA"
+        
+        if menpai:
+            if menpai.find('丐帮') >= 0:
+                menpai_abbr = "GB"
+            elif menpai.find('武当派') >= 0:
+                menpai_abbr = "WD"
+            elif menpai.find('桃花岛') >= 0:
+                menpai_abbr = "TH"
+            elif menpai.find('天龙寺') >= 0:
+                menpai_abbr = "TL"
+            elif menpai.find('灵鹫宫') >= 0:
+                menpai_abbr = "LJ"
+            elif menpai.find('朝廷') >= 0:
+                menpai_abbr = "CT"
+            elif menpai.find('明教') >= 0:
+                menpai_abbr = "MJ"
+            elif menpai.find('古墓') >= 0:
+                menpai_abbr = "GM"
+            elif menpai.find('星宿') >= 0:
+                menpai_abbr = "XX"
+            elif menpai.find('无门派') >= 0:
+                menpai_abbr = "BX"
+
+        return menpai_abbr
+
+    @trigger(r'^│\s*国籍：\S+\s+户籍：(\S+).+│门派：(\S+)(?:\s\S+)*\s+│$', group = "cmd.score")
+    def menpaiinfo(self, name, line, wildcards):
+        menpai = wildcards[1]
+        self.session.setVariable("family/family_name", menpai)
+        self.session.setVariable("menpai", self.getmenpai())
+
+    @trigger(r'^│\s*性别：\S+\s+上线：(\S+).+│师承：(\S+)(?:\s\S+)*\s+│$', group = "cmd.score")
+    def logininfo(self, name, line, wildcards):
+        self.session.setVariable("loginroom", wildcards[0])
+
+    @trigger(r'^│\s*杀生：\S+\s+│职业：.+│存款：(\S*(?:\s\S+)?)\s+│$', group = "cmd.score")
+    def bankinfo(self, name, line, wildcards):
+        self.session.setVariable("deposit", wildcards[0])
+
+    @exception
+    async def execute(self, cmd = "score", *args, **kwargs):
+        self.reset()
+
+        self.session.tris["cmd.score.start"].enabled = True
+        await self.session.waitfor(cmd, self.session.tris["cmd.score.end"].triggered())
+
+        return self.SUCCESS
+
+
+
+class CmdHp(Command, IConfig):
+    def __init__(self, session, *args, **kwargs):
+        kwargs.setdefault("id", "cmd.hp")
+        super().__init__(session, "^hp$", *args, **kwargs)
+
+        options = {"group" : "cmd.hp", "enabled" : False}
+        self._tris = {
+            "start"     : Trigger(session, r"^[┌─]+个人状态[─┬┐]+$", onSuccess = self.hpstart, **options),
+            "line1"     : Trigger(session, r'^│【(\S+)】\s*(\d+)\s+/\s*(\d+)\s+\[([^\]]+)\]\s+│\s*【(\S+)】\s*(\d+)\s+/\s*(\d+)\s+\(([^\)]+)\).+', onSuccess = self.hpstatus, **options),
+            "line2"     : Trigger(session, r'^│【(\S+)】\s*(\d+)\s+/\s*(\d+)\s+\[([^\]]+)\]\s+│\s*【(\S+)】\s*([\d,KM]+)\s+│', onSuccess = self.hpstatus, **options),
+            "status"    : Trigger(session, r'^│.+【(\S+)】\s(\S+)\s+\S+│', raw = True, onSuccess = self.hpstatus, **options),
+            "stop"      : Trigger(session, r'^└[─┴]+[^└─┴┘]+[─]+┘$', keeyEval = True, **options),
+
+            "raw_hp"    : GMCPTrigger(session, "GMCP.raw_hp", onSuccess = self.raw_hp, group = "cmd.hp"),
+            "raw_sm"    : GMCPTrigger(session, "GMCP.raw_status_me", onSuccess = self.raw_status, group = "cmd.hp"),
+        }
+
+    def __unload__(self):
+        self.session.delObjects(self._tris)
+        super().__unload__()
+
+    def logdebug(self, id, line, wildcards):
+        self.info(f"trigger {id} has been triggered. wildcards is: {wildcards}")
+
+    def raw_hp(self, id, line, wildcards): 
+        hp = wildcards[0]
+
+        if isinstance(hp, dict):
+            self.session.vars["qi"] = hp["qi"]["current"]
+            self.session.vars["eff_qi"] = hp["qi"]["effective"]
+            self.session.vars["max_qi"] = hp["qi"]["max"]
+
+            self.session.vars["jing"] = hp["jing"]["current"]
+            self.session.vars["eff_jing"] = hp["jing"]["effective"]
+            self.session.vars["max_jing"] = hp["jing"]["max"]
+
+            self.session.vars["jingli"] = hp["jingli"]["current"]
+            self.session.vars["max_jingli"] = hp["jingli"]["max"]
+
+            self.session.vars["neili"] = hp["neili"]["current"]
+            self.session.vars["max_neili"] = hp["neili"]["max"]
+
+            self.session.vars["food"] = hp["food"]["current"]
+            self.session.vars["water"] = hp["water"]["current"]
+            self.session.vars["vigour/qi"] = hp["vigour/qi"]["current"]
+
+            self.session.vars["combat_exp"] = hp["combat_exp"]["current"]
+
+            self.info("HP查询hp *执行完毕", "HP")
+        
+        else:
+            self.warning(f"raw_hp * 不是一个dict，而是一个 {type(hp)}, 解析失败")
+
+    def raw_status(self, id, line, wildcards): 
+        # raw_status_me 解析
+        sm = wildcards[0]
+
+        if isinstance(sm, dict):
+            self.session.vars["status_me"] = sm
+
+            self.info("自身查询sm *执行完毕", id)
+        else:
+            self.warning(f"raw_status_me * 不是一个dict，而是一个 {type(sm)}, 解析失败")
+
+    def hpstart(self, id, line, wildcards):
+        self.session.enableGroup("cmd.hp", enabled = True, types = [Trigger])
+
+    def hpstatus(self, id, line, wildcards):
+        self.info(line)
+        if wildcards[0] == "精神":
+            self.session.vars["jing"] = int(wildcards[1])
+            self.session.vars["eff_jing"] = int(wildcards[2])
+            if wildcards[3] == "100%":
+                self.session.vars["max_jing"] = int(wildcards[2])
+            self.session.vars["jingli"] = int(wildcards[5])
+            self.session.vars["max_jingli"] = int(wildcards[6])
+
+        elif wildcards[0] == "气血":
+            self.session.vars["qi"] = int(wildcards[1])
+            self.session.vars["eff_qi"] = int(wildcards[2])
+
+            if wildcards[3] == "100%":
+                self.session.vars["max_qi"] = int(wildcards[2])
+            self.session.vars["neili"] = int(wildcards[5])
+            self.session.vars["max_neili"] = int(wildcards[6])
+            self.session.vars["jiali"] = int(wildcards[7][2:].strip())
+
+        elif wildcards[0] == "食物":
+            self.session.vars["food"] = int(wildcards[1])
+            self.session.vars["max_food"] = int(wildcards[2])
+            self.session.vars["potential"] = int(wildcards[5])
+
+        elif wildcards[0] == "饮水":
+            self.session.vars["water"] = int(wildcards[1])
+            self.session.vars["max_water"] = int(wildcards[2])
+            self.session.vars["combat_exp"] = int(wildcards[5])
+
+        elif wildcards[0] == "状态":
+            self.session.vars["status"] = wildcards[1].split("、")
+
+    @exception
+    async def execute(self, cmd = "hp", *args, **kwargs):
+        self.reset()
+        self._tris["start"].enabled = True
+        await self.session.waitfor(cmd, self._tris["stop"].triggered())
+        self.session.enableGroup("cmd.hp", enabled = False, types = [Trigger])
+        return self.SUCCESS

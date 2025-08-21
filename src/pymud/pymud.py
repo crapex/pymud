@@ -113,10 +113,6 @@ class PyMudApp:
         self.keybindings.add(Keys.ControlRight, is_global = True)(partial(self.change_session, right = True))
         self.keybindings.add(Keys.ShiftLeft, is_global = True)(partial(self.change_session, right = False))    # Shift-左右箭头切换当前会话
         self.keybindings.add(Keys.ShiftRight, is_global = True)(partial(self.change_session, right = True))   # 适配 MacOS系统
-        self.keybindings.add(Keys.Escape, Keys.Left, is_global = True)(partial(self.change_session, right = False))
-        self.keybindings.add(Keys.Escape, Keys.Right, is_global = True)(partial(self.change_session, right = True))
-        self.keybindings.add(Keys.Escape, "+", is_global = True)(partial(self.split_screen, increase = True))
-        self.keybindings.add(Keys.Escape, "-", is_global = True)(partial(self.split_screen, increase = False))
         self.keybindings.add(Keys.ShiftUp, is_global = True)(partial(self.split_screen, increase = False))
         self.keybindings.add(Keys.ShiftDown, is_global = True)(partial(self.split_screen, increase = True))
         self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
@@ -215,6 +211,7 @@ class PyMudApp:
 
         cmdKeybinding = KeyBindings()
 
+        @cmdKeybinding.add(Keys.Escape)
         @cmdKeybinding.add(Keys.Any)
         @cmdKeybinding.add(Keys.Enter)
         @cmdKeybinding.add(Keys.Left)
@@ -231,6 +228,11 @@ class PyMudApp:
                 if key == Keys.Enter:
                     buffer.append_to_history()
                     self.enter_pressed(buffer)
+                    return
+
+                elif key == Keys.Escape:
+                    buffer.cut_selection()
+                    buffer.exit_selection()
                     return
 
                 elif key == Keys.Left:

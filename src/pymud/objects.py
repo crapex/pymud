@@ -9,6 +9,7 @@ from collections import namedtuple
 from typing import Any
 from .settings import Settings
 from .decorators import print_exception
+from .extras import ValuedEvent
 
 class CodeLine:
     """
@@ -341,6 +342,8 @@ class BaseObject:
 
         self.args       = args
         self.kwarg      = kwargs
+        self._tasks     = set()
+        self.event      = ValuedEvent()
 
         # 成功完成，失败完成，超时的处理函数(若有指定)，否则使用类的自定义函数
         self._onSuccess = kwargs.get("onSuccess", self.onSuccess)
@@ -364,6 +367,49 @@ class BaseObject:
     @enabled.setter
     def enabled(self, en: bool):
         self._enabled = en
+
+    def create_task(self, coro, *args, name = None):
+        """
+        创建并管理任务。由 BaseObject 创建的任务，同时也被 Session 所管理。
+        其内部是调用 asyncio.create_task 进行任务创建。
+
+        :param coro: 任务包含的协程或可等待对象
+        :param name: 任务名称， Python 3.10 才支持的参数
+        """
+        task = self.session.create_task(coro, *args, name)
+        task.add_done_callback(self._tasks.discard)
+        self._tasks.add(task)
+        return task
+
+    def remove_task(self, task: asyncio.Task, msg = None):
+        """
+        取消任务并从管理任务清单中移除。由 BaseObject 取消和移除的任务，同时也被 Session 所取消和移除。
+
+        :param task: 要取消的任务
+        :param msg: 取消任务时提供的消息， Python 3.10 才支持的参数
+        """
+
+        result = self.session.remove_task(task, msg)
+        self._tasks.discard(task)
+
+        return result
+    
+    def reset(self):
+        """
+        复位对象，取消和清除所有本对象管理的任务。
+        """
+        try:
+            self.event.clear()
+
+            for task in list(self._tasks):
+                if isinstance(task, asyncio.Task) and (not task.done()):
+                    self.remove_task(task)
+        except:
+            pass
+
+    def set(self):
+        "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"
+        self.event.set()
 
     def onSuccess(self, *args, **kwargs):
         "成功后执行的默认回调函数"
@@ -421,28 +467,24 @@ class GMCPTrigger(BaseObject):
     :param name: 触发对应的 GMCP 的 name
     """
     def __init__(self, session, name, *args, **kwargs):
-        self.event = asyncio.Event()
+        #self.event = asyncio.Event()
         self.value = None
         # 确保不要有重复的id
         kwargs.pop("id", None)
         super().__init__(session, id = name, *args, **kwargs)
 
     def __del__(self):
-        self.reset()
-
-    def reset(self):
-        "复位事件，用于async执行"
-        self.event.clear()
+        super().reset()
 
     async def triggered(self):
         """
         异步触发的可等待函数。其使用方法和 Trigger.triggered() 类似，且参数与返回值均与之兼容。
         """
         self.reset()
-        await self.event.wait()
-        state = BaseObject.State(True, self.id, self.line, self.value)
-        self.reset()
-        return state
+        #state = await self.event.wait()
+        #state = BaseObject.State(True, self.id, self.line, self.value)
+        #self.reset()
+        return await self.event.wait()
 
     def __call__(self, value: str) -> Any:
         try:
@@ -456,9 +498,13 @@ class GMCPTrigger(BaseObject):
         self.value = value_exp
         
         if callable(self._onSuccess):
-            self.event.set()
             try:
-                self._onSuccess(self.id, value, value_exp)
+                if asyncio.iscoroutinefunction(self._onSuccess):
+                    self.create_task(self._onSuccess(self.id, value, value_exp))
+                else:
+                    self._onSuccess(self.id, value, value_exp)
+
+                self.event.set(value = BaseObject.State(True, self.id, self.line, self.value))
             except Exception as e:
                 print_exception(self.session, e)
 
@@ -492,10 +538,11 @@ class MatchObject(BaseObject):
         
         self.wildcards = []
         self.lines = []
-        self.event = asyncio.Event()
+        # self.event = asyncio.Event()
 
         # self.patterns = patterns
         self.patterns      = kwargs.pop("patterns", "")
+        self._tasks        = set()
 
         if "session" in kwargs:
             super().__init__(*args, **kwargs)
@@ -503,7 +550,7 @@ class MatchObject(BaseObject):
             super().__init__(session = session, *args, **kwargs)
 
     def __del__(self):
-        pass
+        super().reset()
 
     @property
     def patterns(self):
@@ -543,15 +590,6 @@ class MatchObject(BaseObject):
                 self.linesToMatch = len(self._regExps)
                 self.multiline = True
                 self._mline = 0
-
-    def reset(self):
-        "复位事件，用于async执行未等待结果时，对事件的复位。仅异步有效。"
-        self.event.clear()
-        # self.state = BaseObject.State(self.NOTSET, self.id, "", tuple())
-
-    def set(self):
-        "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"
-        self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
         """
@@ -622,14 +660,23 @@ class MatchObject(BaseObject):
             if docallback:
                 if self.sync:
                     if state.result == self.SUCCESS:
-                        self._onSuccess(state.id, state.line, state.wildcards)
+                        if asyncio.iscoroutinefunction(self._onSuccess):
+                            self.create_task(self._onSuccess(state.id, state.line, state.wildcards))
+                        else:
+                            self._onSuccess(state.id, state.line, state.wildcards)
                     elif state.result == self.FAILURE:
-                        self._onFailure(state.id, state.line, state.wildcards)
+                        if asyncio.iscoroutinefunction(self._onFailure):
+                            self.create_task(self._onFailure(state.id, state.line, state.wildcards))
+                        else:
+                            self._onFailure(state.id, state.line, state.wildcards)
                     elif state.result == self.TIMEOUT:
-                        self._onTimeout(state.id, state.line, state.wildcards)
+                        if asyncio.iscoroutinefunction(self._onTimeout):
+                            self.create_task(self._onTimeout(state.id, state.line, state.wildcards))
+                        else:
+                            self._onTimeout(state.id, state.line, state.wildcards)
                 
                 if state.result == self.SUCCESS:
-                    self.event.set()
+                    self.event.set(value = state)
                     
             self.state = state
             #return state
@@ -645,15 +692,11 @@ class MatchObject(BaseObject):
         异步匹配模式用于 Trigger 的异步模式以及 Command 的匹配中。
         """
         # 等待，再复位
-        try:
-            self.reset()
-            await self.event.wait()
-            self.reset()
 
-        except Exception as e:
-            print_exception(self.session, e)
-        
-        return self.state
+        self.reset()
+        return await self.event.wait()
+        #self.reset()
+
     
     def __detailed__(self) -> str:
         group = f'group = "{self.group}" ' if self.group else ''
@@ -715,13 +758,14 @@ class Trigger(MatchObject):
         """
         异步触发的可等待函数。内部通过 MatchObject.matched 实现
 
-        差异在于对创建的 matched 任务进行了管理。
         """
-        if isinstance(self._task, asyncio.Task) and (not self._task.done()):
-            self._task.cancel()
+        # if isinstance(self._task, asyncio.Task) and (not self._task.done()):
+        #     self._task.cancel()
 
-        self._task = self.session.create_task(self.matched())
-        return await self._task
+        # self._task = self.session.create_task(self.matched())
+        # return await self._task
+
+        return await super().matched()
 
 class SimpleTrigger(Trigger):
     """
@@ -795,45 +839,45 @@ class Command(MatchObject):
         except (AttributeError, TypeError):
             pass
 
-    def create_task(self, coro, *args, name = None):
-        """
-        创建并管理任务。由 Command 创建的任务，同时也被 Session 所管理。
-        其内部是调用 asyncio.create_task 进行任务创建。
+    # def create_task(self, coro, *args, name = None):
+    #     """
+    #     创建并管理任务。由 Command 创建的任务，同时也被 Session 所管理。
+    #     其内部是调用 asyncio.create_task 进行任务创建。
 
-        :param coro: 任务包含的协程或可等待对象
-        :param name: 任务名称， Python 3.10 才支持的参数
-        """
-        task = self.session.create_task(coro, *args, name)
-        task.add_done_callback(self._tasks.discard)
-        self._tasks.add(task)
-        return task
+    #     :param coro: 任务包含的协程或可等待对象
+    #     :param name: 任务名称， Python 3.10 才支持的参数
+    #     """
+    #     task = self.session.create_task(coro, *args, name)
+    #     task.add_done_callback(self._tasks.discard)
+    #     self._tasks.add(task)
+    #     return task
 
-    def remove_task(self, task: asyncio.Task, msg = None):
-        """
-        取消任务并从管理任务清单中移除。由 Command 取消和移除的任务，同时也被 Session 所取消和移除。
+    # def remove_task(self, task: asyncio.Task, msg = None):
+    #     """
+    #     取消任务并从管理任务清单中移除。由 Command 取消和移除的任务，同时也被 Session 所取消和移除。
 
-        :param task: 要取消的任务
-        :param msg: 取消任务时提供的消息， Python 3.10 才支持的参数
-        """
+    #     :param task: 要取消的任务
+    #     :param msg: 取消任务时提供的消息， Python 3.10 才支持的参数
+    #     """
 
-        result = self.session.remove_task(task, msg)
-        self._tasks.discard(task)
-        # if task in self._tasks:
-        #     self._tasks.remove(task)
-        return result
+    #     result = self.session.remove_task(task, msg)
+    #     self._tasks.discard(task)
+    #     # if task in self._tasks:
+    #     #     self._tasks.remove(task)
+    #     return result
     
-    def reset(self):
-        """
-        复位命令，并取消和清除所有本对象管理的任务。
-        """
-        try:
-            super().reset()
+    # def reset(self):
+    #     """
+    #     复位命令，并取消和清除所有本对象管理的任务。
+    #     """
+    #     try:
+    #         super().reset()
 
-            for task in list(self._tasks):
-                if isinstance(task, asyncio.Task) and (not task.done()):
-                    self.remove_task(task)
-        except:
-            pass
+    #         for task in list(self._tasks):
+    #             if isinstance(task, asyncio.Task) and (not task.done()):
+    #                 self.remove_task(task)
+    #     except:
+    #         pass
 
     async def execute(self, cmd, *args, **kwargs) -> Any:
         """
@@ -960,13 +1004,22 @@ class SimpleCommand(Command):
                 break
 
         if result == self.SUCCESS:
-            self._onSuccess(name = self.id, cmd = cmd, line = "", wildcards = [])
+            if asyncio.iscoroutinefunction(self._onSuccess):
+                self.create_task(self._onSuccess(name = self.id, cmd = cmd, line = "", wildcards = []))
+            else:
+                self._onSuccess(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.FAILURE:
-            self._onFailure(name = self.id, cmd = cmd, line = "", wildcards = [])
+            if asyncio.iscoroutinefunction(self._onFailure):
+                self.create_task(self._onFailure(name = self.id, cmd = cmd, line = "", wildcards = []))
+            else:
+                self._onFailure(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.TIMEOUT:
-            self._onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
+            if asyncio.iscoroutinefunction(self._onTimeout):
+                self.create_task(self._onTimeout(name = self.id, cmd = cmd, timeout = self.timeout))
+            else:
+                self._onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
  
         return result
 
@@ -1008,7 +1061,10 @@ class Timer(BaseObject):
             await asyncio.sleep(self.timeout)
 
             if callable(self._onSuccess):
-                self._onSuccess(self.id)
+                if asyncio.iscoroutinefunction(self._onSuccess):
+                    self.create_task(self._onSuccess(self.id))
+                else:
+                    self._onSuccess(self.id)
 
             if self.oneShot or self._halt:
                 break

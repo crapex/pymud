@@ -1,4 +1,5 @@
 # External Libraries
+import asyncio
 from unicodedata import east_asian_width
 from wcwidth import wcwidth, wcswidth
 from dataclasses import dataclass
@@ -1092,3 +1093,72 @@ class DStr(str):
         left = spaces // 2
         right = spaces - left
         return fillchar * left + self + fillchar * right
+
+
+# 创建一个awaitable对象，既支持像asyncio.Event那样可以set/clear重复使用，也支持像asyncio.Future那样可以带返回值。
+class ValuedEvent:
+    """
+    一个可等待对象，结合了asyncio.Event和asyncio.Future的特性。
+    支持set/clear重复使用，也可以设置返回值。
+    """
+    def __init__(self, loop=None):
+        self._loop = loop or asyncio.get_event_loop()
+        self._future = asyncio.Future(loop=self._loop)
+        self._value = None
+        self._set = False
+
+    def __await__(self):
+        return self._future.__await__()
+
+    def set(self, value=None):
+        """设置事件为已触发状态，并可选地设置返回值。"""
+        self._value = value
+        self._set = True
+        if not self._future.done():
+            self._future.set_result(value)
+
+    def clear(self):
+        """重置事件为未触发状态，以便再次使用。"""
+        if self._future.done():
+            self._future = asyncio.Future(loop=self._loop)
+        self._set = False
+        self._value = None
+
+    def is_set(self):
+        """检查事件是否已被触发。"""
+        return self._set
+
+    def result(self):
+        """获取设置的结果值。如果尚未设置，则抛出异常。"""
+        return self._future.result()
+
+    def exception(self):
+        """获取异常（如果有）。"""
+        return self._future.exception()
+
+    def set_exception(self, exc):
+        """设置异常。"""
+        if not self._future.done():
+            self._future.set_exception(exc)
+        self._set = True
+
+    def cancel(self):
+        """取消等待。"""
+        return self._future.cancel()
+
+    def cancelled(self):
+        """检查是否已取消。"""
+        return self._future.cancelled()
+
+    async def wait(self):
+        """
+        等待事件被设置，类似于asyncio.Event.wait方法。
+        如果事件已设置，立即返回结果值；否则等待直到事件被设置。
+        
+        返回值：
+            设置的结果值，如果事件已被取消则抛出CancelledError。
+        """
+        if self.is_set() and not self._future.done():
+            # 如果事件已设置但future尚未完成，手动完成它
+            self._future.set_result(self._value)
+        return await self._future
