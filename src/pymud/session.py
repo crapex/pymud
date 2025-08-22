@@ -842,7 +842,51 @@ class Session:
         await asyncio.sleep(wait_time)
         self.writeline(line)
         return await awaitable
+    
+    async def wait_triggers(self, line: str, triggers, tr_id_List, timeout = None, return_when = "FIRST_COMPLETED") -> None:
+        """
+        传入触发器列表，等待指定触发器列表中的任意一个被触发
+    
+        :param line: 要发送的命令行
+        :param triggers: 触发器字典
+        :param tr_id_List: 要等待的触发器字典的key列表
+        :param timeout: (可选参数) 超时时间（秒），None表示不超时
+        :return_when: (可选参数) 这在什么条件下返回结果，默认是"FIRST_COMPLETED"
+        ：
+        :return: 返回 (state, name, line, wildcards) 或 (None, "", "", None) 如果超时
         
+        示例:
+        state, name, line, wildcards = await self.session.wait_triggers('a_cmd', self._tris, ["a_resp","b_resp", 'c_respon'],timeout=timeout)
+        if name in "a_resp":
+            await asyncio.sleep(1)
+        elif name in "b_resp":
+            await asyncio.sleep(3)  
+        elif name in "c_respon":
+            self.session.info("c_respon")
+        else:
+            self.session.warning("timeout")
+        """
+
+        waited_tris = []
+        for tr_id in tr_id_List:
+            if tr_id in triggers:
+                waited_tris.append(self.create_task(triggers[tr_id].triggered()))
+            else:
+                self.error(f"触发器 ID '{tr_id}' 在提供的触发器字典中不存在")
+
+        done, pending = await self.waitfor(line, asyncio.wait(waited_tris, timeout = timeout, return_when = "FIRST_COMPLETED"))
+
+        for t in list(pending):
+            self.remove_task(t)
+
+        tasks_done = list(done)
+        if len(tasks_done) == 0:
+            # 这里表示超时了
+            return None, "", "", None
+
+        elif len(tasks_done) > 0:
+            task = tasks_done[0]
+            return task.result()
 
     def exec(self, cmd: str, name = None, *args, **kwargs):
         r"""
