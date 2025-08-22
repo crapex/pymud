@@ -3,6 +3,8 @@ PyMUD Settings 文件
 用于保存与App有关的各类配置、常量等
 """
 
+import importlib.metadata
+
 class Settings:
     "保存PyMUD配置的全局对象"
 
@@ -11,16 +13,18 @@ class Settings:
     "APP 名称, 默认PYMUD"
     __appdesc__   = "a MUD client written in Python"
     "APP 简要描述"
-    __version__   = "0.19.3"
+    __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2024-04-03"
+    __release__   = "2025-06-09"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
     __email__     = "crapex@crapex.cc"
     "APP 作者邮箱"
-    __website__     = "https://pymud.readthedocs.org/"
+    __website__     = "https://pymud.readthedocs.io/"
     "帮助文档发布网址"
+
+    language = "chs"
 
     server = {
         "default_encoding"  : "utf-8",              # 服务器默认编码
@@ -54,7 +58,7 @@ class Settings:
         "naws_width"        : 150,                  # 客户端NAWS宽度
         "naws_height"       : 40,                   # 客户端NAWS高度
         "newline"           : "\n",                 # 客户端换行符
-        "tabstop"           : 4,                    # 制表符改成空格
+        "tabstop"           : 8,                    # 制表符改成空格
         "seperator"         : ";",                  # 多个命令分隔符（默认;）
         "appcmdflag"        : "#",                  # app命令标记（默认#）
         
@@ -68,7 +72,9 @@ class Settings:
         "remain_last_input" : False,
         "echo_input"        : False,
         "beautify"          : True,                 # 专门为解决控制台下PKUXKX字符画对不齐的问题
+        "history_records"   : 500,                  # 记录发送到服务器的命令的上限数量，0表示不记录，-1表示无限记录
         
+        "status_divider"    : True,                 # 是否显示状态栏的分隔线
         "status_display"    : 1,                    # 状态窗口显示情况设置，0-不显示，1-显示在下方，2-显示在右侧
         "status_width"      : 30,                   # 右侧状态栏的宽度
         "status_height"     : 6,                    # 下侧状态栏的高度
@@ -79,16 +85,18 @@ class Settings:
         "welcome"           : "欢迎使用PYMUD客户端 - 北大侠客行，最好的中文MUD游戏",
         "world"             : "世界",
         "new_session"       : "创建新会话...",
+        "show_log"          : "显示记录信息",
         "exit"              : "退出",
         "session"           : "会话",
         "connect"           : "连接/重新连接",
         "disconnect"        : "断开连接",
+        "beautify"          : "打开/关闭美化显示",
         "echoinput"         : "显示/隐藏输入指令",
         "nosplit"           : "取消分屏",
         "copy"              : "复制(纯文本)",
         "copyraw"           : "复制(ANSI)",
         "clearsession"      : "清空会话内容",
-        "closesession"      : "关闭当前会话",
+        "closesession"      : "关闭当前页面",
         "autoreconnect"     : "打开/关闭自动重连",
         "loadconfig"        : "加载脚本配置",
         "reloadconfig"      : "重新加载脚本配置",
@@ -173,8 +181,16 @@ class Settings:
         "value"     : "fg:green",
     }
 
-    INFO_STYLE     = "\x1b[32m"     #"\x1b[38;2;0;128;255m"
-    WARN_STYLE     = "\x1b[33m"
-    ERR_STYLE      = "\x1b[31m"
+    INFO_STYLE     = "\x1b[48;5;22m\x1b[38;5;252m"     #"\x1b[38;2;0;128;255m"
+    WARN_STYLE     = "\x1b[48;5;220m\x1b[38;5;238m"
+    ERR_STYLE      = "\x1b[48;5;160m\x1b[38;5;252m"
     CLR_STYLE      = "\x1b[0m"
+
+    @classmethod
+    def gettext(cls, text: str, *args, **kwargs):
+        if len(args) == 0 and len(kwargs) == 0:
+            return cls.text[text] if text in cls.text else text
+        else:
+            return cls.text[text].format(*args, **kwargs) if text in cls.text else text.format(*args, **kwargs)
+
 

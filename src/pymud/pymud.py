@@ -1,44 +1,33 @@
-import asyncio, functools, re, logging, math, json, os, webbrowser
-import importlib.util
+import asyncio, functools, os, webbrowser, threading
+from datetime import datetime
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
 from prompt_toolkit import HTML
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.application import Application
-from prompt_toolkit.filters import Condition
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.filters import Condition, is_true, to_filter
 from prompt_toolkit.layout import ConditionalContainer, Float, VSplit, HSplit, Window, WindowAlign
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.dimension import D
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.styles import Style
-from prompt_toolkit.widgets import Label, MenuItem, TextArea
+from prompt_toolkit.widgets import Label, TextArea
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.cursor_shapes import CursorShape
-from prompt_toolkit.key_binding import KeyPress, KeyPressEvent
+from prompt_toolkit.key_binding import KeyBindings, KeyPress, KeyPressEvent
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.filters import (
-    Condition,
-    is_true,
-    to_filter,
-)
-from prompt_toolkit.formatted_text import (
-    Template,
-)
-from prompt_toolkit.layout.processors import (
-    DisplayMultipleCursors,
-    HighlightSearchProcessor,
-    HighlightSelectionProcessor,
-)
+from prompt_toolkit.formatted_text import Template
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from wcwidth import wcswidth
 
 from .objects import CodeBlock
-from .extras import MudFormatProcessor, SessionBuffer, EasternMenuContainer, VSplitWindow, SessionBufferControl, DotDict, Plugin
+from .extras import BufferBase, LogFileBuffer, PyMudBufferControl, EasternMenuContainer, VSplitWindow, DotDict, MenuItem
+from .modules import Plugin
 from .session import Session
 from .settings import Settings
-from .dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog
+from .dialogs import MessageDialog, WelcomeDialog, QueryDialog, NewSessionDialog, LogSelectionDialog
 
 from enum import Enum
 
@@ -73,7 +62,18 @@ class PyMudApp:
         构造PyMudApp对象实例，并加载替代配置。
         """
 
+        from .i18n import i18n_LoadLanguage, i18n_ListAvailableLanguages
+        # 加载默认chs语言内容，以防翻译不完整时，默认使用中文替代
+        i18n_LoadLanguage("chs")
+
         if cfg_data and isinstance(cfg_data, dict):
+            # load language from 
+            language = Settings.language
+            if "language" in cfg_data.keys():
+                if cfg_data["language"] in i18n_ListAvailableLanguages() and cfg_data["language"] != "chs":
+                    language = cfg_data["language"]
+                    i18n_LoadLanguage(language)
+            
             for key in cfg_data.keys():
                 if key == "sessions":
                     Settings.sessions = cfg_data[key]
@@ -87,10 +87,13 @@ class PyMudApp:
                     Settings.styles.update(cfg_data[key])
                 elif key == "keys":
                     Settings.keys.update(cfg_data[key])
+                elif key == "language":
+                    Settings.language = cfg_data[key]
 
         self._mouse_support = True
         self._plugins  = DotDict()              # 增加 插件 字典
         self._globals  = DotDict()              # 增加所有session使用的全局变量
+        self._onTimerCallbacks = dict()
         self.sessions = {}
         self.current_session = None
         self.status_display = STATUS_DISPLAY(Settings.client["status_display"])
@@ -105,6 +108,8 @@ class PyMudApp:
         self.keybindings.add(Keys.Backspace)(self.delete_selection)
         self.keybindings.add(Keys.ControlLeft, is_global = True)(self.change_session)   # Control-左右箭头切换当前会话
         self.keybindings.add(Keys.ControlRight, is_global = True)(self.change_session)
+        self.keybindings.add(Keys.ShiftLeft, is_global = True)(self.change_session)    # Shift-左右箭头切换当前会话
+        self.keybindings.add(Keys.ShiftRight, is_global = True)(self.change_session)   # 适配 MacOS系统
         self.keybindings.add(Keys.F1, is_global=True)(lambda event: webbrowser.open(Settings.__website__))
         self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
 
@@ -140,7 +145,32 @@ class PyMudApp:
         set_title("{} {}".format(Settings.__appname__, Settings.__version__))
         self.set_status(Settings.text["welcome"])
 
+        self.loggers = dict()           # 所有记录字典
+        self.showLog = False            # 是否显示记录页
+        self.logFileShown = ''          # 记录页显示的记录文件名
+        #self.logSessionBuffer = SessionBuffer()
+        #self.logSessionBuffer.name = "LOGBUFFER"
+        self.logSessionBuffer = LogFileBuffer("LOGBUFFER")
+
         self.load_plugins()
+
+    async def onSystemTimerTick(self):
+        while True:
+            await asyncio.sleep(1)
+            self.app.invalidate()
+            for callback in self._onTimerCallbacks.values():
+                if callable(callback):
+                    callback()
+
+    def addTimerTickCallback(self, name, func):
+        '注册一个系统定时器回调，每1s触发一次。指定name为回调函数关键字，func为回调函数。'
+        if callable(func) and (not name in self._onTimerCallbacks.keys()):
+            self._onTimerCallbacks[name] = func
+
+    def removeTimerTickCallback(self, name):
+        '从系统定时器回调中移除一个回调函数。指定name为回调函数关键字。'
+        if name in self._onTimerCallbacks.keys():
+            self._onTimerCallbacks.pop(name)
 
     def initUI(self):
         """初始化UI界面"""
@@ -174,17 +204,8 @@ class PyMudApp:
             show_cursor=False
         )
 
-        self.mudFormatProc = MudFormatProcessor()
-
-        self.consoleView = SessionBufferControl(
+        self.consoleView = PyMudBufferControl(
             buffer = None,
-            input_processors=[
-                self.mudFormatProc,
-                HighlightSearchProcessor(),
-                HighlightSelectionProcessor(),
-                DisplayMultipleCursors(),
-                ],
-            focus_on_click = False,
             )
         
 
@@ -193,6 +214,7 @@ class PyMudApp:
             width = D(preferred = Settings.client["naws_width"]),
             height = D(preferred = Settings.client["naws_height"]),
             wrap_lines=Condition(lambda: is_true(self.wrap_lines)),
+            #left_margins=[NumberedMargin()],
             #right_margins=[ScrollbarMargin(True)],   
             style="class:text-area"
             )
@@ -201,7 +223,8 @@ class PyMudApp:
             content = HSplit(
                 [
                     self.console,
-                    Window(char = "—", height = 1),
+                    ConditionalContainer(content = Window(char = "—", height = 1), filter = Settings.client["status_divider"]),
+                    #Window(char = "—", height = 1),
                     Window(content = self.statusView, height = Settings.client["status_height"]),
                 ]
             ),
@@ -213,7 +236,7 @@ class PyMudApp:
             content = VSplit(
                 [
                     self.console,
-                    Window(char = "|", width = 1),
+                    ConditionalContainer(content = Window(char = "|", width = 1), filter = Settings.client["status_divider"]),
                     Window(content = self.statusView, width = Settings.client["status_width"]),
                 ]
             ),
@@ -272,24 +295,26 @@ class PyMudApp:
             body = self.body,
             menu_items=[
                 MenuItem(
-                    Settings.text["world"],
+                    Settings.gettext("world"),
                     children=self.create_world_menus(),
                 ),
                 MenuItem(
-                    Settings.text["session"],
+                    Settings.gettext("session"),
                     children=[
-                        MenuItem(Settings.text["connect"], handler = self.act_connect),
-                        MenuItem(Settings.text["disconnect"], handler = self.act_discon),
-                        MenuItem(Settings.text["closesession"], handler = self.act_close_session),
-                        MenuItem(Settings.text["autoreconnect"], handler = self.act_autoreconnect),
+                        MenuItem(Settings.gettext("disconnect"), handler = self.act_discon),
+                        MenuItem(Settings.gettext("connect"), handler = self.act_connect),
+                        MenuItem(Settings.gettext("closesession"), handler = self.act_close_session),
+                        MenuItem(Settings.gettext("autoreconnect"), handler = self.act_autoreconnect),
                         MenuItem("-", disabled=True),
-                        MenuItem(Settings.text["echoinput"], handler = self.act_echoinput),
-                        MenuItem(Settings.text["nosplit"], handler = self.act_nosplit),
-                        MenuItem(Settings.text["copy"], handler = self.act_copy),
-                        MenuItem(Settings.text["copyraw"], handler = self.act_copyraw),
-                        MenuItem(Settings.text["clearsession"], handler = self.act_clearsession),
+                        MenuItem(Settings.gettext("nosplit"), handler = self.act_nosplit),
+                        MenuItem(Settings.gettext("echoinput"), handler = self.act_echoinput),
+                        MenuItem(Settings.gettext("beautify"), handler = self.act_beautify),
+                        MenuItem(Settings.gettext("copy"), handler = self.act_copy),
+                        MenuItem(Settings.gettext("copyraw"), handler = self.act_copyraw),
+                        MenuItem(Settings.gettext("clearsession"), handler = self.act_clearsession),
                         MenuItem("-", disabled=True),
-                        MenuItem(Settings.text["reloadconfig"], handler = self.act_reload),
+                        
+                        MenuItem(Settings.gettext("reloadconfig"), handler = self.act_reload),
                     ]
                 ),
 
@@ -303,15 +328,15 @@ class PyMudApp:
                 # ),
 
                 MenuItem(
-                    Settings.text["help"],
+                    Settings.gettext("help"),
                     children=[
-                        MenuItem(Settings.text["about"], handler = self.act_about)
+                        MenuItem(Settings.gettext("about"), handler = self.act_about)
                     ]
                 ),
 
                 MenuItem(
-                    "",    # 增加一个空名称MenuItem，阻止右侧空白栏点击响应
-                    children=[]
+                    "",    # 增加一个空名称MenuItem，单机后焦点移动至命令行输入处，阻止右侧空白栏点击响应
+                    handler = lambda : self.app.layout.focus(self.commandLine)
                 )
             ],
             floats=[
@@ -326,57 +351,59 @@ class PyMudApp:
     def create_world_menus(self):
         "创建世界子菜单，其中根据本地pymud.cfg中的有关配置创建会话有关子菜单"
         menus = []
-        menus.append(MenuItem(Settings.text["new_session"], handler = self.act_new))
+        menus.append(MenuItem(f'{Settings.gettext("new_session")}...', handler = self.act_new))
         menus.append(MenuItem("-", disabled=True))
 
         ss = Settings.sessions
 
         for key, site in ss.items():
-            host = site["host"]
-            port = site["port"]
-            encoding = site["encoding"]
-            autologin = site["autologin"]
-            scripts = list()
-            default_script = site["default_script"]
-            
-            def_scripts = list()
-            if isinstance(default_script, str):
-                def_scripts.extend(default_script.split(","))
-            elif isinstance(default_script, (list, tuple)):
-                def_scripts.extend(default_script)
-
             menu = MenuItem(key)
-            for name, info in site["chars"].items():
-                after_connect = autologin.format(info[0], info[1])
-                sess_scripts = list()
-                sess_scripts.extend(def_scripts)
-                
-                if len(info) == 3:
-                    session_script = info[2]
-                    if session_script:
-                        if isinstance(session_script, str):
-                            sess_scripts.extend(session_script.split(","))
-                        elif isinstance(session_script, (list, tuple)):
-                            sess_scripts.extend(session_script)
-
-                sub = MenuItem(name, handler = functools.partial(self.create_session, name, host, port, encoding, after_connect, sess_scripts, info[0]))
+            for name in site["chars"].keys():
+                sub = MenuItem(name, handler = functools.partial(self._quickHandleSession, key, name)) # type: ignore
                 menu.children.append(sub)
             menus.append(menu)
 
         menus.append(MenuItem("-", disabled=True))
-        menus.append(MenuItem(Settings.text["exit"], handler=self.act_exit))
+        menus.append(MenuItem(Settings.gettext("show_log"), handler = self.show_logSelectDialog))
+        menus.append(MenuItem("-", disabled=True))
+        menus.append(MenuItem(Settings.gettext("exit"), handler=self.act_exit))
 
         return menus
+
+    def invalidate(self):
+        "刷新显示界面"
+        self.app.invalidate()
 
     def scroll(self, lines = 1):
         "内容滚动指定行数，小于0为向上滚动，大于0为向下滚动"
         if self.current_session:
             s = self.current_session
             b = s.buffer
+        elif self.showLog:
+            b = self.logSessionBuffer
+        else:
+            b = None
+            
+        if isinstance(b, BufferBase):
             if lines < 0:
-                b.cursor_up(-1 * lines)
-            elif lines > 0:
-                b.cursor_down(lines)
+                if b.start_lineno < 0:
+                    self.console._scroll_up()
+                    b.start_lineno = b.lineCount - self.get_height() * 3 // 2
+                else:
+                    b.start_lineno += lines
+                    if b.start_lineno < 0:
+                        b.start_lineno = 0
+
+            else:
+                if b.start_lineno < 0:
+                    return
+
+                b.start_lineno += lines
+ 
+                if b.start_lineno >= b.lineCount - self.get_height():
+                    b.start_lineno = -1
+
+
 
     def page_up(self, event: KeyPressEvent) -> None:
         "快捷键PageUp: 用于向上翻页。翻页页数为显示窗口行数的一半减去一行。"
@@ -419,7 +446,7 @@ class PyMudApp:
     def complete_autosuggest(self, event: KeyPressEvent):
         """快捷键右箭头→: 自动完成建议"""
         b = event.current_buffer
-        if b.cursor_position == len(b.text):
+        if (b.cursor_position == len(b.text)) and b.auto_suggest:
             s = b.auto_suggest.get_suggestion(b, b.document)
             if s:
                 b.insert_text(s.text, fire_event=False)
@@ -427,22 +454,33 @@ class PyMudApp:
             b.cursor_right()
 
     def change_session(self, event: KeyPressEvent):
-        """快捷键Ctrl+左右箭头: 切换会话"""
+        """快捷键Ctrl/Shift+左右箭头: 切换会话"""
         if self.current_session:
             current = self.current_session.name
             keys = list(self.sessions.keys())
             idx = keys.index(current)
             count = len(keys)
 
-            if event.key_sequence[-1].key == Keys.ControlRight:
+            if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
                 if idx < count - 1:
                     new_key = keys[idx+1]
                     self.activate_session(new_key)
 
-            elif event.key_sequence[-1].key == Keys.ControlLeft:
+                elif (idx == count -1) and self.showLog:
+                    self.showLogInTab()
+
+            elif (event.key_sequence[-1].key == Keys.ControlLeft) or (event.key_sequence[-1].key == Keys.ShiftLeft):
                 if idx > 0:
                     new_key = keys[idx-1]
                     self.activate_session(new_key)
+
+        else:
+            if self.showLog:
+                if (event.key_sequence[-1].key == Keys.ControlRight) or (event.key_sequence[-1].key == Keys.ShiftRight):
+                    keys = list(self.sessions.keys())
+                    if len(keys) > 0:
+                        new_key = keys[-1]
+                        self.activate_session(new_key)
 
     def toggle_mousesupport(self, event: KeyPressEvent):
         """快捷键F2: 切换鼠标支持状态。用于远程连接时本地复制命令执行操作"""
@@ -460,62 +498,65 @@ class PyMudApp:
 
         ``注意: 复制的内容仅存在于运行环境的剪贴板中。若使用ssh远程，该复制命令不能访问本地剪贴板。``
         """
+        
         b = self.consoleView.buffer
-        if b.selection_state:
-            srow, scol = b.document.translate_index_to_position(b.selection_state.original_cursor_position)
-            erow, ecol = b.document.translate_index_to_position(b.document.cursor_position)
-
+        if b and b.selection.is_valid():
             if not raw:
-                # Control-C 复制纯文本
-                if srow == erow:
-                    # 单行情况
-                    #line = b.document.current_line
-                    line = self.mudFormatProc.line_correction(b.document.current_line)
-                    start = max(0, scol)
-                    end = min(ecol, len(line))
-                    line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
-                    #line_plain = re.sub("\x1b\\[[^mz]+[mz]", "", line).replace("\r", "").replace("\x00", "")
+                #if b.selection.start_row == b.selection.end_row:
+                if b.selection.rows == 1:
+                    if b.selection.actual_end_col - b.selection.actual_start_col >= len(b.getLine(b.selection.start_row)):
+                        # 单行且选中了整行，此时不校正显示位置匹配
+                        line = b.getLine(b.selection.actual_start_row)
+                    else:
+                        # 单行且选中了部分内容，此时校正显示位置匹配
+                        line = self.consoleView.line_correction(b.getLine(b.selection.actual_start_row))
+
+                    start = max(0, b.selection.actual_start_col)
+                    end = min(len(line) + 1, b.selection.actual_end_col)
+                    line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                     selection = line_plain[start:end]
                     self.app.clipboard.set_text(selection)
-                    self.set_status("已复制：{}".format(selection))
-
-                    self.current_session.setVariable("%copy", selection)
+                    self.set_status(Settings.gettext("msg_copy", selection))
+                    if self.current_session:
+                        self.current_session.setVariable("%copy", selection)
                 else:
                     # 多行只认行
                     lines = []
-                    for row in range(srow, erow + 1):
-                        line = b.document.lines[row]
-                        line_plain = re.sub("\x1b\\[[\d;]+[abcdmz]", "", line, flags = re.IGNORECASE).replace("\r", "").replace("\x00", "")
+                    for row in range(b.selection.actual_start_row, b.selection.actual_end_row + 1):
+                        line = b.getLine(row)
+                        line_plain = Session.PLAIN_TEXT_REGX.sub("", line).replace("\r", "").replace("\x00", "")
                         lines.append(line_plain)
+                    copy_text = "\n".join(lines)
+                    self.app.clipboard.set_text(copy_text)
+                    self.set_status(Settings.gettext("msg_copylines", b.selection.rows))
 
-                    self.app.clipboard.set_text("\n".join(lines))
-                    self.set_status("已复制：行数{}".format(1 + erow - srow))
-
-                    self.current_session.setVariable("%copy", "\n".join(lines))
-                    
             else:
-                # Control-R 复制带有ANSI标记的原始内容（对应字符关系会不正确，因此RAW复制时自动整行复制）
-                if srow == erow:
-                    line = b.document.current_line
+                # RAW模式，直接复制原始内容
+                #if b.selection.start_row == b.selection.end_row:
+                if b.selection.rows == 1:
+                    # 单行情况
+                    line = b.getLine(b.selection.actual_start_row)
                     self.app.clipboard.set_text(line)
-                    self.set_status("已复制：{}".format(line))
-
-                    self.current_session.setVariable("%copy", line)
+                    self.set_status(Settings.gettext("msg_copy", line))
+                    if self.current_session:
+                        self.current_session.setVariable("%copy", line)
 
                 else:
-                    lines = b.document.lines[srow:erow+1]
-                    copy_raw_text = "".join(lines)
+                    # 多行只认行
+                    lines = []
+                    for row in range(b.selection.actual_start_row, b.selection.actual_end_row + 1):
+                        line = b.getLine(row)
+                        lines.append(line)
+                    copy_raw_text = "\n".join(lines)
                     self.app.clipboard.set_text(copy_raw_text)
-                    self.set_status("已复制：行数{}".format(1 + erow - srow))
-                    self.current_session.setVariable("%copy", copy_raw_text)
+                    self.set_status(Settings.gettext("msg_copylines", b.selection.rows))
 
-                # data = self.consoleView.buffer.copy_selection()
-                # self.app.clipboard.set_data(data)
-                # self.set_status("已复制：{}".format(data.text))
+                    if self.current_session:
+                        self.current_session.setVariable("%copy", copy_raw_text)
 
-                # self.current_session.setVariable("%copy", data.text)
+
         else:
-            self.set_status("未选中任何内容...")
+            self.set_status(Settings.gettext("msg_no_selection"))
 
     def create_session(self, name, host, port, encoding = None, after_connect = None, scripts = None, userid = None):
         """
@@ -544,9 +585,74 @@ class PyMudApp:
 
             result = True
         else:
-            self.set_status(f"错误！已存在一个名为{name}的会话，请更换名称再试.")
+            self.set_status(Settings.gettext("msg_session_exists", name))
 
         return result
+
+    def show_logSelectDialog(self):
+        def correction_align_width(text, width):
+            "修正文本对齐宽度，防止ljust和rjust方法产生的中文宽度不对齐问题"
+            return width - wcswidth(text) + len(text)
+        async def coroutine():
+            title_filename = Settings.gettext("logfile_name").ljust(correction_align_width(Settings.gettext("logfile_name"), 20))
+            title_filesize = Settings.gettext("logfile_size").rjust(correction_align_width(Settings.gettext("logfile_size"), 20))
+            title_modified = Settings.gettext("logfile_modified").center(correction_align_width(Settings.gettext("logfile_modified"), 23))
+            head_line = "   {}{}{}".format(title_filename, title_filesize, title_modified)
+            
+            log_list = list()
+            files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.log')]
+            for file in files:
+                file = os.path.abspath(file)
+                filename = os.path.basename(file).ljust(20)
+                filesize = f"{os.path.getsize(file):,} Bytes".rjust(20)
+                # ctime   = datetime.fromtimestamp(os.path.getctime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                mtime   = datetime.fromtimestamp(os.path.getmtime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                
+                file_display_line = "{}{}{}".format(filename, filesize, mtime)
+                log_list.append((file, file_display_line))
+
+            logDir = os.path.abspath(os.path.join(os.curdir, 'log'))
+            if os.path.exists(logDir):
+                files = [f for f in os.listdir(logDir) if f.endswith('.log')]
+                for file in files:
+                    file = os.path.join(logDir, file)
+                    filename = ('log/' + os.path.basename(file)).ljust(20)
+                    filesize = f"{os.path.getsize(file):,} Bytes".rjust(20)
+                    # ctime   = datetime.fromtimestamp(os.path.getctime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                    mtime   = datetime.fromtimestamp(os.path.getmtime(file)).strftime('%Y-%m-%d %H:%M:%S').rjust(23)
+                    
+                    file_display_line = "{}{}{}".format(filename, filesize, mtime)
+                    log_list.append((file, file_display_line))
+            
+            dialog = LogSelectionDialog(
+                text = head_line,
+                values = log_list
+            )
+
+            result = await self.show_dialog_as_float(dialog)
+
+            if result:
+                self.logFileShown = result
+                self.showLogInTab()
+
+        asyncio.ensure_future(coroutine())
+
+    def showLogInTab(self):
+        "在记录也显示LOG记录"
+        self.current_session = None
+        self.showLog = True
+
+        if self.logFileShown:
+            filename = os.path.abspath(self.logFileShown)
+            if os.path.exists(filename):
+                lock = threading.RLock()
+                lock.acquire()
+                self.logSessionBuffer.loadfile(filename)
+                lock.release()
+
+            #self.logSessionBuffer.cursor_position = len(self.logSessionBuffer.text)
+            self.consoleView.buffer = self.logSessionBuffer
+            self.app.invalidate()
 
     def activate_session(self, key):
         "激活指定名称的session，并将该session设置为当前session"
@@ -563,14 +669,19 @@ class PyMudApp:
         async def coroutine():
             if self.current_session:
                 if self.current_session.connected:
-                    dlgQuery = QueryDialog(HTML('<b fg="red">警告</b>'), HTML('<style fg="red">当前会话 {0} 还处于连接状态，确认要关闭？</style>'.format(self.current_session.name)))
+                    dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning")}</b>'), HTML(f'<style fg="red">{Settings.gettext("session_close_prompt", self.current_session.name)}</style>'))
                     result = await self.show_dialog_as_float(dlgQuery)
                     if result:
                         self.current_session.disconnect()
 
                         # 增加延时等待确保会话关闭
+                        wait_time = 0
                         while self.current_session.connected:
                             await asyncio.sleep(0.1)
+                            wait_time += 1
+                            if wait_time > 100:
+                                self.current_session.onDisconnected(None)
+                                break
                             
                     else:
                         return
@@ -580,9 +691,11 @@ class PyMudApp:
                         plugin.onSessionDestroy(self.current_session)
 
                 name = self.current_session.name
+                self.current_session.closeLoggers()
                 self.current_session.clean()
                 self.current_session = None
-                self.consoleView.buffer = SessionBuffer()
+                #self.consoleView.buffer = SessionBuffer()
+                self.consoleView.buffer = None
                 self.sessions.pop(name)
                 #self.set_status(f"会话 {name} 已关闭")
                 if len(self.sessions.keys()) > 0:
@@ -590,7 +703,7 @@ class PyMudApp:
                     self.activate_session(new_sess)
                     #self.set_status(f"当前会话已切换为 {self.current_session.name}")
 
-        asyncio.ensure_future(coroutine())
+        asyncio.ensure_future(coroutine()) # type: ignore
 
     # 菜单选项操作 - 开始
 
@@ -621,25 +734,48 @@ class PyMudApp:
             s = self.current_session
             b = s.buffer
             b.exit_selection()
-            b.cursor_position = len(b.text)
+            #b.cursor_position = len(b.text)
+            b.nosplit()
+
+        elif self.showLog:
+            b = self.logSessionBuffer
+            #b.exit_selection()
+            #b.cursor_position = len(b.text)
+            #b.start_lineno = -1
+            b.nosplit()
 
     def act_close_session(self):
         "菜单: 关闭当前会话"
-        self.close_session()
+        if self.current_session:
+            self.close_session()
+
+        elif self.showLog:
+            self.showLog = False
+            #self.logSessionBuffer = None
+            if len(self.sessions.keys()) > 0:
+                new_sess = list(self.sessions.keys())[0]
+                self.activate_session(new_sess)
+
+    def act_beautify(self):
+        "菜单: 打开/关闭美化显示"
+        val = not Settings.client["beautify"]
+        Settings.client["beautify"] = val
+        if self.current_session:
+            self.current_session.info(f'{Settings.gettext("msg_beautify")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}!')
 
     def act_echoinput(self):
         "菜单: 显示/隐藏输入指令"
         val = not Settings.client["echo_input"]
         Settings.client["echo_input"] = val
         if self.current_session:
-            self.current_session.info(f"回显输入命令被设置为：{'打开' if val else '关闭'}")
+            self.current_session.info(f'{Settings.gettext("msg_echoinput")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}!')
 
     def act_autoreconnect(self):
         "菜单: 打开/关闭自动重连"
         val = not Settings.client["auto_reconnect"]
         Settings.client["auto_reconnect"] = val
         if self.current_session:
-            self.current_session.info(f"自动重连被设置为：{'打开' if val else '关闭'}")
+            self.current_session.info(f'{Settings.gettext("msg_autoreconnect")}{Settings.gettext("msg_open") if val else Settings.gettext("msg_close")}')
 
     def act_copy(self):
         "菜单: 复制纯文本"
@@ -651,7 +787,8 @@ class PyMudApp:
 
     def act_clearsession(self):
         "菜单: 清空会话内容"
-        self.consoleView.buffer.text = ""
+        if self.consoleView.buffer:
+            self.consoleView.buffer.clear()
 
     def act_reload(self):
         "菜单: 重新加载脚本配置"
@@ -660,17 +797,7 @@ class PyMudApp:
 
     # 暂未实现该功能
     def act_change_layout(self, layout):
-        #if isinstance(layout, STATUS_DISPLAY):
         self.status_display = layout
-        #self.console_frame.body.reset()
-        # if layout == STATUS_DISPLAY.HORIZON:
-        #     self.console_frame.body = self.console_with_horizon_status
-        # elif layout == STATUS_DISPLAY.VERTICAL:
-        #     self.console_frame.body = self.console_with_vertical_status
-        # elif layout == STATUS_DISPLAY.NONE:
-        #     self.console_frame.body = self.console_without_status
-
-        #self.show_message("布局调整", f"已将布局设置为{layout}")
         self.app.invalidate()
 
     def act_exit(self):
@@ -682,7 +809,7 @@ class PyMudApp:
                     con_sessions.append(session.name)
 
             if len(con_sessions) > 0:
-                dlgQuery = QueryDialog(HTML('<b fg="red">程序退出警告</b>'), HTML('<style fg="red">尚有 {0} 个会话 {1} 还处于连接状态，确认要关闭？</style>'.format(len(con_sessions), ", ".join(con_sessions))))
+                dlgQuery = QueryDialog(HTML(f'<b fg="red">{Settings.gettext("warning_exit")}</b>'), HTML(f'<style fg="red">{Settings.gettext("app_exit_prompt", len(con_sessions), ", ".join(con_sessions))}</style>'))
                 result = await self.show_dialog_as_float(dlgQuery)
                 if result:
                     for ss_name in con_sessions:
@@ -690,15 +817,20 @@ class PyMudApp:
                         ss.disconnect()
 
                         # 增加延时等待确保会话关闭
+                        wait_time = 0
                         while ss.connected:
                             await asyncio.sleep(0.1)
+                            wait_time += 1
+                            if wait_time > 100:
+                                ss.onDisconnected(None)
+                                break
 
                         for plugin in self._plugins.values():
                             if isinstance(plugin, Plugin):
                                 plugin.onSessionDestroy(ss)
 
-                    else:
-                        return
+                else:
+                    return
                 
             self.app.exit()
 
@@ -713,17 +845,26 @@ class PyMudApp:
 
     def get_input_prompt(self):
         "命令输入行提示符"
-        return HTML(Settings.text["input_prompt"])
+        return HTML(Settings.gettext("input_prompt"))
 
     def btn_title_clicked(self, name, mouse_event: MouseEvent):
         "顶部会话标签点击切换鼠标事件"
         if mouse_event.event_type == MouseEventType.MOUSE_UP:
-            self.activate_session(name)
+            if name == '[LOG]':
+                self.showLogInTab()
+            else:
+                self.activate_session(name)
 
     def get_frame_title(self):
         "顶部会话标题选项卡"
         if len(self.sessions.keys()) == 0:
-            return Settings.__appname__ + " " + Settings.__version__
+            if not self.showLog:
+                return Settings.__appname__ + " " + Settings.__version__
+            else:
+                if self.logFileShown:
+                    return f'[LOG] {self.logFileShown}'
+                else:
+                    return f'[LOG]'
         
         title_formatted_list = []
         for key, session in self.sessions.items():
@@ -742,6 +883,17 @@ class PyMudApp:
             title_formatted_list.append((style, key, functools.partial(self.btn_title_clicked, key)))
             title_formatted_list.append(("", " | "))
 
+        if self.showLog:
+            if self.current_session is None:
+                style = style = Settings.styles["selected"]
+            else:
+                style = Settings.styles["normal"]
+
+            title = f'[LOG] {self.logFileShown}' if self.logFileShown else f'[LOG]'
+
+            title_formatted_list.append((style, title, functools.partial(self.btn_title_clicked, '[LOG]')))
+            title_formatted_list.append(("", " | "))
+
         return title_formatted_list[:-1]
 
     def get_statusbar_text(self):
@@ -753,16 +905,26 @@ class PyMudApp:
     
     def get_statusbar_right_text(self):
         "状态栏右侧内容"
-        con_str, mouse_support, tri_status = "", "", ""
+        con_str, mouse_support, tri_status, beautify = "", "", "", ""
+        if not Settings.client["beautify"]:
+            beautify = Settings.gettext("status_nobeautify") + " "
+
         if not self._mouse_support:
-            mouse_support = "鼠标已禁用 "
+            mouse_support = Settings.gettext("status_mouseinh") + " "
+
+        mouse = "0, 0"
 
         if self.current_session:
+            buffer = self.current_session.buffer
+            if buffer:
+                position = buffer.mouse_point
+                mouse = f"{position.y}, {position.x}"
+
             if self.current_session._ignore:
-                tri_status = "全局禁用 "
+                tri_status = Settings.gettext("status_ignore") + " "
 
             if not self.current_session.connected:
-                con_str = "未连接"
+                con_str = Settings.gettext("status_notconnect")
             else:
                 dura = self.current_session.duration
                 DAY, HOUR, MINUTE = 86400, 3600, 60
@@ -773,23 +935,26 @@ class PyMudApp:
                 dura = dura - hours * HOUR
                 mins = dura // MINUTE
                 sec = dura - mins * MINUTE
-
                 if days > 0:
-                    con_str = "已连接：{:.0f}天{:.0f}小时{:.0f}分{:.0f}秒".format(days, hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{4}{1:.0f}{5}{2:.0f}{6}{3:.0f}{7}".format(days, hours, mins, sec, Settings.gettext("Day"), Settings.gettext("Hour"), Settings.gettext("Minute"), Settings.gettext("Second"))
                 elif hours > 0:
-                    con_str = "已连接：{:.0f}小时{:.0f}分{:.0f}秒".format(hours, mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{3}{1:.0f}{4}{2:.0f}{5}".format(hours, mins, sec, Settings.gettext("Hour"), Settings.gettext("Minute"), Settings.gettext("Second"))
                 elif mins > 0:
-                    con_str = "已连接：{:.0f}分{:.0f}秒".format(mins, sec)
+                    con_str = Settings.gettext("status_connected") + ": {0:.0f}{2}{1:.0f}{3}".format(mins, sec, Settings.gettext("Minute"), Settings.gettext("Second"))
                 else:
-                    con_str = "已连接：{:.0f}秒".format(sec)
+                    con_str = Settings.gettext("status_connected") + ": {:.0f}{}".format(sec, Settings.gettext("Second"))
 
-        return "{}{}{} {} {} ".format(mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
+        return "{}{}{}{} {} {} ".format(beautify, mouse_support, tri_status, con_str, Settings.__appname__, Settings.__version__)
 
     def get_statuswindow_text(self):
         "状态窗口: status_maker 的内容"
         text = ""
-        if self.current_session:
-            text = self.current_session.get_status()
+
+        try:
+            if self.current_session:
+                text = self.current_session.get_status()
+        except Exception as e:
+            text = f"{e}"
 
         return text
 
@@ -802,6 +967,50 @@ class PyMudApp:
         self.status_message = msg
         self.app.invalidate()
 
+    def _quickHandleSession(self, group, name):
+        '''
+        根据指定的组名和会话角色名，从Settings内容，创建一个会话
+        '''
+        handled = False
+        if name in self.sessions.keys():
+           self.activate_session(name)
+           handled = True
+
+        else:
+            site = Settings.sessions[group]
+            if name in site["chars"].keys():
+                host = site["host"]
+                port = site["port"]
+                encoding = site["encoding"]
+                autologin = site["autologin"]
+                default_script = site["default_script"]
+                
+                def_scripts = list()
+                if isinstance(default_script, str):
+                    def_scripts.extend(default_script.split(","))
+                elif isinstance(default_script, (list, tuple)):
+                    def_scripts.extend(default_script)
+
+                charinfo = site["chars"][name]
+
+                after_connect = autologin.format(charinfo[0], charinfo[1])
+                sess_scripts = list()
+                sess_scripts.extend(def_scripts)
+                    
+                if len(charinfo) == 3:
+                    session_script = charinfo[2]
+                    if session_script:
+                        if isinstance(session_script, str):
+                            sess_scripts.extend(session_script.split(","))
+                        elif isinstance(session_script, (list, tuple)):
+                            sess_scripts.extend(session_script)
+
+                self.create_session(name, host, port, encoding, after_connect, sess_scripts, charinfo[0])
+                handled = True
+        
+        return handled
+
+
     def handle_session(self, *args):
         '''
         嵌入命令 #session 的执行函数，创建一个远程连接会话。
@@ -812,12 +1021,18 @@ class PyMudApp:
             - 当不指定 Encoding: 时, 默认使用utf-8编码
             - 可以直接使用 #{名称} 切换会话和操作会话命令
 
+            - #session {group}.{name}
+            - 相当于直接点击菜单{group}下的{name}菜单来创建会话. 当该会话已存在时，切换到该会话
+
         参数:
             :name: 会话名称
             :host: 服务器域名或IP地址
             :port: 端口号
             :encoding: 编码格式，不指定时默认为 utf8
     
+            :group: 组名, 即配置文件中, sessions 字段下的某个关键字
+            :name: 会话快捷名称, 上述 group 关键字下的 chars 字段中的某个关键字
+
         示例:
             ``#session {名称} {宿主机} {端口} {编码}`` 
                 创建一个远程连接会话，使用指定编码格式连接到远程宿主机的指定端口并保存为 {名称} 。其中，编码可以省略，此时使用Settings.server["default_encoding"]的值，默认为utf8
@@ -830,6 +1045,9 @@ class PyMudApp:
             ``#newstart give miui gold`` 
                 使名称为newstart的会话执行give miui gold指令，但不切换到该会话
 
+            ``#session pkuxkx.newstart``
+                通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。若该会话存在，则切换到该会话
+
         相关命令:
             - #close
             - #exit
@@ -837,8 +1055,17 @@ class PyMudApp:
         '''
 
         nothandle = True
+        errmsg = "错误的#session命令"
+        if len(args) == 1:
+            host_session = args[0]
+            if '.' in host_session:
+                group, name = host_session.split('.')
+                nothandle = not self._quickHandleSession(group, name)
 
-        if len(args) >= 3:
+            else:
+                errmsg = Settings.gettext("msg_cmd_session_error")
+
+        elif len(args) >= 3:
             session_name = args[0]
             session_host = args[1]
             session_port = int(args[2])
@@ -851,18 +1078,14 @@ class PyMudApp:
             nothandle = False
         
         if nothandle:
-            self.set_status("错误的#session命令")
+            self.set_status(errmsg)
 
     def enter_pressed(self, buffer: Buffer):
         "命令行回车按键处理"
         cmd_line = buffer.text
         space_index = cmd_line.find(" ")
-        
-        if len(cmd_line) == 0:
-            if self.current_session:
-                self.current_session.writeline("")
-        
-        elif cmd_line[0] != Settings.client["appcmdflag"]:
+
+        if (len(cmd_line) >= 1) and (cmd_line[0] != Settings.client["appcmdflag"]):
             if self.current_session:
                 self.current_session.last_command = cmd_line
 
@@ -874,15 +1097,23 @@ class PyMudApp:
             if self.current_session:
                 if len(cmd_line) == 0:
                     self.current_session.writeline("")
+        
                 else:
                     try:
+                        self.current_session.log.log(f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n")
+
                         cb = CodeBlock(cmd_line)
                         cb.execute(self.current_session)
                     except Exception as e:
                         self.current_session.warning(e)
                         self.current_session.exec_command(cmd_line)
             else:
-                self.set_status("当前没有正在运行的session.")
+                if cmd_line == "#exit":
+                    self.act_exit()
+                elif (cmd_line == "#close") and self.showLog:
+                    self.act_close_session()
+                else:
+                    self.set_status(Settings.gettext("msg_no_session"))
 
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:
@@ -956,29 +1187,42 @@ class PyMudApp:
     async def show_dialog_as_float(self, dialog):
         "显示弹出式窗口."
         float_ = Float(content=dialog)
-        self.root_container.floats.insert(0, float_)
+        if self.root_container.floats:
 
-        self.app.layout.focus(dialog)
-        result = await dialog.future
-        self.app.layout.focus(self.commandLine)
+            self.root_container.floats.insert(0, float_)
 
-        if float_ in self.root_container.floats:
-            self.root_container.floats.remove(float_)
+            self.app.layout.focus(dialog)
+            result = await dialog.future
+            self.app.layout.focus(self.commandLine)
 
-        return result
+            if float_ in self.root_container.floats:
+                self.root_container.floats.remove(float_)
+
+            return result
 
     async def run_async(self):
         "以异步方式运行本程序"
-        await self.app.run_async()
+        # 运行插件启动应用，放在此处，确保插件初始化在event_loop创建完成之后运行
+        for plugin in self._plugins.values():
+            if isinstance(plugin, Plugin):
+                plugin.onAppInit(self)
+                
+        asyncio.create_task(self.onSystemTimerTick())
+        await self.app.run_async(set_exception_handler = False)
+
+        # 当应用退出时，运行插件销毁应用
+        for plugin in self._plugins.values():
+            if isinstance(plugin, Plugin):
+                plugin.onAppDestroy(self)
 
     def run(self):
         "运行本程序"
-        self.app.run()
-        #asyncio.run(self.run_async())
+        #self.app.run(set_exception_handler = False)
+        asyncio.run(self.run_async())
 
     def get_width(self):
-        "获取ConsoleView的实际宽度，等于输出宽度-4,（左右线条宽度, 滚动条宽度，右边让出的1列）"
-        size = self.app.output.get_size().columns - 4
+        "获取ConsoleView的实际宽度，等于输出宽度,（已经没有左右线条和滚动条了）"
+        size = self.app.output.get_size().columns
         if Settings.client["status_display"] == 2:
             size = size - Settings.client["status_width"] - 1
         return size
@@ -1007,9 +1251,9 @@ class PyMudApp:
                         file_name = file[:-3]
                         plugin = Plugin(file_name, file_path)
                         self._plugins[plugin.name] = plugin
-                        plugin.onAppInit(self)
+                        # plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件，加载错误，信息为: {e}")
+                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
         
         # 然后加载当前目录下的插件
         current_dir = os.path.abspath(".")
@@ -1024,8 +1268,7 @@ class PyMudApp:
                         self._plugins[plugin.name] = plugin
                         plugin.onAppInit(self)
                     except Exception as e:
-                        self.set_status(f"文件: {plugins_dir}\{file} 不是一个合法的插件文件. 加载错误，信息为: {e}")
-
+                        self.set_status(Settings.gettext("msg_plugin_load_error", file, e))
 
     def reload_plugin(self, plugin: Plugin):
         "重新加载指定插件"
@@ -1039,21 +1282,6 @@ class PyMudApp:
             plugin.onSessionCreate(session)
         
 
-def main(cfg_data = None):
+def startApp(cfg_data = None):
     app = PyMudApp(cfg_data)
     app.run()
-
-if __name__ == "__main__":
-
-    cfg = "pymud.cfg"
-    import sys
-    args = sys.argv
-    if len(args) > 1:
-        cfg = args[1]
-
-    if os.path.exists(cfg):
-        with open(cfg, "r", encoding="utf8", errors="ignore") as fp:
-            cfg_data = json.load(fp)
-            main(cfg_data)
-    else:
-        main()

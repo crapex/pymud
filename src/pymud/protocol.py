@@ -1,4 +1,4 @@
-import logging, asyncio, datetime, traceback
+import logging, datetime
 from asyncio import BaseTransport, Protocol
 from .settings import Settings
 
@@ -146,7 +146,7 @@ class MudClientProtocol(Protocol):
             subfunc = getattr(self, f"handle_{v.lower()}_sb", None)         # 子协商处理函数
             self._iac_subneg_handlers[k] = subfunc
 
-        self.encoding = Settings.server["default_encoding"]                 # 字节串基本编码
+        self.encoding = kwargs.get("encoding", Settings.server["default_encoding"])                 # 字节串基本编码
         self.encoding_errors = Settings.server["encoding_errors"]           # 编码解码错误时的处理
         self.mnes = Settings.mnes
 
@@ -164,7 +164,7 @@ class MudClientProtocol(Protocol):
     def get_extra_info(self, name, default=None):
         """获取传输信息或者额外的协议信息."""
         if self._transport:
-            default = self._transport._extra.get(name, default)
+            default = self._transport.get_extra_info(name, default)
         return self._extra.get(name, default)
         
     def connection_made(self, transport: BaseTransport) -> None:
@@ -204,8 +204,9 @@ class MudClientProtocol(Protocol):
             self.log.warning(f'由于异常连接已经断开: {self}, {exc}.')
             self.session.set_exception(exc)
 
-        self._transport.close()
-        self._transport = None
+        if self._transport:
+            self._transport.close()
+            self._transport = None
         #self.session.set_transport(None)
 
         # 若设置了onConnected回调函数，则调用
@@ -324,7 +325,7 @@ class MudClientProtocol(Protocol):
     # public protocol methods
     def __repr__(self):
         "%r下的表述"
-        hostport = self.get_extra_info("peername", ["-", "closing"])[:2]
+        hostport = self.get_extra_info("peername", ["-", "closing"])[:2] # type: ignore
         return "<Peer {0} {1}>".format(*hostport)
     
     def _iac_default_handler(self, cmd, option):
@@ -475,7 +476,7 @@ class MudClientProtocol(Protocol):
                 self._mtts_index += 1
                 self.log.debug('回复第二次MTTS子协商: IAC SB TTYPE IS "XTERM" IAC SE')
             elif self._mtts_index == 2:
-                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置775（支持ANSI, VT100, UTF-8, TRUECOLOR, MNES），后续功能完善后再更改
+                # 第三次收到，回复客户端终端支持的标准功能，此处默认设置783（支持ANSI, VT100, UTF-8, 256 COLORS, TRUECOLOR, MNES），后续功能完善后再更改
                 # 根据完善的终端模拟功能，修改终端标准
                 #       1 "ANSI"              Client supports all common ANSI color codes.
                 #       2 "VT100"             Client supports all common VT100 codes.
@@ -489,9 +490,9 @@ class MudClientProtocol(Protocol):
                 #     512 "MNES"              Client supports the Mud New Environment Standard for information exchange.
                 #    1024 "MSLP"              Client supports the Mud Server Link Protocol for clickable link handling.
                 #    2048 "SSL"               Client supports SSL for data encryption, preferably TLS 1.3 or higher.
-                self.session.write(IAC + SB + TTYPE + IS + b"MTTS 775" + IAC + SE)
+                self.session.write(IAC + SB + TTYPE + IS + b"MTTS 783" + IAC + SE)
                 self._mtts_index += 1
-                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 775" IAC SE')
+                self.log.debug('回复第三次MTTS子协商: IAC SB TTYPE IS "MTTS 783" IAC SE')
             else:
                 self.log.warning(f'收到第{self._mtts_index + 1}次(正常为3次)的MTTS子协商, 将不予应答')
         else:
@@ -766,9 +767,9 @@ class MudClientProtocol(Protocol):
                     state_machine = "wait_val_in_table"
                 elif byte in (IAC, MSDP_VAR, MSDP_VAL):     # 正常数据 value 结束
                     current_val = val_in_text.decode(self.encoding)
-                    msdp_data[current_var] = current_val
+                    msdp_data[current_var] = current_val # type: ignore
                     state_machine = "wait_end"
-                    self.log.debug(f"收到文本形式的MSDP子协商数据： {current_var} = '{current_val}'")
+                    self.log.debug(f"收到文本形式的MSDP子协商数据： {current_var} = '{current_val}'") # type: ignore
                 else:                           # value是正常数据
                     val_in_text.append(byte)
             elif state_machine == "wait_val_in_array":
@@ -776,9 +777,9 @@ class MudClientProtocol(Protocol):
                     # 最后一个val 已结束
                     val_in_array.append(val_in_text.decode(self.encoding))
                     val_in_text.clear()
-                    msdp_data[current_var] = val_in_array
+                    msdp_data[current_var] = val_in_array # type: ignore
                     state_machine = "wait_end"
-                    self.log.debug(f"收到数组形式的MSDP子协商数据： {current_var} = '{val_in_array}'")
+                    self.log.debug(f"收到数组形式的MSDP子协商数据： {current_var} = '{val_in_array}'") # type: ignore
                 elif byte == MSDP_VAL:
                     if len(val_in_text) > 0:                # 一个VAL已完成，保存到array，后面还有val
                         val_in_array.append(val_in_text.decode(self.encoding))
@@ -786,15 +787,16 @@ class MudClientProtocol(Protocol):
                 else:
                     val_in_text.append(byte)
             elif state_machine == "wait_val_in_table":
+                state_machine_table = "not_initialized"
                 if byte == MSDP_TABLE_CLOSE:
                     # 最后一组已结束
-                    val_in_table[table_var_name.decode[self.encoding]] = table_var_value.decode[self.encoding]
-                    msdp_data[current_var] = val_in_table
+                    val_in_table[table_var_name.decode(self.encoding)] = table_var_value.decode(self.encoding)
+                    msdp_data[current_var] = val_in_table # type: ignore
                     state_machine = "wait_end"
-                    self.log.debug(f"收到表格形式的MSDP子协商数据： {current_var} = '{val_in_table}'")
+                    self.log.debug(f"收到表格形式的MSDP子协商数据： {current_var} = '{val_in_table}'") # type: ignore
                 elif byte == MSDP_VAR:
                     if len(table_var_name) > 0:             # 上一个VAL已完成，保存到table，后面继续为VAR
-                        val_in_table[table_var_name.decode[self.encoding]] = table_var_value.decode[self.encoding]
+                        val_in_table[table_var_name.decode(self.encoding)] = table_var_value.decode(self.encoding)
                         table_var_name.clear()
                         table_var_value.clear()
                     state_machine_table = "wait_table_var"

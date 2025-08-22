@@ -1,48 +1,32 @@
 # External Libraries
 from unicodedata import east_asian_width
 from wcwidth import wcwidth
-from typing import Any
-import time
-
-from typing import Iterable
+from dataclasses import dataclass
+import time, re, linecache, os
+from typing import Optional, List, Dict
+from typing import Iterable, Optional, Tuple
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.formatted_text import to_formatted_text, fragment_list_to_text
+from prompt_toolkit.formatted_text import to_formatted_text
 from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
-from prompt_toolkit.layout.processors import Processor, Transformation
+from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.document import Document
 from prompt_toolkit.data_structures import Point
-from prompt_toolkit.layout.controls import UIContent
-from prompt_toolkit.lexers import Lexer
+from prompt_toolkit.layout.controls import UIContent, FormattedTextControl
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
-from prompt_toolkit.selection import SelectionType
-from prompt_toolkit.buffer import Buffer, ValidationState
 
-from prompt_toolkit.filters import (
-    FilterOrBool,
-)
 from prompt_toolkit.formatted_text import (
     StyleAndTextTuples,
     to_formatted_text,
 )
-from prompt_toolkit.formatted_text.utils import fragment_list_to_text
-from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.key_binding.key_bindings import KeyBindingsBase
 from prompt_toolkit.layout.containers import (
     Window,
     WindowAlign,
 )
 from prompt_toolkit.layout.controls import (
-    BufferControl,
+    
     FormattedTextControl,
 )
-from prompt_toolkit.layout.processors import (
-    Processor,
-)
-from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Button, MenuContainer, MenuItem
@@ -51,424 +35,10 @@ from prompt_toolkit.widgets.base import Border
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Screen, WritePosition
 from prompt_toolkit.layout.utils import explode_text_fragments
 from prompt_toolkit.formatted_text.utils import (
-    fragment_list_to_text,
     fragment_list_width,
 )
 
 from .settings import Settings
-
-class MudFormatProcessor(Processor):
-    "在BufferControl中显示ANSI格式的处理器"
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
-        self.SINGLE_LINES = set("┌└├┬┼┴╭╰─")
-        self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
-
-    def width_correction(self, line: str) -> str:
-        new_str = []
-        for ch in line:
-            new_str.append(ch)
-            if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
-                if ch in self.FULL_BLOCKS:
-                    new_str.append(ch)
-                elif ch in self.SINGLE_LINES:
-                    new_str.append("─")
-                elif ch in self.DOUBLE_LINES:
-                    new_str.append("═")
-                else:
-                    new_str.append(' ')
-
-        return "".join(new_str)
-    
-    def return_correction(self, line: str):
-        return line.replace("\r", "").replace("\x00", "")
-    
-    def tab_correction(self, line: str):
-        return line.replace("\t", " " * Settings.client["tabstop"])
-
-    def line_correction(self, line: str):
-        # 处理\r符号（^M）
-        line = self.return_correction(line)
-        # 处理Tab(\r)符号（^I）
-        line = self.tab_correction(line)
-        # 美化（解决中文英文在Console中不对齐的问题）
-        if Settings.client["beautify"]:
-            line = self.width_correction(line)
-
-        return line
-
-    def apply_transformation(self, transformation_input):
-        # 准备（先还原为str）
-        line = fragment_list_to_text(transformation_input.fragments)
-        line = self.line_correction(line)
-        # 处理ANSI标记（生成FormmatedText）
-        fragments = to_formatted_text(ANSI(line))
-        return Transformation(fragments)
-
-class SessionBuffer(Buffer):
-    "继承自Buffer，为Session内容所修改，主要修改为只能在最后新增内容，并且支持分屏显示适配"
-
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-        # 修改内容
-        self.__text = ""
-        self.__split = False
-        
-    def _set_text(self, value: str) -> bool:
-        """set text at current working_index. Return whether it changed."""
-        original_value = self.__text
-        self.__text = value
-
-        # Return True when this text has been changed.
-        if len(value) != len(original_value):
-            return True
-        elif value != original_value:
-            return True
-        return False
-
-    @property
-    def text(self) -> str:
-        return self.__text
-
-    @text.setter
-    def text(self, value: str) -> None:
-        # SessionBuffer is only appendable
-
-        if self.cursor_position > len(value):
-            self.cursor_position = len(value)
-
-        changed = self._set_text(value)
-
-        if changed:
-            self._text_changed()
-            self.history_search_text = None
-
-    @property
-    def working_index(self) -> int:
-        return 0
-
-    @working_index.setter
-    def working_index(self, value: int) -> None:
-        pass
-
-    def _text_changed(self) -> None:
-        # Remove any validation errors and complete state.
-        self.validation_error = None
-        self.validation_state = ValidationState.UNKNOWN
-        self.complete_state = None
-        self.yank_nth_arg_state = None
-        self.document_before_paste = None
-        
-        # 添加内容时，不取消选择
-        #self.selection_state = None
-
-        self.suggestion = None
-        self.preferred_column = None
-
-        # fire 'on_text_changed' event.
-        self.on_text_changed.fire()
-
-    def set_document(self, value: Document, bypass_readonly: bool = False) -> None:
-        pass
-
-    @property
-    def split(self) -> bool:
-        return self.__split
-    
-    @split.setter
-    def split(self, value: bool) -> None:
-        self.__split = value
-
-    @property
-    def is_returnable(self) -> bool:
-        return False
-
-    # End of <getters/setters>
-
-    def save_to_undo_stack(self, clear_redo_stack: bool = True) -> None:
-        pass
-
-    def delete(self, count: int = 1) -> str:
-        pass
-
-    def insert_text(
-        self,
-        data: str,
-        overwrite: bool = False,
-        move_cursor: bool = True,
-        fire_event: bool = True,
-    ) -> None:
-        # 始终在最后增加内容
-        self.text += data
-        
-        # 分隔情况下，光标保持原位置不变，否则光标始终位于最后
-        if not self.__split:
-            # 若存在选择状态，则视情保留选择
-            if self.selection_state:
-                start = self.selection_state.original_cursor_position
-                end = self.cursor_position
-                row, col = self.document.translate_index_to_position(start)
-                lastrow, col = self.document.translate_index_to_position(len(self.text))
-                self.exit_selection()
-                # 还没翻过半页的话，就重新选择上
-                if lastrow - row < get_app().output.get_size().rows // 2 - 1:
-                    self.cursor_position = len(self.text)
-                    self.cursor_position = start
-                    self.start_selection
-                    self.cursor_position = end
-                else:
-                    self.cursor_position = len(self.text)
-            else:
-                self.cursor_position = len(self.text)
-        else:
-            pass
-        
-
-    def clear_half(self):
-        "将Buffer前半段内容清除，并清除缓存"
-        remain_lines = len(self.document.lines) // 2
-        start = self.document.translate_row_col_to_index(remain_lines, 0)
-        new_text = self.text[start:]
-
-        del self.history
-        self.history = InMemoryHistory()
-        
-        self.text = ""
-        self._set_text(new_text)
-
-        self._document_cache.clear()
-        new_doc  = Document(text = new_text, cursor_position = len(new_text))
-        self.reset(new_doc, False)
-        self.__split = False
-
-        return new_doc.line_count
-
-    def undo(self) -> None:
-        pass
-
-    def redo(self) -> None:
-        pass
-
-
-class SessionBufferControl(BufferControl):
-    def __init__(self, buffer: SessionBuffer = None, input_processors = None, include_default_input_processors: bool = True, lexer: Lexer = None, preview_search: FilterOrBool = False, focusable: FilterOrBool = True, search_buffer_control = None, menu_position = None, focus_on_click: FilterOrBool = False, key_bindings: KeyBindingsBase = None):
-        # 将所属Buffer类型更改为SessionBuffer
-        buffer = buffer or SessionBuffer()
-        super().__init__(buffer, input_processors, include_default_input_processors, lexer, preview_search, focusable, search_buffer_control, menu_position, focus_on_click, key_bindings)
-        self.buffer = buffer
-
-    # def create_content(
-    #     self, width: int, height: int, preview_search: bool = False
-    # ) -> UIContent:
-    #     """
-    #     Create a UIContent.
-    #     """
-    #     buffer = self.buffer
-
-    #     # Trigger history loading of the buffer. We do this during the
-    #     # rendering of the UI here, because it needs to happen when an
-    #     # `Application` with its event loop is running. During the rendering of
-    #     # the buffer control is the earliest place we can achieve this, where
-    #     # we're sure the right event loop is active, and don't require user
-    #     # interaction (like in a key binding).
-    #     buffer.load_history_if_not_yet_loaded()
-
-    #     # Get the document to be shown. If we are currently searching (the
-    #     # search buffer has focus, and the preview_search filter is enabled),
-    #     # then use the search document, which has possibly a different
-    #     # text/cursor position.)
-    #     search_control = self.search_buffer_control
-    #     preview_now = preview_search or bool(
-    #         # Only if this feature is enabled.
-    #         self.preview_search()
-    #         and
-    #         # And something was typed in the associated search field.
-    #         search_control
-    #         and search_control.buffer.text
-    #         and
-    #         # And we are searching in this control. (Many controls can point to
-    #         # the same search field, like in Pyvim.)
-    #         get_app().layout.search_target_buffer_control == self
-    #     )
-
-    #     if preview_now and search_control is not None:
-    #         ss = self.search_state
-
-    #         document = buffer.document_for_search(
-    #             SearchState(
-    #                 text=search_control.buffer.text,
-    #                 direction=ss.direction,
-    #                 ignore_case=ss.ignore_case,
-    #             )
-    #         )
-    #     else:
-    #         document = buffer.document
-
-    #     get_processed_line = self._create_get_processed_line_func(
-    #         document, width, height
-    #     )
-    #     self._last_get_processed_line = get_processed_line
-
-    #     def translate_rowcol(row: int, col: int) -> Point:
-    #         "Return the content column for this coordinate."
-    #         return Point(x=get_processed_line(row).source_to_display(col), y=row)
-
-    #     def get_line(i: int) -> StyleAndTextTuples:
-    #         "Return the fragments for a given line number."
-    #         fragments = get_processed_line(i).fragments
-
-    #         # Add a space at the end, because that is a possible cursor
-    #         # position. (When inserting after the input.) We should do this on
-    #         # all the lines, not just the line containing the cursor. (Because
-    #         # otherwise, line wrapping/scrolling could change when moving the
-    #         # cursor around.)
-    #         fragments = fragments + [("", " ")]
-    #         return fragments
-
-    #     content = UIContent(
-    #         get_line=get_line,
-    #         line_count=document.line_count,
-    #         cursor_position=translate_rowcol(
-    #             document.cursor_position_row, document.cursor_position_col
-    #         ),
-    #     )
-
-    #     # If there is an auto completion going on, use that start point for a
-    #     # pop-up menu position. (But only when this buffer has the focus --
-    #     # there is only one place for a menu, determined by the focused buffer.)
-    #     if get_app().layout.current_control == self:
-    #         menu_position = self.menu_position() if self.menu_position else None
-    #         if menu_position is not None:
-    #             assert isinstance(menu_position, int)
-    #             menu_row, menu_col = buffer.document.translate_index_to_position(
-    #                 menu_position
-    #             )
-    #             content.menu_position = translate_rowcol(menu_row, menu_col)
-    #         elif buffer.complete_state:
-    #             # Position for completion menu.
-    #             # Note: We use 'min', because the original cursor position could be
-    #             #       behind the input string when the actual completion is for
-    #             #       some reason shorter than the text we had before. (A completion
-    #             #       can change and shorten the input.)
-    #             menu_row, menu_col = buffer.document.translate_index_to_position(
-    #                 min(
-    #                     buffer.cursor_position,
-    #                     buffer.complete_state.original_document.cursor_position,
-    #                 )
-    #             )
-    #             content.menu_position = translate_rowcol(menu_row, menu_col)
-    #         else:
-    #             content.menu_position = None
-
-    #     return content
-
-    def mouse_handler(self, mouse_event: MouseEvent):
-        """
-        鼠标处理，修改内容包括：
-        1. 在CommandLine获得焦点的时候，鼠标对本Control也可以操作
-        2. 鼠标双击为选中行
-        """
-        buffer = self.buffer
-        position = mouse_event.position
-
-        # Focus buffer when clicked.
-        cur_control = get_app().layout.current_control
-        cur_buffer = get_app().layout.current_buffer
-        # 这里时修改的内容
-        if (cur_control == self) or (cur_buffer and cur_buffer.name == "input"):
-            if self._last_get_processed_line:
-                processed_line = self._last_get_processed_line(position.y)
-
-                # Translate coordinates back to the cursor position of the
-                # original input.
-                xpos = processed_line.display_to_source(position.x)
-                index = buffer.document.translate_row_col_to_index(position.y, xpos)
-
-                # Set the cursor position.
-                if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                    buffer.exit_selection()
-                    buffer.cursor_position = index
-
-                elif (
-                    mouse_event.event_type == MouseEventType.MOUSE_MOVE
-                    and mouse_event.button != MouseButton.NONE
-                ):
-                    # Click and drag to highlight a selection
-                    if (
-                        buffer.selection_state is None
-                        and abs(buffer.cursor_position - index) > 0
-                    ):
-                        buffer.start_selection(selection_type=SelectionType.CHARACTERS)
-                    buffer.cursor_position = index
-
-                elif mouse_event.event_type == MouseEventType.MOUSE_UP:
-                    # When the cursor was moved to another place, select the text.
-                    # (The >1 is actually a small but acceptable workaround for
-                    # selecting text in Vi navigation mode. In navigation mode,
-                    # the cursor can never be after the text, so the cursor
-                    # will be repositioned automatically.)
-                    
-                    if abs(buffer.cursor_position - index) > 1:
-                        if buffer.selection_state is None:
-                            buffer.start_selection(
-                                selection_type=SelectionType.CHARACTERS
-                            )
-                        buffer.cursor_position = index
-
-                    # Select word around cursor on double click.
-                    # Two MOUSE_UP events in a short timespan are considered a double click.
-                    double_click = (
-                        self._last_click_timestamp
-                        and time.time() - self._last_click_timestamp < 0.3
-                    )
-                    self._last_click_timestamp = time.time()
-
-                    if double_click:
-                        start = buffer.document.translate_row_col_to_index(position.y, 0)
-                        end = buffer.document.translate_row_col_to_index(position.y, 10000000)
-                        buffer.cursor_position = start
-                        buffer.start_selection(selection_type=SelectionType.CHARACTERS)
-                        buffer.cursor_position = end
-                else:
-                    # Don't handle scroll events here.
-                    return NotImplemented
-
-        # Not focused, but focusing on click events.
-        else:
-            if (
-                self.focus_on_click()
-                and mouse_event.event_type == MouseEventType.MOUSE_UP
-            ):
-                # Focus happens on mouseup. (If we did this on mousedown, the
-                # up event will be received at the point where this widget is
-                # focused and be handled anyway.)
-                get_app().layout.current_control = self
-            else:
-                return NotImplemented
-
-        return None
-
-    def move_cursor_down(self) -> None:
-        b = self.buffer
-        b.cursor_position += b.document.get_cursor_down_position()
-
-    def move_cursor_up(self) -> None:
-        b = self.buffer
-        b.cursor_position += b.document.get_cursor_up_position()
-
-    def move_cursor_right(self, count = 1) -> None:
-        b = self.buffer
-        b.cursor_position += count
-
-    def move_cursor_left(self, count = 1) -> None:
-        b = self.buffer
-        b.cursor_position -= count
-
 
 class VSplitWindow(Window):
     "修改的分块窗口，向上翻页时，下半部保持最后数据不变"
@@ -644,54 +214,75 @@ class VSplitWindow(Window):
             upper = (total - 1) // 2
             below = total - upper - 1
             
-            if lineno + total < line_count:
-                if isinstance(self.content, SessionBufferControl):
-                    b = self.content.buffer
-                    b.split = True
+            if isinstance(self.content, PyMudBufferControl):
+                b = self.content.buffer
+                if not b:
+                    return y
+                    
+                line_count = b.lineCount
+                start_lineno = b.start_lineno
+                if start_lineno < 0:
+                    # no split window
+                    if line_count < total:
+                        # 内容行数小于屏幕行数
+                        lineno = 0
 
-                while y < upper and lineno < line_count:
-                    line = ui_content.get_line(lineno)
-                    visible_line_to_row_col[y] = (lineno, horizontal_scroll)
-                    x = 0
-                    x, y = copy_line(line, lineno, x, y, is_input=True)
-                    lineno += 1
-                    y += 1
+                        while y < total and lineno < line_count:
+                            # Take the next line and copy it in the real screen.
+                            line = ui_content.get_line(lineno)
+                            visible_line_to_row_col[y] = (lineno, horizontal_scroll)
+                            x = 0
+                            x, y = copy_line(line, lineno, x, y, is_input=True)
+                            lineno += 1
+                            y += 1
 
-                x = 0
-                x, y = copy_line([("","-"*width)], lineno, x, y, is_input=False)
-                y += 1
+                    else:
+                        # 若内容行数大于屏幕行数，则倒序复制，确保即使有自动折行时，最后一行也保持在屏幕最底部
+                        y = total
+                        lineno = line_count
 
-                lineno = line_count - below
-                while y < total and lineno < line_count:
-                    line = ui_content.get_line(lineno)
-                    visible_line_to_row_col[y] = (lineno, horizontal_scroll)
-                    x = 0
-                    x, y = copy_line(line, lineno, x, y, is_input=True)
-                    lineno += 1
-                    y += 1
+                        while y >= 0 and lineno >= 0:
+                            lineno -= 1
+                            # Take the next line and copy it in the real screen.
+                            display_lines = ui_content.get_height_for_line(lineno, width, None)
+                            y -= display_lines
+                            line = ui_content.get_line(lineno)
+                            visible_line_to_row_col[y] = (lineno, horizontal_scroll)
+                            copy_line(line, lineno, 0, y, is_input=True)
+                    
+                else:
+                    # 有split window
+                    
+                    # 先复制下半部分，倒序复制，确保即使有自动折行时，最后一行也保持在屏幕最底部
+                    y = total
+                    lineno = line_count
 
-                return y
-                
-            else:
-                if isNotMargin and isinstance(self.content, SessionBufferControl):
-                    b = self.content.buffer
-                    b.split = False
+                    while y > below and lineno >= 0:
+                        lineno -= 1
+                        # Take the next line and copy it in the real screen.
+                        display_lines = ui_content.get_height_for_line(lineno, width, None)
+                        y -= display_lines
+                        if y <= below:
+                            break
+                        line = ui_content.get_line(lineno)
+                        visible_line_to_row_col[y] = (lineno, horizontal_scroll)
+                        copy_line(line, lineno, 0, y, is_input=True)
 
-                while y < write_position.height and lineno < line_count:
-                    # Take the next line and copy it in the real screen.
-                    line = ui_content.get_line(lineno)
+                    # 复制上半部分，正序复制，确保即使有自动折行时，第一行也保持在屏幕最顶部
+                    y = -vertical_scroll_2
+                    lineno = start_lineno
+                    while y <= upper and lineno < line_count:
+                        line = ui_content.get_line(lineno)
+                        visible_line_to_row_col[y] = (lineno, horizontal_scroll)
+                        x = 0
+                        x, y = copy_line(line, lineno, x, y, is_input=True)
+                        lineno += 1
+                        y += 1
 
-                    visible_line_to_row_col[y] = (lineno, horizontal_scroll)
-
-                    # Copy margin and actual line.
-                    x = 0
-                    x, y = copy_line(line, lineno, x, y, is_input=True)
-
-                    lineno += 1
-                    y += 1
-                return y
-        
-            
+                    # 最后复制分割线，若上下有由于折行额外占用的内容，都用分割线给覆盖掉
+                    copy_line([("","-"*width)], -1, 0, upper + 1, is_input=False)
+                    
+            return y
 
         copy()
 
@@ -755,23 +346,6 @@ class VSplitWindow(Window):
 
         return visible_line_to_row_col, rowcol_to_yx
 
-    def _copy_margin(
-        self,
-        margin_content: UIContent,
-        new_screen: Screen,
-        write_position: WritePosition,
-        move_x: int,
-        width: int,
-    ) -> None:
-        """
-        Copy characters from the margin screen to the real screen.
-        """
-        xpos = write_position.xpos + move_x
-        ypos = write_position.ypos
-
-        margin_write_position = WritePosition(xpos, ypos, width, write_position.height)
-        self._copy_body(margin_content, new_screen, margin_write_position, 0, width, isNotMargin=False)
-
     def _scroll_down(self) -> None:
         "向下滚屏，处理屏幕分隔"
         info = self.render_info
@@ -779,35 +353,15 @@ class VSplitWindow(Window):
         if info is None:
             return
 
-        if isinstance(self.content, SessionBufferControl):
+        if isinstance(self.content, PyMudBufferControl):
             b = self.content.buffer
-            d = b.document
-
-            b.exit_selection()
-            cur_line = d.cursor_position_row
-            
-            # # 向下滚动时，如果存在自动折行情况，要判断本行被折成了几行，在行内时要逐行移动（此处未调试好）
-            # cur_col  = d.cursor_position_col
-            # line = d.current_line
-            # line_width = len(line)
-            # line_start = d.translate_row_col_to_index(cur_line, 0)
-            # screen_width = info.window_width
-
-            # offset_y = cur_col // screen_width
-            # wraplines = math.ceil(1.0 * line_width / screen_width)
-
-            if cur_line < info.content_height:
-                
-                # if offset_y < wraplines:                                    # add
-                #     self.content.move_cursor_right(screen_width)            # add
-                # else:                                                       # add
-
-                self.content.move_cursor_down()
-                self.vertical_scroll = cur_line + 1
-
-            firstline = d.line_count - len(info.displayed_lines)
-            if cur_line >= firstline:
-                b.cursor_position = len(b.text)
+            if not b:
+                return
+            start_lineno = b.start_lineno
+            if (start_lineno >= 0) and (start_lineno < b.lineCount - (info.window_height - 1) // 2):
+                b.start_lineno = b.start_lineno + 1
+            else:
+                b.start_lineno = -1
 
     def _scroll_up(self) -> None:
         "向上滚屏，处理屏幕分隔"
@@ -816,23 +370,19 @@ class VSplitWindow(Window):
         if info is None:
             return
 
-        #if info.cursor_position.y >= 1:
-        if isinstance(self.content, SessionBufferControl):
+        if isinstance(self.content, PyMudBufferControl):
             b = self.content.buffer
-            d = b.document
+            if not b:
+                return
+            start_lineno = b.start_lineno
+            if start_lineno > 0:
+                b.start_lineno = b.start_lineno - 1
+                
+            elif start_lineno == 0:
+                b.start_lineno = 0
 
-            b.exit_selection()
-            cur_line = d.cursor_position_row
-            if cur_line > d.line_count - len(info.displayed_lines):
-                firstline = d.line_count - len(info.displayed_lines)
-                newpos = d.translate_row_col_to_index(firstline, 0)
-                b.cursor_position = newpos
-                cur_line = d.cursor_position_row
-                self.vertical_scroll = cur_line
-
-            elif cur_line > 0:
-                self.content.move_cursor_up()
-                self.vertical_scroll = cur_line - 1
+            elif b.start_lineno < 0 and b.lineCount >= info.window_height:
+                b.start_lineno = b.lineCount - (info.window_height - 1) // 2
 
 
 class EasternButton(Button):
@@ -945,30 +495,495 @@ class EasternMenuContainer(MenuContainer):
         return Window(FormattedTextControl(get_text_fragments), style="class:menu")
 
 
-
-class MenuItem:
-    def __init__(
-        self,
-        text: str = "",
-        handler = None,
-        children = None,
-        shortcut = None,
-        disabled: bool = False,
-    ) -> None:
-        self.text = text
-        self.handler = handler
-        self.children = children or []
-        self.shortcut = shortcut
-        self.disabled = disabled
-        self.selected_item = 0
+@dataclass
+class SessionSelectionState:
+    start_row: int = -1
+    end_row: int = -1
+    start_col: int = -1
+    end_col: int = -1
+    def is_valid(self):
+        return  (self.start_row >= 0) and \
+                (self.start_col >= 0) and \
+                (self.end_row >= 0) and \
+                (self.end_col >= 0) and \
+                abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col) > 0
 
     @property
-    def width(self) -> int:
-        if self.children:
-            return max(get_cwidth(c.text) for c in self.children)
+    def rows(self):
+        if self.is_valid():
+            return abs(self.end_row - self.start_row) + 1
         else:
             return 0
 
+    @property
+    def actual_start_row(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.start_row
+            else:
+                return self.end_row
+
+        return -1
+    
+    @property
+    def actual_start_col(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.start_col
+            else:
+                return self.end_col
+        
+        return -1
+
+    @property
+    def actual_end_row(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.end_row
+            else:
+                return self.start_row
+
+        return -1
+
+    @property
+    def actual_end_col(self):
+        if self.is_valid():
+            if self.start_row <= self.end_row:
+                return self.end_col
+            else:
+                return self.start_col
+
+        return -1
+
+
+class BufferBase:
+    def __init__(self, name, newline = "\n", max_buffered_lines = 10000) -> None:
+        self.name = name
+        self.newline = newline
+        self.max_buffered_lines = max_buffered_lines
+        self.start_lineno = -1
+        self.selection = SessionSelectionState(-1, -1, -1, -1)
+
+        self.mouse_point = Point(-1, -1)
+
+    def clear(self):
+        pass
+
+    @property
+    def lineCount(self) -> int:
+        return 0
+
+    def getLine(self, lineno: int) -> str:
+        return ""
+
+    # 获取指定某行到某行的内容。当start未设置时，从首行开始。当end未设置时，到最后一行结束。
+    # 注意判断首位顺序逻辑，以及给定参数是否越界
+    def selection_range_at_line(self, lineno: int) -> Optional[Tuple[int, int]]:
+        if self.selection.is_valid():
+            if self.selection.rows > 1:
+                
+                if lineno == self.selection.actual_start_row:
+                    return (self.selection.actual_start_col, len(self.getLine(lineno)))
+                elif lineno == self.selection.actual_end_row:
+                    return (0, self.selection.actual_end_col)
+                elif lineno > self.selection.actual_start_row and lineno < self.selection.actual_end_row:
+                    return (0, len(self.getLine(lineno)))
+
+            elif self.selection.rows == 1:
+                if lineno == self.selection.start_row:
+                    return (self.selection.start_col, self.selection.end_col)
+
+        return None
+
+    def exit_selection(self):
+        self.selection = SessionSelectionState(-1, -1, -1, -1)
+
+    def nosplit(self):
+        self.start_lineno = -1
+        get_app().invalidate()
+
+
+class SessionBuffer(BufferBase):
+    def __init__(
+        self, 
+        name, 
+        newline = "\n",
+        max_buffered_lines = 10000,
+        ) -> None:
+
+        super().__init__(name, newline, max_buffered_lines)
+
+        self._lines : List[str] = []
+        self._isnewline = True
+
+    def append(self, line: str):
+        """
+        追加文本到缓冲区。
+        当文本以换行符结尾时，会自动添加到缓冲区。
+        当文本不以换行符结尾时，会自动添加到上一行。
+        """
+        newline_after_append = False
+        if line.endswith(self.newline):
+            line = line.rstrip(self.newline)
+            newline_after_append = True
+            
+        if not self.newline in line:
+            if self._isnewline:
+                self._lines.append(line)
+            else:
+                self._lines[-1] += line
+
+        else:
+            lines = line.split(self.newline)
+            if self._isnewline:
+                self._lines.extend(lines)
+            else:
+                self._lines[-1] += lines[0]
+                self._lines.extend(lines[1:])
+
+        self._isnewline = newline_after_append
+
+        ## limit buffered lines
+        if self.start_lineno < 0 and len(self._lines) > self.max_buffered_lines:
+            diff = len(self._lines) - self.max_buffered_lines
+            del self._lines[:diff]
+            ## adjust selection
+            if self.selection.start_row >= 0:
+                self.selection.start_row -= diff
+                self.selection.end_row -= diff
+
+        get_app().invalidate()
+
+    def clear(self):
+        self.exit_selection()
+        self._isnewline = True
+        self._lines.clear()
+        self.nosplit()
+
+    def forceNewline(self):
+        self._isnewline = True
+
+    @property
+    def lineCount(self):
+        return len(self._lines)
+        
+    def getLine(self, lineno: int):
+        if lineno < 0 or lineno >= len(self._lines):
+            return ""
+        return self._lines[lineno]
+
+
+class LogFileBuffer(BufferBase):
+    def __init__(
+        self,
+        name,
+        filepath: Optional[str] = None,
+        ) -> None:
+
+        super().__init__(name)
+        self._lines : Dict[int, str] = {}
+        self.loadfile(filepath)
+        
+    def loadfile(self, filepath: Optional[str] = None):
+        if filepath and os.path.exists(filepath):
+            self.filepath = filepath
+        else:
+            self.filepath = None
+
+    def clear(self):
+        self.filepath = None
+
+    @property
+    def lineCount(self):
+        if not self.filepath or not os.path.exists(self.filepath):
+            return 0
+
+        with open(self.filepath, 'r', encoding = 'utf-8', errors = 'ignore') as fp:
+            return sum(1 for _ in fp)
+
+    def getLine(self, lineno: int):
+        if not self.filepath or not os.path.exists(self.filepath):
+            return ""
+
+        return linecache.getline(self.filepath, lineno).rstrip(self.newline)
+
+    def __del__(self):
+        self._lines.clear()
+
+class PyMudBufferControl(UIControl):
+    def __init__(self, buffer: Optional[BufferBase]) -> None:
+        self.buffer = buffer
+
+        # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
+        self.FULL_BLOCKS = set("▂▃▅▆▇▄█━")
+        self.TABLE_LINES  = set("┠┌└├┬┼┴╭╰─┨┘┐┤╮╯╔╚╠╦╪╩═╗╝╣┃││║")
+        self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
+        self.SINGLE_LINES_LEFT = set("┨┘┐┤╮╯")
+        self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
+        self.DOUBLE_LINES_LEFT = set("╗╝╣")
+        self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
+        self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
+        self._color_start = ""
+        self._color_correction = False
+        self._color_line_index = 0
+
+        self._last_click_timestamp = 0
+
+    def reset(self) -> None:
+        # Default reset. (Doesn't have to be implemented.)
+        pass
+
+    def preferred_width(self, max_available_width: int) -> Optional[int]:
+        return None
+
+    def is_focusable(self) -> bool:
+        """
+        Tell whether this user control is focusable.
+        """
+        return False
+
+    def width_correction(self, line: str) -> str:
+        new_str = []
+        for idx, ch in enumerate(line):
+            if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
+                
+                if ch in self.FULL_BLOCKS:
+                    new_str.append(ch)
+                    new_str.append(ch)
+                elif ch in self.SINGLE_LINES:
+                    new_str.append(ch)
+                    new_str.append("─")
+                elif ch in self.DOUBLE_LINES:
+                    new_str.append(ch)
+                    new_str.append("═")
+                elif ch in self.SINGLE_LINES_LEFT:
+                    new_str.append("─")
+                    new_str.append(ch)
+                elif ch in self.DOUBLE_LINES_LEFT:
+                    new_str.append("═")
+                    new_str.append(ch)
+                else:
+                    right = str.rstrip(line[idx+1:])
+                    right_len = fragment_list_width(to_formatted_text(ANSI(right)))
+                    if ((idx == len(line) - 1) or (right_len == 0)) and (ch in self.TABLE_LINES):
+                        new_str.append(" ")
+                        new_str.append(ch)
+                    else:
+                        new_str.append(ch)
+                        new_str.append(' ')
+            else:
+                new_str.append(ch)
+
+        return "".join(new_str)
+    
+    def return_correction(self, line: str):
+        return line.replace("\r", "").replace("\x00", "")
+    
+    def tab_correction(self, line: str):
+        from .session import Session
+        while "\t" in line:
+            tab_index = line.find("\t")
+            left, right = line[:tab_index], line[tab_index + 1:]
+            left_width = get_cwidth(Session.PLAIN_TEXT_REGX.sub("", left))
+            tab_width = Settings.client["tabstop"] - (left_width % Settings.client["tabstop"])
+            line = left + " " * tab_width + right
+
+        return line
+
+    def line_correction(self, line: str):
+        # 处理\r符号（^M）
+        line = self.return_correction(line)
+        
+        # 美化（解决中文英文在Console中不对齐的问题）
+        if Settings.client["beautify"]:
+            line = self.width_correction(line)
+
+        # 处理Tab(\r)符号（^I）对齐
+        line = self.tab_correction(line)
+
+        line += " "    # 最后添加一个空格，用于允许选择行时选到最后一个字符
+
+        return line
+
+    def create_content(self, width: int, height: int) -> UIContent:
+        """
+        Generate the content for this user control.
+
+        Returns a :class:`.UIContent` instance.
+        """
+        buffer = self.buffer
+        if not buffer:
+            return UIContent(
+                get_line = lambda i: [],
+                line_count = 0,
+                cursor_position = None
+            )
+
+        def get_line(i: int) -> StyleAndTextTuples:
+            line = buffer.getLine(i)
+            # 颜色校正
+            SEARCH_LINES = 10
+            thislinecolors = len(self.AVAI_COLOR_REGX.findall(line))
+            if thislinecolors == 0:
+                lineno = i - 1
+                search = 0
+                while lineno >= 0 and search < SEARCH_LINES:
+                    search += 1
+
+                    lastline = buffer.getLine(lineno)
+                    allcolors = self.ALL_COLOR_REGX.findall(lastline)
+                    
+                    if len(allcolors) == 0:
+                        lineno = lineno - 1
+
+                    elif len(allcolors) == 1:
+                        colors = self.AVAI_COLOR_REGX.findall(lastline)
+                        
+                        if len(colors) == 1:
+                            line = f"{colors[0]}{line}"
+                            break
+
+                        else:
+                            break
+
+                    else:
+                        break
+
+            
+            # 其他校正
+            line = self.line_correction(line)
+            #line = self.return_correction(line)
+
+            # 处理ANSI标记（生成FormmatedText）
+            fragments = to_formatted_text(ANSI(line))
+            #fragments = explode_text_fragments(fragments)
+
+            # if Settings.client["beautify"]:
+            #     fragments = self.fragment_correction(fragments)
+
+            # 选择内容标识
+            selected_fragment = " class:selected "
+
+            # In case of selection, highlight all matches.
+            selection_at_line = buffer.selection_range_at_line(i)
+
+            if selection_at_line:
+                from_, to = selection_at_line
+                total_display = fragment_list_width(fragments)
+                if to == len(buffer.getLine(i)):
+                    to = total_display
+
+
+                fragments = explode_text_fragments(fragments)
+
+                if from_ == 0 and to == 0 and len(fragments) == 0:
+                    # When this is an empty line, insert a space in order to
+                    # visualize the selection.
+                    return [(selected_fragment, " ")]
+                else:
+                    for i in range(from_, min(to, total_display+1)):
+                        if i < len(fragments):
+                            old_fragment, old_text, *_ = fragments[i]
+                            fragments[i] = (old_fragment + selected_fragment, old_text)
+                        # elif i == len(fragments):
+                        #     fragments.append((selected_fragment, " "))
+
+
+
+            return fragments
+
+        content = UIContent(
+            get_line = get_line,
+            line_count = buffer.lineCount,
+            cursor_position = None
+        )
+
+        return content
+
+    def mouse_handler(self, mouse_event: MouseEvent):
+        """
+        Handle mouse events.
+
+        When `NotImplemented` is returned, it means that the given event is not
+        handled by the `UIControl` itself. The `Window` or key bindings can
+        decide to handle this event as scrolling or changing focus.
+
+        :param mouse_event: `MouseEvent` instance.
+        """
+        """
+        鼠标处理，修改内容包括：
+        1. 在CommandLine获得焦点的时候，鼠标对本Control也可以操作
+        2. 鼠标双击为选中行
+        """
+        buffer = self.buffer
+        position = mouse_event.position
+
+        # Focus buffer when clicked.
+        cur_control = get_app().layout.current_control
+        cur_buffer = get_app().layout.current_buffer
+        # 这里是修改的内容
+        if (cur_control == self) or (cur_buffer and cur_buffer.name == "input"):
+
+            if buffer:
+                # Set the selection position.
+                buffer.mouse_point = position
+                if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+                    buffer.exit_selection()
+                    buffer.selection.start_row = position.y
+                    buffer.selection.start_col = position.x
+
+                elif (
+                    mouse_event.event_type == MouseEventType.MOUSE_MOVE
+                    and mouse_event.button == MouseButton.LEFT
+                ):
+                    # Click and drag to highlight a selection
+                    if buffer.selection.start_row >= 0 and not (position.y == 0 and position.x == 0):
+                        buffer.selection.end_row = position.y
+                        buffer.selection.end_col = position.x
+                    
+
+                elif mouse_event.event_type == MouseEventType.MOUSE_UP:
+                    # When the cursor was moved to another place, select the text.
+                    # (The >1 is actually a small but acceptable workaround for
+                    # selecting text in Vi navigation mode. In navigation mode,
+                    # the cursor can never be after the text, so the cursor
+                    # will be repositioned automatically.)
+                    
+                    if buffer.selection.start_row >= 0 and position.y >= 0:
+                        buffer.selection.end_row = position.y
+                        buffer.selection.end_col = position.x
+
+                    if not buffer.selection.is_valid():
+                        buffer.exit_selection()
+
+                    # Select word around cursor on double click.
+                    # Two MOUSE_UP events in a short timespan are considered a double click.
+                    double_click = (
+                        self._last_click_timestamp
+                        and time.time() - self._last_click_timestamp < 0.3
+                    )
+                    self._last_click_timestamp = time.time()
+
+                    if double_click:
+                        buffer.selection.start_row = position.y
+                        buffer.selection.start_col = 0
+                        buffer.selection.end_row = position.y
+                        buffer.selection.end_col = len(buffer.getLine(position.y))
+
+                    get_app().layout.focus("input")
+
+                else:
+                    # Don't handle scroll events here.
+                    return NotImplemented
+            else:
+                # Don't handle scroll events here.
+                return NotImplemented
+
+        # Not focused, but focusing on click events.
+        else:
+                return NotImplemented
+
+        return None
 
 class DotDict(dict):
     """
@@ -1007,75 +1022,5 @@ class DotDict(dict):
     def __setstate__(self, state):
         self.update(state)
 
-import importlib
-import importlib.util
 
-class Plugin:
-    """
-    插件管理类。对加载的插件文件进行管理。该类型由PyMudApp进行管理，无需人工创建。
-
-    有关插件的详细信息，请参见 `插件 <plugins.html>`_
-
-    :param name: 插件的文件名, 如'myplugin.py'
-    :param location: 插件所在的目录。自动加载的插件包括PyMUD包目录下的plugins目录以及当前目录下的plugins目录
-
-    """
-    def __init__(self, name, location):
-        self._plugin_file = name
-        self._plugin_loc  = location
-
-        self.reload()
-
-    def reload(self):
-        "加载/重新加载插件对象"
-        #del self.modspec, self.mod
-        self.modspec = importlib.util.spec_from_file_location(self._plugin_file[:-3], self._plugin_loc)
-        self.mod     = importlib.util.module_from_spec(self.modspec)
-        self.modspec.loader.exec_module(self.mod)
-
-        self._app_init = self.mod.__dict__["PLUGIN_PYMUD_START"]
-        self._session_create = self.mod.__dict__["PLUGIN_SESSION_CREATE"]
-        self._session_destroy = self.mod.__dict__["PLUGIN_SESSION_DESTROY"]
         
-    @property
-    def name(self):
-        "插件名称，由插件文件中的 PLUGIN_NAME 常量定义"
-        return self.mod.__dict__["PLUGIN_NAME"]
-    
-    @property
-    def desc(self):
-        "插件描述，由插件文件中的 PLUGIN_DESC 常量定义"
-        return self.mod.__dict__["PLUGIN_DESC"]
-    
-    @property
-    def help(self):
-        "插件帮助，由插件文件中的文档字符串定义"
-        return self.mod.__doc__
-    
-    def onAppInit(self, app):
-        """
-        PyMUD应用启动时对插件执行的操作，由插件文件中的 PLUGIN_PYMUD_START 函数定义
-
-        :param app: 启动的 PyMudApp 对象实例
-        """
-        self._app_init(app)
-
-    def onSessionCreate(self, session):
-        """
-        新会话创建时对插件执行的操作，由插件文件中的 PLUGIN_SESSION_CREATE 函数定义
-
-        :param session: 新创建的会话对象实例
-        """
-        self._session_create(session)
-
-    def onSessionDestroy(self, session):
-        """
-        会话关闭时（注意不是断开）对插件执行的操作，由插件文件中的 PLUGIN_SESSION_DESTROY 函数定义
-
-        :param session: 所关闭的会话对象实例
-        """
-        self._session_destroy(session)
-
-    def __getattr__(self, __name: str) -> Any:
-        if hasattr(self.mod, __name):
-            return self.mod.__getattribute__(__name)

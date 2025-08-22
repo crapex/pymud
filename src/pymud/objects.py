@@ -3,11 +3,12 @@ MUD会话(session)中, 支持的对象列表
 """
 
 import asyncio, logging, re
+from typing import Union, List, Tuple
 from collections.abc import Iterable
 from collections import namedtuple
-import functools
 from typing import Any
 from .settings import Settings
+from .decorators import print_exception
 
 class CodeLine:
     """
@@ -37,7 +38,7 @@ class CodeLine:
                 elif ch == "}":
                     brace_count -= 1
                     if brace_count < 0:
-                        raise Exception("错误的代码块，大括号数量不匹配")
+                        raise Exception(Settings.gettext("excpetion_brace_not_matched"))
                     arg += ch
                 elif ch == "'":
                     if single_quote == 0:
@@ -60,7 +61,7 @@ class CodeLine:
                     arg += ch
 
             if (single_quote > 0) or (double_quote > 0):
-                raise Exception("引号的数量不匹配")
+                raise Exception(Settings.gettext("exception_quote_not_matched"))
             
             if arg:
                 code_params.append(arg)
@@ -77,7 +78,7 @@ class CodeLine:
         
             return syncmode, hasvar, tuple(code_params), 
         else:
-            return syncmode, hasvar, tuple()
+            return "dontcare", hasvar, tuple()
 
     def __init__(self, _code: str) -> None:
         self.__code = _code
@@ -108,7 +109,7 @@ class CodeLine:
 
         line = kwargs.get("line", None) or session.getVariable("%line", "None")
         raw  = kwargs.get("raw", None) or session.getVariable("%raw", "None")
-        wildcards = kwargs.get("wildcards", None)
+        wildcards = kwargs.get("wildcards", ())
 
         for item in self.code:
             if len(item) == 0: continue
@@ -120,27 +121,27 @@ class CodeLine:
                 else:
                     item_val = "None"
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             # 系统变量，%开头
             elif item == "%line":
                 new_code.append(line)
-                new_code_str = new_code_str.replace(item, line, 1)
+                new_code_str = new_code_str.replace(item, f"{line}", 1)
 
             elif item == "%raw":
                 new_code.append(raw)
-                new_code_str = new_code_str.replace(item, raw, 1)
+                new_code_str = new_code_str.replace(item, f"{raw}", 1)
 
             elif item[0] == "%":
                 item_val = session.getVariable(item, "")
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             # 非系统变量，@开头，在变量明前加@引用
             elif item[0] == "@":
                 item_val = session.getVariable(item[1:], "")
                 new_code.append(item_val)
-                new_code_str = new_code_str.replace(item, item_val, 1)
+                new_code_str = new_code_str.replace(item, f"{item_val}", 1)
 
             else:
                 new_code.append(item)
@@ -148,7 +149,7 @@ class CodeLine:
         return new_code_str, new_code
 
     async def async_execute(self, session, *args, **kwargs):           
-        await session.exec_code_async(self, *args, **kwargs)
+        return await session.exec_code_async(self, *args, **kwargs)
 
 class CodeBlock:
     """
@@ -178,7 +179,7 @@ class CodeBlock:
             elif ch == "}":
                 brace_count -= 1
                 if brace_count < 0:
-                    raise Exception("错误的代码块，大括号数量不匹配")
+                    raise Exception(Settings.gettext("excpetion_brace_not_matched"))
                 line += ch
             elif ch == ";":
                 if brace_count == 0:
@@ -264,7 +265,7 @@ class CodeBlock:
             elif self.syncmode == "sync":
                 sync = True
             elif self.syncmode == "conflict":
-                session.warning("该命令中同时存在强制同步命令和强制异步命令，将使用异步执行，同步命令将失效。")
+                session.warning(Settings.gettext("exception_forced_async"))
                 sync = False
 
         if sync:
@@ -278,14 +279,16 @@ class CodeBlock:
         """
         以异步方式执行该 CodeBlock。参数与 execute 相同。
         """
+        result = None
         for code in self.codes:
             if isinstance(code, CodeLine):
-                await code.async_execute(session, *args, **kwargs)
+                result = await code.async_execute(session, *args, **kwargs)
 
             if Settings.client["interval"] > 0:
                 await asyncio.sleep(Settings.client["interval"] / 1000.0)
 
         session.clean_finished_tasks()
+        return result
 
 class BaseObject:
     """
@@ -320,10 +323,15 @@ class BaseObject:
     "内部缩写代码前缀"
 
     def __init__(self, session, *args, **kwargs):
-        self.session    = session
+        from .session import Session
+        if isinstance(session, Session):
+            self.session    = session
+        else:
+            assert(Settings.gettext("exception_session_type_fail"))
+            
         self._enabled   = True              # give a default value
         self.log        = logging.getLogger(f"pymud.{self.__class__.__name__}")
-        self.id         = kwargs.get("id", session.getUniqueID(self.__class__.__abbr__))
+        self.id         = kwargs.get("id", self.session.getUniqueID(self.__class__.__abbr__))
         self.group      = kwargs.get("group", "")                  # 组
         self.enabled    = kwargs.get("enabled", True)              # 使能与否
         self.priority   = kwargs.get("priority", 100)              # 优先级
@@ -340,6 +348,8 @@ class BaseObject:
         self._onTimeout = kwargs.get("onTimeout", self.onTimeout)
 
         self.log.debug(f"对象实例 {self} 创建成功.")
+
+        self.session.addObject(self)
 
     @property
     def enabled(self):
@@ -391,7 +401,8 @@ class BaseObject:
         return self.__detailed__()
     
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled}'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled}'
 
 class GMCPTrigger(BaseObject):
     """
@@ -407,6 +418,8 @@ class GMCPTrigger(BaseObject):
     def __init__(self, session, name, *args, **kwargs):
         self.event = asyncio.Event()
         self.value = None
+        # 确保不要有重复的id
+        kwargs.pop("id", None)
         super().__init__(session, id = name, *args, **kwargs)
 
     def __del__(self):
@@ -435,13 +448,17 @@ class GMCPTrigger(BaseObject):
 
         self.line  = value
         self.value = value_exp
-
+        
         if callable(self._onSuccess):
             self.event.set()
-            self._onSuccess(self.id, value, value_exp)
+            try:
+                self._onSuccess(self.id, value, value_exp)
+            except Exception as e:
+                print_exception(self.session, e)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" group = "{self.group}" enabled = {self.enabled} '
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> name = "{self.id}" value = "{self.value}" {group}enabled = {self.enabled} '
             
 class MatchObject(BaseObject):
     """
@@ -476,7 +493,7 @@ class MatchObject(BaseObject):
         super().__init__(session, patterns = patterns, *args, **kwargs)
 
     def __del__(self):
-        self.reset()
+        pass
 
     @property
     def patterns(self):
@@ -491,7 +508,7 @@ class MatchObject(BaseObject):
         return self._patterns
 
     @patterns.setter
-    def patterns(self, patterns):
+    def patterns(self, patterns: Union[str, Union[Tuple[str], List[str]]]):
         self._patterns = patterns
 
         if isinstance(patterns, str):
@@ -504,22 +521,25 @@ class MatchObject(BaseObject):
         if self.isRegExp:
             flag = 0
             if self.ignoreCase: flag = re.I
-            if not self.multiline:
-                self._regExp = re.compile(self.patterns, flag)   # 此处可考虑增加flags
+            if isinstance(patterns, str):
+                self.multiline = False
+                self.linesToMatch = 1
+                self._regExp = re.compile(patterns, flag)   # 此处可考虑增加flags
             else:
                 self._regExps = []
-                for line in self.patterns:
+                for line in patterns:
                     self._regExps.append(re.compile(line, flag))
 
                 self.linesToMatch = len(self._regExps)
+                self.multiline = True
                 self._mline = 0
 
     def reset(self):
-        "复位事件，用于async执行未等待结果时，对事件的复位"
+        "复位事件，用于async执行未等待结果时，对事件的复位。仅异步有效。"
         self.event.clear()
 
     def set(self):
-        "设置事件标记，用于人工强制触发"
+        "设置事件标记，可以用于人工强制触发，仅在异步触发器下生效。"
         self.event.set()
 
     def match(self, line: str, docallback = True) -> BaseObject.State:
@@ -531,72 +551,79 @@ class MatchObject(BaseObject):
 
         :return: BaseObject.State 类型，一个包含 result, id, name, line, wildcards 的命名元组对象
         """
-        result = self.NOTSET
+        try:
+            result = self.NOTSET
 
-        if not self.multiline:                              # 非多行
-            if self.isRegExp:
-                m = self._regExp.match(line)
-                if m:
-                    result = self.SUCCESS
-                    self.wildcards.clear()
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
+            if not self.multiline:                              # 非多行
+                if self.isRegExp:
+                    m = self._regExp.match(line)
+                    if m:
+                        result = self.SUCCESS
+                        self.wildcards.clear()
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
 
-                    self.lines.clear()
-                    self.lines.append(line)
-            else:
-                #if line.find(self.patterns) >= 0:
-                #if line == self.patterns:
-                if self.patterns in line:
-                    result = self.SUCCESS
-                    self.lines.clear()
-                    self.lines.append(line)
-                    self.wildcards.clear()
-
-        else:                                               # 多行匹配情况
-            # multilines match. 多行匹配时，受限于行的捕获方式，必须一行一行来，设置状态标志进行处理。
-            if self._mline == 0:                            # 当尚未开始匹配时，匹配第1行
-                m = self._regExps[0].match(line)
-                if m:
-                    self.lines.clear()
-                    self.lines.append(line)
-                    self.wildcards.clear()
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    self._mline = 1                         # 下一状态 （中间行）
-            elif (self._mline > 0) and (self._mline < self.linesToMatch - 1):
-                m = self._regExps[self._mline].match(line)
-                if m:
-                    self.lines.append(line)
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    self._mline += 1
+                        self.lines.clear()
+                        self.lines.append(line)
                 else:
+                    #if line.find(self.patterns) >= 0:
+                    #if line == self.patterns:
+                    if isinstance(self.patterns, str) and (self.patterns in line):
+                        result = self.SUCCESS
+                        self.lines.clear()
+                        self.lines.append(line)
+                        self.wildcards.clear()
+
+            else:                                               # 多行匹配情况
+                # multilines match. 多行匹配时，受限于行的捕获方式，必须一行一行来，设置状态标志进行处理。
+                if self._mline == 0:                            # 当尚未开始匹配时，匹配第1行
+                    m = self._regExps[0].match(line)
+                    if m:
+                        self.lines.clear()
+                        self.lines.append(line)
+                        self.wildcards.clear()
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        self._mline = 1                         # 下一状态 （中间行）
+                elif (self._mline > 0) and (self._mline < self.linesToMatch - 1):
+                    m = self._regExps[self._mline].match(line)
+                    if m:
+                        self.lines.append(line)
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        self._mline += 1
+                    else:
+                        self._mline = 0
+                elif self._mline == self.linesToMatch - 1:      # 最终行
+                    m = self._regExps[self._mline].match(line)
+                    if m:
+                        self.lines.append(line)
+                        if len(m.groups()) > 0:
+                            self.wildcards.extend(m.groups())
+                        result = self.SUCCESS
+
                     self._mline = 0
-            elif self._mline == self.linesToMatch - 1:      # 最终行
-                m = self._regExps[self._mline].match(line)
-                if m:
-                    self.lines.append(line)
-                    if len(m.groups()) > 0:
-                        self.wildcards.extend(m.groups())
-                    result = self.SUCCESS
 
-                self._mline = 0
+            state = BaseObject.State(result, self.id, "\n".join(self.lines), tuple(self.wildcards))
 
-        state = BaseObject.State(result, self.id, "\n".join(self.lines), tuple(self.wildcards))
-
-        # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
-        if self.sync and docallback:
-            if state.result == self.SUCCESS:
-                self._onSuccess(state.id, state.line, state.wildcards)
-                self.event.set()
-            elif state.result == self.FAILURE:
-                self._onFailure(state.id, state.line, state.wildcards)
-            elif state.result == self.TIMEOUT:
-                self._onTimeout(state.id, state.line, state.wildcards)
-
-        self.state = state
-        return state
+            # 采用回调方式执行的时候，执行函数回调（仅当self.sync和docallback均为真时才执行同步
+            # 当docallback为真时，是真正的进行匹配和触发，为false时，仅返回匹配结果，不实际触发
+            if docallback:
+                if self.sync:
+                    if state.result == self.SUCCESS:
+                        self._onSuccess(state.id, state.line, state.wildcards)
+                    elif state.result == self.FAILURE:
+                        self._onFailure(state.id, state.line, state.wildcards)
+                    elif state.result == self.TIMEOUT:
+                        self._onTimeout(state.id, state.line, state.wildcards)
+                
+                if state.result == self.SUCCESS:
+                    self.event.set()
+                    
+            self.state = state
+            return state
+        except Exception as e:
+            print_exception(self.session, e)
     
     async def matched(self) -> BaseObject.State:
         """
@@ -609,13 +636,14 @@ class MatchObject(BaseObject):
             self.reset()
             await self.event.wait()
             self.reset()
-        except Exception as e:
-            self.error(f"异步执行中遇到异常, {e}")
 
-        return self.state
+            return self.state
+        except Exception as e:
+            print_exception(self.session, e)
     
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}"'
 
 class Alias(MatchObject):
     """
@@ -645,7 +673,8 @@ class SimpleAlias(Alias):
         self._codeblock.execute(self.session, id = id, line = line, wildcards = wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -659,7 +688,7 @@ class Trigger(MatchObject):
 
     __abbr__ = "tri"
 
-    def __init__(self, session, patterns, *args, **kwargs):
+    def __init__(self, session, patterns: Union[str, Union[Tuple[str], List[str]]], *args, **kwargs):
         super().__init__(session, patterns, *args, **kwargs)
         self._task = None
 
@@ -696,7 +725,8 @@ class SimpleTrigger(Trigger):
         self._codeblock.execute(self.session, id = id, line = line, raw = raw, wildcards = wildcards)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} patterns = "{self.patterns}" code = "{self._code}"'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -716,6 +746,20 @@ class Command(MatchObject):
     def __init__(self, session, patterns, *args, **kwargs):
         super().__init__(session, patterns, sync = False, *args, **kwargs)
         self._tasks = set()
+
+    def __unload__(self):
+        """
+        当从会话中移除任务时，会自动调用该函数。
+        可以将命令管理的各子类对象在此处清除。
+        该函数需要在子类中覆盖重写。
+        """
+        pass
+
+    def unload(self):
+        """
+        与__unload__方法相同，子类仅需覆盖一种方法就可以
+        """
+        pass
 
     def create_task(self, coro, *args, name = None):
         """
@@ -748,14 +792,16 @@ class Command(MatchObject):
         """
         复位命令，并取消和清除所有本对象管理的任务。
         """
+        try:
+            super().reset()
 
-        super().reset()
+            for task in list(self._tasks):
+                if isinstance(task, asyncio.Task) and (not task.done()):
+                    self.remove_task(task)
+        except:
+            pass
 
-        for task in list(self._tasks):
-            if isinstance(task, asyncio.Task) and (not task.done()):
-                self.remove_task(task)
-
-    async def execute(self, cmd, *args, **kwargs):
+    async def execute(self, cmd, *args, **kwargs) -> Any:
         """
         命令调用的入口函数。该函数由 Session 进行自动调用。
         通过 ``Session.exec`` 系列方法调用的命令，最终是执行该命令的 execute 方法。
@@ -783,7 +829,7 @@ class SimpleCommand(Command):
 
     MAX_RETRY = 20
 
-    def __init__(self, session, patterns, succ_tri, *args, **kwargs):
+    def __init__(self, session, patterns: str, succ_tri, *args, **kwargs):
         super().__init__(session, patterns, succ_tri, *args, **kwargs)
         self._succ_tris = list()
         self._fail_tris = list()
@@ -825,7 +871,7 @@ class SimpleCommand(Command):
         """
         self.reset()
         # 0. check command
-        cmd = cmd or self.patterns
+        cmd = cmd or self.patterns.__str__()
         # 1. save the command, to use later.
         self._executed_cmd = cmd
         # 2. writer command
@@ -880,23 +926,14 @@ class SimpleCommand(Command):
                 break
 
         if result == self.SUCCESS:
-            self._onSuccess(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
-            _outer_onSuccess = kwargs.get("onSuccess", None)
-            if callable(_outer_onSuccess):
-                _outer_onSuccess(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
+            self._onSuccess(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.FAILURE:
-            self._onFailure(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
-            _outer_onFailure = kwargs.get("onFailure", None)
-            if callable(_outer_onFailure):
-                _outer_onFailure(name = self.id, cmd = cmd, line = line, wildcards = wildcards)
+            self._onFailure(name = self.id, cmd = cmd, line = "", wildcards = [])
 
         elif result == self.TIMEOUT:
             self._onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
-            _outer_onTimeout = kwargs.get("onTimeout", None)
-            if callable(_outer_onTimeout):
-                _outer_onTimeout(name = self.id, cmd = cmd, timeout = self.timeout)
-
+ 
         return result
 
 class Timer(BaseObject):
@@ -968,7 +1005,8 @@ class Timer(BaseObject):
             self.startTimer()
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout}'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} timeout = {self.timeout}'
     
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -990,4 +1028,6 @@ class SimpleTimer(Timer):
         self._codeblock.execute(self.session, id = id)
 
     def __detailed__(self) -> str:
-        return f'<{self.__class__.__name__}> id = "{self.id}" group = "{self.group}" enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
+        group = f'group = "{self.group}" ' if self.group else ''
+        return f'<{self.__class__.__name__}> id = "{self.id}" {group}enabled = {self.enabled} timeout = {self.timeout} code = "{self._code}"'
+

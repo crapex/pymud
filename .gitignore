@@ -20,3 +20,10 @@ debug/
 # docs build is build test directory
 docs/build
 docs/build/
+
+# my update file for debugging
+update
+update.*
+.vscode/
+src/.DS_Store
+docs/.DS_Store
