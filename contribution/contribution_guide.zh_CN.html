@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>为我的 GitHub 仓库做贡献：一份指南</title>
+<style>.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px 40px;
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 8px
+    }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    line-height: 1.7;
+    color: #333;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 0
+    }
+h1, h2, h3, h4, h5, h6 {
+    color: #1a1a1a;
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+    line-height: 1.3;
+    font-weight: 600
+    }
+h1 {
+    font-size: 2.2em;
+    text-align: center;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0.5em;
+    margin-top: 0
+    }
+h2 {
+    font-size: 1.8em;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3em
+    }
+h3 {
+    font-size: 1.5em
+    }
+h4 {
+    font-size: 1.2em
+    }
+p {
+    margin-bottom: 1.2em;
+    text-align: justify
+    }
+a {
+    color: #007bff;
+    text-decoration: none
+    }
+a:hover {
+    text-decoration: underline
+    }
+ul, ol {
+    margin-bottom: 1.2em;
+    padding-left: 1.8em
+    }
+li {
+    margin-bottom: 0.5em
+    }
+strong {
+    font-weight: 600
+    }
+em {
+    font-style: italic
+    }
+blockquote {
+    margin: 1.5em 0;
+    padding: 1em 1.5em;
+    border-left: 5px solid #007bff;
+    background-color: #f0f8ff;
+    color: #555;
+    font-style: italic
+    }
+blockquote p {
+    margin-bottom: 0
+    }
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    background-color: #f0f0f0;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em
+    }
+pre {
+    background-color: #2d2d2d;
+    color: #f8f8f2;
+    padding: 1em;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-size: 0.9em;
+    line-height: 1.5
+    }
+pre code {
+    background-color: transparent;
+    padding: 0;
+    color: inherit
+    }
+table {
+    width: auto;
+    max-width: 100%;
+    margin: 1.5em auto;
+    border-collapse: collapse;
+    font-size: 0.95em;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    table-layout: fixed;
+    overflow-wrap: anywhere
+    }
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px 12px;
+    text-align: left
+    }
+th {
+    background-color: #f2f2f2;
+    font-weight: 600
+    }
+caption {
+    caption-side: bottom;
+    margin-top: 0.5em;
+    font-style: italic;
+    color: #777;
+    font-size: 0.9em
+    }
+.references {
+    margin-top: 3em;
+    padding-top: 1.5em;
+    border-top: 1px solid #eee
+    }
+.references h3 {
+    margin-top: 0;
+    font-size: 1.6em
+    }
+.references ol {
+    list-style-type: decimal;
+    padding-left: 20px
+    }
+.references li {
+    margin-bottom: 0.8em;
+    font-size: 0.9em
+    }
+/* Chart specific styles */
+.chart-container {
+    width: 80%;
+    max-width: 700px;
+    /* Max width for chart */
+    height: auto;
+    /* Height adjusts based on aspect ratio */
+    max-height: 2000px;
+    /* Max height */
+    margin: 2em auto;
+    /* Center chart with spacing */
+    position: relative;
+    /* Needed for chart responsiveness */
+    }
+canvas {
+    display: block;
+    /* Prevents extra space below canvas */
+    width: 100% !important;
+    /* Ensure canvas fills container width */
+    height: auto !important;
+    /* Maintain aspect ratio */
+    }
+.chart-source {
+    font-size: 0.8em;
+    color: #666;
+    text-align: center;
+    margin-top: 0.5em;
+    margin-bottom: 2em
+    }
+.chart-title {
+    font-size: 1.1em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 0.5em;
+    color: #333
+    }</style>
+<script src="https://static-recommend-img.tiangong.cn/router/agent/chart_0c881812ee9d48598f6fe7dbffb2e546.js"></script>
+</head>
+<body>
+<div class="container">
+<h1 id="section-1">为我的 GitHub 仓库做贡献：一份指南</h1>
+<p>欢迎来到我的 GitHub 仓库！我很高兴您有兴趣参与贡献。本指南将引导您了解如何为本项目做贡献，无论您是修复错误、添加功能、改进文档还是提出问题。遵循这些指南，您将帮助我们维持一个协作高效的工作流程。让我们开始吧！</p>
+<h2 id="section-1">贡献类型</h2>
+<p>为开源项目做贡献的方式有很多种——不仅仅是编写代码。以下是一些您可以提供帮助的示例：</p>
+<ul>
+<li><strong>报告错误 (Bug Reports)：</strong> 如果您发现了一个错误或非预期的行为，请通过提交一个“问题 (issue)”来告诉我。请提供复现该问题的步骤，以便我进行调查。</li>
+<li><strong>功能请求 (Feature Requests)：</strong> 对新功能或改进有想法吗？可以提交一个“问题”来讨论。我会考虑您的建议，我们可以一起规划如何实现它。</li>
+<li><strong>代码贡献 (Code Contributions)：</strong> 您可以通过编写代码来修复错误或实现新功能。这通常涉及复刻 (fork) 仓库、进行修改并提交一个拉取请求 (pull request)（下文会详细介绍）。</li>
+<li><strong>文档 (Documentation)：</strong> 帮助改进文档，包括 README、代码注释或任何指南。好的文档至关重要——即使是修正一个拼写错误或澄清一句话，也是非常有价值的贡献。</li>
+<li><strong>测试 (Testing)：</strong> 测试同样重要！您可以通过为现有代码编写测试用例或测试新的变更来提供帮助。如果我提交了一个拉取请求，您可以审查它并在本地测试这些变更。</li>
+<li><strong>社区支持 (Community Support)：</strong> 您可以在“问题”或讨论区回答问题，帮助分类错误，或组织社区资源。每一点支持都能帮助他人更好地开始。</li>
+</ul>
+<p>正如 GitHub 的贡献指南所指出的，<em>“参与开源项目的方式多种多样”</em>——您不必是程序员才能做出贡献<a href="https://opensource.guide/how-to-contribute/" target="_blank">（开源指南）</a>。无论是编码、写作还是帮助他人，我们都欢迎您的贡献。</p>
+<h2 id="section-2">寻找可做之事</h2>
+<p>如果您正在寻找可以着手处理的问题，一个很好的起点是仓库的<strong>问题跟踪器 (Issue Tracker)</strong>。我使用 GitHub Issues 来跟踪错误、功能请求和任务。您可以通过标签筛选问题，找到适合您的任务：</p>
+<ul>
+<li><strong>适合新手的第一个问题 (Good First Issues)：</strong> 标记为 <code>good first issue</code> 的问题是为新手准备的。它们通常是较小的任务，是了解项目的好方法。标记这些问题是为了让新贡献者更容易找到起点<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/finding-ways-to-contribute-to-open-source-on-github" target="_blank">（GitHub 文档）</a>。</li>
+<li><strong>需要帮助 (Help Wanted)：</strong> 标记为 <code>help wanted</code> 的任务是维护者需要帮助的任务。这些可能比“第一个问题”稍微复杂一些，但我们非常感谢您的帮助。</li>
+<li>其他标签如 <code>bug</code>、<code>enhancement</code> 或 <code>documentation</code> 可以帮助您找到您感兴趣领域的问题（例如，如果您想改进文档，可以查找 <code>documentation</code> 标签）。</li>
+</ul>
+<p>在开始编码之前，最好先<strong>检查您感兴趣的问题或功能是否已经存在</strong>。如果存在，您可以在该问题下留言，告知他人您想处理它。这可以避免重复工作，也让我能为您提供必要的指导。如果不存在相关问题，您可以先提交一个新问题来讨论变更（特别是对于较大的功能）——这样我们可以在您投入时间编码前就方法达成一致。</p>
+<p>GitHub 也让发现贡献机会变得容易。例如，每个仓库都有一个<strong>贡献 (Contribute)</strong> 页面，会突出显示 <code>good first issue</code> 和 <code>help wanted</code> 的问题<a href="https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels" target="_blank">（GitHub 文档）</a>。您可以通过点击仓库主页上的“Contribute”来访问。这是一个为欢迎新贡献者而设的精选列表。此外，GitHub 的搜索功能允许按标签筛选（例如 <code>label:"good first issue"</code>），以便在各个项目中查找开放问题<a href="https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/encouraging-helpful-contributions-to-your-project-with-labels" target="_blank">（GitHub 文档）</a>。还有一些外部网站，如 <strong>goodfirstissue.dev</strong>，它会聚合来自不同项目的 <code>good first issue</code> 标签<a href="https://goodfirstissue.dev/" target="_blank">（goodfirstissue.dev）</a>。</p>
+<p>如果您不确定从哪里开始，请不要犹豫，随时寻求帮助。您可以在问题下留言，或通过沟通渠道（讨论区、电子邮件等——见下文）与我联系，我很乐意为您指明方向。</p>
+<h2 id="section-3">沟通渠道</h2>
+<p>有效的沟通是开源项目的关键。以下是我们使用的主要沟通渠道以及各自的适用场景：</p>
+<ul>
+<li><strong>GitHub Issues (问题)：</strong> 问题用于跟踪具体的任务、错误或功能请求。您可以使用“问题”来报告错误或提出新功能。问题与仓库直接相关，非常适合讨论具体的变更或问题<a href="https://docs.github.com/en/get-started/using-github/communicating-on-github" target="_blank">（GitHub 文档）</a>。每个问题都应有清晰的标题和描述，以便每个人都能理解其内容。</li>
+<li><strong>GitHub Pull Requests (PRs) (拉取请求)：</strong> 拉取请求用于提议和审查代码变更。当您有代码想要提交时，您需要创建一个 PR。在 PR 的讨论中，我会逐行审查您的代码并提出修改建议。您可以将 PR 视为讨论解决方案<em>实现</em>的地方。如果一个 PR 与某个问题相关联，关闭该问题将成为讨论的一部分（通常在 PR 描述中写上“Fixes #123”）。</li>
+<li><strong>GitHub Discussions (讨论区)：</strong> 讨论区就像是项目社区的论坛。您可以使用讨论区进行一般性提问、分享想法或进行不针对特定错误或代码变更的对话<a href="https://docs.github.com/en/get-started/using-github/communicating-on-github" target="_blank">（GitHub 文档）</a>。例如，您可以发起一个讨论来询问如何使用项目、分享一个用例，或以非正式的方式进行新功能头脑风暴。讨论区是获取帮助或与其他用户和贡献者分享知识的好地方。</li>
+<li><strong>其他渠道：</strong> 根据项目的不同，可能还有其他沟通渠道，如聊天室（Slack、Discord）、邮件列表或论坛。如果存在这些渠道，会在 README 或文档中提及。通常，<strong>GitHub Issues 和 Discussions 是本项目的主要渠道</strong>，但如果存在官方聊天室，那么随意的交谈和快速提问可能会在那里进行。</li>
+</ul>
+<p>总结一下：<strong>对于可操作的任务或错误，请使用“问题”</strong>；<strong>当您有代码要提交时，请使用“拉取请求”</strong>；<strong>对于开放式提问或讨论，请使用“讨论区”</strong><a href="https://docs.github.com/en/get-started/using-github/communicating-on-github" target="_blank">（GitHub 文档）</a>。这有助于保持项目井然有序。我会尽力在这些渠道中及时回复。如果您不确定在哪里发布内容，通常发起一个“问题”或“讨论”是安全的——如果需要，我可以帮助您将对话转移到合适的地方。</p>
+<h2 id="section-4">如何提交拉取请求 (PR)</h2>
+<p>提交拉取请求是将您的代码变更贡献回主仓库的过程。以下是具体操作的步骤指南：</p>
+<ol>
+<li><strong>复刻 (Fork) 仓库：</strong> 首先，在您的 GitHub 账户中创建本仓库的一个副本，只需点击仓库页面上的“Fork”按钮。这样您就有了一个自己的版本（<code>https://github.com/your-username/repo-name</code>），可以在其中自由地进行修改。</li>
+<li><strong>克隆 (Clone) 仓库：</strong> 在您的本地计算机上，克隆您复刻的仓库（使用 <code>git clone</code>），以便获取代码进行开发。例如：
+                <pre><code>git clone https://github.com/your-username/repo-name.git</code></pre>
+<p>这将把代码下载到您的计算机上。</p>
+</li>
+<li><strong>设置远程仓库 (Remotes)：</strong> 一个好的做法是配置一个指向上游（即原始）仓库的远程地址（通常称为 <code>upstream</code>），以便同步变更。在您的本地仓库目录中执行：
+                <pre><code>git remote add upstream https://github.com/my-username/repo-name.git</code></pre>
+<p>现在 <code>origin</code> 指向您的复刻仓库，而 <code>upstream</code> 指向原始仓库。</p>
+</li>
+<li><strong>创建分支 (Branch)：</strong> 在进行修改之前，为您的工作创建一个新分支。这能使您的工作保持独立。例如：
+                <pre><code>git checkout -b my-feature-branch</code></pre>
+<p>请使用描述性的分支名称（如 <code>fix-bug-123</code> 或 <code>add-new-feature</code>）。</p>
+</li>
+<li><strong>进行修改并提交 (Commit)：</strong> 根据需要编辑文件以修复错误或添加功能。完成后，使用清晰的提交信息来提交您的变更。例如：
+                <pre><code>git add .
+git commit -m "Fix: 修复保存文件时崩溃的问题 (resolves #123)"</code></pre>
+<p>请保持提交信息简洁但内容丰富——它们应解释变更的<em>内容</em>和<em>原因</em>。（如果您的提交解决了某个特定问题，请包含问题编号，例如“Fix #123”。）</p>
+</li>
+<li><strong>推送到您的复刻仓库 (Push)：</strong> 将您的分支推送到您在 GitHub 上的复刻仓库：
+                <pre><code>git push origin my-feature-branch</code></pre>
+</li>
+<li><strong>创建拉取请求 (Pull Request)：</strong> 前往 GitHub 上的<strong>我的原始仓库</strong>。您可能会看到一个建议您为刚推送的分支创建拉取请求的横幅。如果没有，请导航到“Pull Requests”选项卡，然后点击“New Pull Request”。选择基础分支（通常是原始仓库的 <code>main</code> 或 <code>master</code> 分支）和比较分支（您复刻仓库中的 <code>my-feature-branch</code>）。然后点击“Create Pull Request”。
+                <p>GitHub 会将您带到一个页面，您可以在此为您的 PR 输入标题和描述。<strong>请提供一个清晰的标题</strong>（例如“修复：保存文件时崩溃”）和详细的描述，说明您做了哪些更改以及原因。如果此 PR 修复了某个问题，请提及它（例如“Fixes #123”）。您提供的上下文越多，我审查起来就越容易。</p>
+</li>
+<li><strong>审查与迭代 (Review and Iteration)：</strong> 您创建 PR 后，我会对其进行审查。我可能会提问或建议修改。请及时回应评论——您可以通过向您的分支推送新的提交来处理反馈（它们会自动显示在 PR 中）。我们将共同努力，使您的变更达到最佳状态。
+                <p>在审查期间，我也可能会运行自动化检查（如测试或代码风格检查）。如果任何检查失败，我会通知您。您可以更新代码并再次推送以修复这些问题。</p>
+</li>
+<li><strong>合并 (Merge)：</strong> 一旦您的 PR 被批准并且所有必需的检查都通过后，我就会将其合并到主分支中。恭喜——您的贡献现在已成为项目的一部分！我会在 PR 中感谢您的贡献，您也将被列为贡献者。</li>
+</ol>
+<p>如果您是第一次接触这个流程，别担心！起初可能会觉得有点复杂，但 GitHub 的官方指南和工具使其变得更容易。实际上，GitHub 有一个示例演练，指导您如何为 <code>github/docs</code> 仓库做贡献，涵盖了复刻、修改和创建 PR 的全过程<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-open-source" target="_blank">（GitHub 文档）</a>。还有一些适合初学者的资源，如 <strong>firstcontributions.github.io</strong>，它为您的首次贡献提供了分步教程<a href="https://github.com/firstcontributions/first-contributions" target="_blank">（firstcontributions 项目）</a>。</p>
+<p>一个重要的提示：<strong>在创建 PR 之前，请务必确保您的分支与原始仓库的最新变更保持同步</strong>。您可以通过从 <code>upstream</code> 拉取并进行合并或变基 (rebase) 来实现。这有助于避免合并冲突。例如：
+        <pre><code>git fetch upstream
+git rebase upstream/main</code></pre>
+        这会将您的分支变基到最新的 <code>main</code> 分支之上，并包含所有新的变更。</p>
+<p>遵循这些步骤，您将提交一个格式规范的拉取请求。我感谢您的努力，并将尽力快速审查。如果您在此过程中有任何问题，请随时在 PR 评论中或通过其他渠道提问——我很乐意提供帮助！</p>
+<h2 id="section-5">如何报告问题</h2>
+<p>如果您在使用项目中遇到问题或有任何建议，通过提交一个“问题 (issue)”来报告将非常有帮助。以下是如何创建一个有用的问题：</p>
+<ol>
+<li><strong>检查现有问题：</strong> 在创建新问题之前，请先在“Issues”选项卡中搜索，看看该问题或请求是否已被报告。如果您找到了匹配的问题，您可以在其下添加评论以提供更多信息，或简单地表示您也遇到了同样的问题。这有助于避免重复。</li>
+<li><strong>创建新问题：</strong> 如果问题尚不存在，请点击“Issues”页面上的“New Issue”按钮。如果我设置了问题模板（例如，用于报告错误或功能请求的模板），您会看到它们。请选择合适的模板。如果没有，则继续创建一个空白问题。</li>
+<li><strong>填写标题和描述：</strong> 为问题提供一个<strong>清晰且具体的标题</strong>，以概括问题或请求。例如，“错误：保存文件时应用程序崩溃”或“功能请求：增加导出为 PDF 的支持”。在描述中，请提供尽可能多的细节：
+                <ul>
+<li>如果是错误：请解释复现步骤（您做了什么，发生了什么，您期望发生什么？）。如果可能，请附上任何错误信息或日志。如果相关，请提及您的环境（操作系统、项目版本等）。</li>
+<li>如果是功能请求：请详细描述该功能及其用途。如果您对如何实现有想法，也欢迎分享。</li>
+</ul>
+<p>您提供的信息越多，我理解和解决问题就越容易。</p>
+</li>
+<li><strong>添加标签（如果可能）：</strong> 如果您有权限或界面允许，可以为问题添加相关标签（如 <code>bug</code>、<code>enhancement</code>、<code>documentation</code> 等）。这有助于对问题进行分类。即使您无法添加标签，也不用担心——我会在创建后为其添加适当的标签。</li>
+<li><strong>提交问题：</strong> 点击“Submit new issue”。问题将被创建，我将收到通知。我会尽快回复，可能会请求澄清或开始处理问题。</li>
+</ol>
+<p><strong>一个好的错误报告示例：</strong>
+<blockquote>
+<p><strong>标题：</strong> 错误：即使使用正确的密码，登录也失败并提示“凭据无效”</p>
+<p><strong>描述：</strong> 复现步骤：
+            <ol>
+<li>打开应用并进入登录界面。</li>
+<li>输入之前有效的用户名和密码。</li>
+<li>点击登录。</li>
+</ol>
+            预期行为：用户成功登录。
+            实际行为：出现错误信息“凭据无效”。
+            这个问题在最近一次更新后开始出现。我尝试重置密码，但仍然无效。控制台中没有显示错误日志。
+        </p>
+</blockquote>
+        这个例子清晰并提供了上下文，有助于调试。</p>
+<p>如果您不确定如何编写一个好的问题，GitHub 的官方文档建议包含一个描述性的标题和对问题与预期行为的详细描述<a href="https://github.com/orgs/community/discussions/147722" target="_blank">（GitHub 社区讨论）</a>。他们还建议使用问题模板来引导贡献者提供必要的信息<a href="https://github.com/orgs/community/discussions/147722" target="_blank">（GitHub 社区讨论）</a>。我可能已经设置了模板（例如，错误报告模板可能会提示您填写发生了什么、预期行为、复现步骤等）。如果是这样，请使用它们——它们旨在收集我需要的信息。</p>
+<p>提交问题后，我可能会提出后续问题或提供更新。如果我开始处理它，我可能会将它分配给自己或相应地标记它。如果您有兴趣自己修复这个问题，请随时在问题中提及——我可以将其分配给您或提供指导。否则，我会尽快处理。感谢您通过报告问题帮助项目变得更好！</p>
+<h2 id="section-6">如何请求新功能</h2>
+<p>如果您对项目有新功能或改进的想法，我非常乐意倾听！功能请求通常也通过 GitHub Issues 处理。以下是如何请求新功能的方法：</p>
+<ol>
+<li><strong>搜索现有请求：</strong> 首先，请检查“Issues”（可能还有“Discussions”），看看是否已有人提出相同的功能。如果存在相关问题，您可以在其下留言以表示支持或提供更多想法。这有助于集中讨论。</li>
+<li><strong>创建新问题：</strong> 如果您的功能想法是新的，请创建一个新问题。您可以使用“功能请求”模板（如果可用），或者直接使用一个普通问题。在标题中，请清晰地说明功能（例如，“功能：添加暗黑模式主题”）。</li>
+<li><strong>描述功能：</strong> 在问题描述中，请详细解释该功能。它会做什么？为什么它有价值？如果可能，请描述您设想的工作方式。例如，如果是一个 UI 功能，您可以草拟它的外观或描述用户交互。如果是一个新的 API 或函数，您可以概述其建议的功能。</li>
+<li><strong>提供用例：</strong> 解释用例会很有帮助——谁会使用这个功能以及为什么。例如，“作为用户，我希望有暗黑模式，这样我可以在光线较暗的环境中使用应用而不会感到眼睛疲劳。”这种上下文有助于我理解其重要性。</li>
+<li><strong>如果您计划实现它：</strong> 如果您愿意并且有能力自己开发这个功能，请提及！您可以说，“如果这个功能被批准，我愿意着手开发。”这非常好，因为这意味着您也可能贡献代码。我很乐意在您开发过程中讨论设计并提供反馈。</li>
+<li><strong>讨论与完善：</strong> 我会回复功能请求问题以进行讨论。我们可能会反复沟通以澄清需求或探讨如何将该功能与现有代码库集成。社区的意见也同样欢迎——其他用户可能会分享他们的想法。</li>
+<li><strong>决策与后续步骤：</strong> 讨论后，我会决定是否推进该功能。如果它符合项目的目标，我会将其标记为已接受，并可能分配它或为其创建一个任务。如果不确定或需要更多工作，我可能会要求一个概念验证，或表示我会在未来的版本中考虑它。在某些情况下，如果该功能不符合项目的方向，我会解释原因，我们可以友好地结束讨论——但我始终感谢您的建议。</li>
+</ol>
+<p>功能请求是塑造项目未来的方式，所以我非常重视它们。即使我不能立即实现每个想法，我也会记在心里。有时，如果一个想法很大，我可能会将其分解为更小的问题或请求帮助实现其中的一部分。</p>
+<p>需要注意的一点是：<strong>如果您打算自己实现该功能</strong>，在开始编码前获得我对设计的反馈会非常有帮助。您可以在问题中进行讨论，甚至可以创建一个草稿拉取请求来展示您的初步想法。这样，我们可以在方法上达成一致，避免您花费时间在可能不合适的事情上。正如 GitHub 的指南所建议的，对于新功能，您应该“在投入大量开发时间之前，先提交一个问题来概述您提议的方法”<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/finding-ways-to-contribute-to-open-source-on-github" target="_blank">（GitHub 文档）</a>。</p>
+<p>感谢您的想法！它们帮助项目成长。无论功能是否被实现，我都感谢您花时间分享。如果我没有立即回复，可能只是因为我忙，但我一定会回复您。</p>
+<h2 id="section-7">代码审查流程</h2>
+<p>当您提交一个拉取请求后，它将进入代码审查流程。以下是您可以预期的内容以及如何帮助流程顺利进行：</p>
+<ul>
+<li><strong>初步分类：</strong> 在您提交 PR 后不久，我会查看它。我可能会添加一些标签（如 <code>needs review</code> 或 <code>work in progress</code>，如果它是一个草稿），并将其分配给我自己或其他审查者。如果存在任何明显的问题（例如，PR 不完整或存在合并冲突），我会在评论中提及。</li>
+<li><strong>深入审查：</strong> 我会逐行审查您的代码变更。我会检查其正确性、风格一致性、潜在的错误，以及是否符合项目的目标。我可能会问一些问题，如“您能解释一下这部分吗？”或指出可能的改进之处。请不要将这些视为个人批评——它们的目的是改进代码并帮助您作为开发者成长。我的目标是与您<em>合作</em>，使贡献尽可能地好。</li>
+<li><strong>迭代：</strong> 审查后，我会留下评论或反馈。您需要处理这些评论。这可能涉及对您的代码进行额外修改，或仅仅是澄清您的方法。您可以向您的分支推送新的提交——它们会自动出现在 PR 中。我鼓励您回应每一条评论（无论是进行修改还是解释为什么您认为不需要修改）。这有助于建立对话。例如，如果我建议一个代码改进，您可以实现它并在该评论下回复“已完成”。这有助于我跟踪已处理的内容。</li>
+<li><strong>批准：</strong> 如果一切看起来都很好，并且我对变更感到满意，我会将 PR 标记为已批准。在某些情况下，特别是对于较大的变更，我可能会请求另一位维护者或社区成员也进行审查。如果有多位维护者，我可能会要求在合并前获得一定数量的批准。</li>
+<li><strong>合并：</strong> 一旦获得批准并且所有必需的检查（如测试通过、CI 检查等）都通过后，我就会将您的 PR 合并到主分支中。我通常会根据 Git 历史的最佳实践选择“压缩并合并 (Squash and Merge)”或普通合并。合并后，我会关闭任何相关联的问题，并在 PR 评论中感谢您的贡献。</li>
+<li><strong>合并后：</strong> 合并后，您的变更将成为项目的一部分。如果您愿意，可以检出主分支的最新版本，看看您的代码实际运行情况。我也会根据需要更新文档或发布说明以反映您的变更。</li>
+</ul>
+<p>在审查过程中，如果我的反馈不清楚，请随时提问。我很乐意解释我的理由。请记住，代码审查是一个学习过程——对我们双方都是如此。即使我请求修改，也不意味着您的工作不好；这只是为了使其符合项目标准而进行完善的一部分。</p>
+<p>为了使审查过程高效，这里有几点给您的建议：</p>
+<ul>
+<li><strong>保持 PR 的专注性：</strong> 尽量让每个 PR 只解决一个问题或实现一个功能。一个范围小、定义明确的 PR 比一个包含许多不相关变更的大型 PR 更容易审查。如果您有多个贡献，可以考虑为每个贡献提交单独的 PR。</li>
+<li><strong>测试您的变更：</strong> 如果可能，请测试您提交的代码。如果存在现有测试，请运行它们以确保没有破坏任何东西。如果您添加了新功能，可以考虑为其编写一个测试（如果适用）。这让我对您的变更更有信心。</li>
+<li><strong>遵循风格指南：</strong> 我可能有编码风格或格式化指南（这些可能在 <code>CONTRIBUTING.md</code> 中或从现有代码中推断）。遵循它们将减少我需要提出的与风格相关的评论数量。</li>
+<li><strong>及时响应：</strong> 您越快处理审查评论，PR 就能越快被合并。我理解您可能很忙，但及时的回应能保持势头。如果您一段时间内无法处理，请告诉我，以便我知晓。</li>
+</ul>
+<p>通过在审查期间的合作，我们将确保合并的代码是高质量且对项目有益的。我非常感谢您的贡献，并希望确保它被正确地集成。感谢您在此过程中的耐心与合作！</p>
+<h2 id="section-8">社区期望与行为准则</h2>
+<p>为开源项目做贡献不仅仅是编写代码——它也是成为社区一员的过程。我致力于为每个人维护一个友好、包容和尊重的环境。为确保这一点，我制定了所有参与者都应遵守的<strong>行为准则 (Code of Conduct)</strong>。</p>
+<p>行为准则概述了在我们的社区中哪些行为是可接受的，哪些是不可接受的。简而言之，我们期望每个人都能<strong>尊重和体谅</strong>他人。积极行为的例子包括使用欢迎的语言、尊重不同的观点、优雅地接受建设性批评、专注于对社区最有利的事情，以及对其他社区成员表示同情<a href="https://gist.github.com/PurpleBooth/b24679402957c63ec426" target="_blank">（一个行为准则示例）</a>。相反，不可接受的行为包括骚扰、侮辱、歧视性语言或任何形式的人身攻击<a href="https://gist.github.com/PurpleBooth/b24679402957c63ec426" target="_blank">（一个行为准则示例）</a>。此类行为将不被容忍。</p>
+<p>作为贡献者，您有责任在所有与项目相关的互动中遵守此行为准则——无论是在问题、拉取请求、讨论区还是我们使用的任何其他平台。如果您看到有人违反行为准则，或者您有任何疑虑，请告知我（维护者）。我会认真对待报告并及时处理。我的目标是保持这个社区成为一个让每个人都能安全愉快地协作的空间。</p>
+<p>通过您的贡献，您不仅在技术上帮助了项目，也在帮助培养一个健康的社区。我感谢您在这方面的理解与合作。让我们共同努力，保持友善、耐心和支持。请记住，当人们善待彼此时，开源社区才能蓬勃发展。</p>
+<p>如果您还没有阅读，我鼓励您阅读完整的行为准则文件（通常在仓库中命名为 <code>CODE_OF_CONDUCT.md</code>），以熟悉相关指南。它通常包括如何报告违规行为以及不可接受行为可能带来的后果。遵循这些指南将使您和他人的体验更加积极。</p>
+<p>感谢您成为社区中负责任的一员。我期待与您合作！</p>
+<h2 id="section-9">其他资源</h2>
+<p>为了进一步帮助您，这里有一些额外的资源和参考资料：</p>
+<ul>
+<li><strong>GitHub 的贡献文档：</strong> GitHub 提供了关于为开源项目做贡献的详细指南。您可能会发现这些很有帮助：
+                <ul>
+<li><em>“在 GitHub 上寻找为开源做贡献的方式”</em> – 一份关于如何发现项目和问题以进行贡献的指南<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/finding-ways-to-contribute-to-open-source-on-github" target="_blank">（GitHub 文档）</a>。</li>
+<li><em>“为开源做贡献”</em> – 一个为项目做贡献的示例演练（以 GitHub 自己的文档仓库为例）<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-open-source" target="_blank">（GitHub 文档）</a>。</li>
+<li><em>“为项目做贡献快速入门”</em> – 一份涵盖复刻、分支、提交和 PR 的快速指南<a href="https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project" target="_blank">（GitHub 文档）</a>。</li>
+</ul>
+</li>
+<li><strong>First Contributions 教程：</strong> 如果您是开源新手，<strong>First Contributions</strong> 项目是一个极好的资源。它提供了在 GitHub 上进行首次贡献的分步指南（包括如何复刻、克隆、提交和创建 PR）<a href="https://github.com/firstcontributions/first-contributions" target="_blank">（firstcontributions 项目）</a>。它甚至有一个交互式仓库供您练习。</li>
+<li><strong>freeCodeCamp 的指南：</strong> freeCodeCamp 有一份全面的<em>“如何为开源做贡献”</em>指南，涵盖了从寻找项目到创建您的第一个 PR 的所有内容<a href="https://github.com/freeCodeCamp/how-to-contribute-to-open-source" target="_blank">（freeCodeCamp 项目）</a>。如果您更喜欢观看，他们还有一个视频教程<a href="https://github.com/freeCodeCamp/how-to-contribute-to-open-source" target="_blank">（freeCodeCamp 项目）</a>。</li>
+<li><strong>开源指南 (Open Source Guides)：</strong> GitHub 的开源指南网站是一个信息宝库。特别是，<em>“如何为开源做贡献”</em>指南提供了入门和做出有意义贡献的技巧<a href="https://opensource.guide/" target="_blank">（开源指南网站）</a>。还有一个<em>“维护者最佳实践”</em>指南，您可能会感兴趣，以了解我如何运营这个项目<a href="https://opensource.guide/best-practices/" target="_blank">（开源指南网站）</a>。</li>
+<li><strong>行为准则 (Code of Conduct)：</strong> 如果您想了解更多关于开源中的行为准则，贡献者契约 (Contributor Covenant) 是一个被广泛使用的行为准则模板，许多项目（可能包括本项目）都在使用。您可以在 <a href="https://www.contributor-covenant.org/" target="_blank">contributor-covenant.org</a> 找到它。了解它将帮助您深入了解社区标准。</li>
+<li><strong>沟通礼仪：</strong> 像 DEV Community 这样的论坛有关于开源沟通的文章。例如，一篇文章建议为尊重行为设定基本规则，并使用积极的语言来鼓励合作<a href="https://dev.to/opensauced/how-to-make-a-delicious-contributing-guide-4bp3" target="_blank">（DEV.to 文章）</a>。牢记这些将有助于您进行富有成效的互动。</li>
+</ul>
+<p>如果您在任何时候不确定如何进行，请随时参考本指南或这些资源。我也随时可以回答问题——您可以通过问题、讨论区或电子邮件（如果我提供了邮箱）与我联系。开源社区的核心是学习和互相帮助，所以我在这里支持您的贡献。</p>
+<p>再次感谢您对本项目的贡献兴趣。我非常期待您的贡献并与您合作。编码愉快，欢迎加入社区！</p>
+</div>
+</body>
+</html>
