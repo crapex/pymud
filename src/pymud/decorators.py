@@ -9,7 +9,7 @@ def print_exception(session, e: Exception):
     if isinstance(session, Session):
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
 
-def exception(func):
+def exception(func: callable):
     """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。可以用于同步方法和异步方法。"""
     if not iscoroutinefunction(func):
         @functools.wraps(func)
@@ -29,6 +29,7 @@ def exception(func):
                     session = None
                     
                 if isinstance(session, Session):
+                    #session.error(traceback.format_exc(), Settings.gettext("script_error"))
                     print_exception(session, e)
                     #session.error(Settings.gettext("exception_message", e, type(e)))
                     #session.error(Settings.gettext("exception_traceback", traceback.format_exc()))

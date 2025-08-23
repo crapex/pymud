@@ -155,7 +155,7 @@ class PyMudApp:
         set_title("{} {}".format(Settings.__appname__, Settings.__version__))
         self.set_status(Settings.text["welcome"])
 
-        self.loggers = dict()           # 所有记录字典
+        self.loggers = dict()           # 所有记录字典K
         self.showLog = False            # 是否显示记录页
         self.logFileShown = ''          # 记录页显示的记录文件名
         #self.logSessionBuffer = SessionBuffer()
@@ -211,7 +211,7 @@ class PyMudApp:
 
         cmdKeybinding = KeyBindings()
 
-        @cmdKeybinding.add(Keys.Escape)
+        @cmdKeybinding.add(Keys.Escape, eager = True)
         @cmdKeybinding.add(Keys.Any)
         @cmdKeybinding.add(Keys.Enter)
         @cmdKeybinding.add(Keys.Left)
@@ -231,8 +231,7 @@ class PyMudApp:
                     return
 
                 elif key == Keys.Escape:
-                    buffer.cut_selection()
-                    buffer.exit_selection()
+                    buffer.reset()
                     return
 
                 elif key == Keys.Left:
@@ -244,16 +243,18 @@ class PyMudApp:
                     buffer.exit_selection()
                     if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
                         s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
-                        if s:
+                        if s and s.text:
                             buffer.insert_text(s.text, fire_event = False)
-                    else:
-                        buffer.cursor_right()
-
+                            return
+            
+                    buffer.cursor_right()
                     return
+
                 elif key == Keys.Tab:
+                    buffer.exit_selection()
                     if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
                         s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
-                        if s:
+                        if s and s.text:
                             buffer.insert_text(s.text, fire_event = False)
 
                     return
@@ -262,8 +263,9 @@ class PyMudApp:
                     buffer.exit_selection()
                     if (buffer.cursor_position == len(buffer.text)) and buffer.auto_suggest:
                         s = buffer.auto_suggest.get_suggestion(buffer, buffer.document)
-                        if s:
+                        if s and s.text:
                             buffer.insert_text(s.text, fire_event = False)
+                            return
 
                     buffer.history_backward()
                     return
@@ -275,15 +277,13 @@ class PyMudApp:
 
                 elif key == Keys.Backspace:
                     if buffer.selection_state:
-                        buffer.cut_selection()
-                        buffer.exit_selection()
+                        buffer.reset()
                     else:
                         buffer.delete_before_cursor(1)
                     return
 
                 elif buffer.selection_state:
-                    buffer.cut_selection()
-                    buffer.exit_selection()
+                    buffer.reset()
 
                 buffer.insert_text(keydata)
 

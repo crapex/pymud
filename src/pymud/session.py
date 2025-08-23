@@ -2948,7 +2948,7 @@ class Session:
         :param module_names: 要重新加载的模块清单。为元组/列表时，卸载指定名称的系列模块，当名称为字符串时，卸载单个模块。当不指定时，重新加载所有已加载模块。
         """
         if module_names is None:
-            for name, module in self._modules.items():
+            for module in list(self._modules.values()):
                 if isinstance(module, ModuleInfo):
                     module.reload()
 

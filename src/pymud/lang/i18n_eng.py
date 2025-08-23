@@ -771,11 +771,15 @@ TRANSLATION = {
             - #tri: Display all triggers in this session.
             - #tri {tri_id}: Display information about the trigger with id {tri_id} in this session.
             - #tri {tri_id} {on/off/del}: Enable/disable/delete the trigger with id {tri_id} in this session.
+            - #tri [>=]{groupname}: Display all triggers in this session with group name {groupname} (when =), or all triggers in this session and its sub-groups (when >).
+            - #tri [>=]{groupname} {on/off/del}: Enable/disable/delete all triggers in this session with group name {groupname} (when =), or all triggers in this session and its sub-groups (when >).
             - #tri {pattern} {code}: Create a new trigger with the matching pattern {pattern} and execute {code} when matched.
             - In the trigger's code, %line can be used to represent the line, and %1~%9 can be used to represent the captured information.
 
         Parameters:
             :tri_id:  The id of the Trigger.
+            :[>=]:    Either = or >, indicating whether to include sub-groups. When =, only the specified group is included; when >, the specified group and its sub-groups are included.
+            :groupname:  Group name, which is the group attribute of the trigger.
             :on:      Enable.
             :off:     Disable.
             :del:     Delete.
@@ -784,6 +788,12 @@ TRANSLATION = {
     
         Examples:
             - ``#tri``: Without parameters, print and list all triggers in the current session.
+            - ``#tri =mygroup``: With one parameter, list all triggers in the current session with group name "mygroup".
+            - ``#tri >mygroup``: With one parameter, list all triggers in the current session and its sub-groups with group name "mygroup".
+            - ``#tri =mygroup on``: With two parameters, enable all triggers in the current session with group name "mygroup".
+            - ``#tri >mygroup off``: With two parameters, disable all triggers in the current session with group name "mygroup" and its sub-groups.
+            - ``#tri =mygroup``: With one parameter, list all triggers in the current session with group name "mygroup".
+            - ``#tri >mygroup``: With one parameter, list all triggers in the current session with group name "mygroup" and its sub-groups.
             - ``#tri my_tri``: With one parameter, list detailed information about the Trigger object with id my_tri.
             - ``#tri my_tri on``: With two parameters, enable the Trigger object with id my_tri (enabled = True).
             - ``#tri my_tri off``: With two parameters, disable the Trigger object with id my_tri (enabled = False).
