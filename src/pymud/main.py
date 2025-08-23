@@ -40,7 +40,7 @@ CFG_TEMPLATE = {
             "port" : "8081",
             "encoding" : "utf8",
             "autologin" : "{0};{1}",
-            "default_script": "examples",
+            "default_script": "pkuxkx",
             "chars" : {
                 "display_title" : ["yourid", "yourpassword", ""],
             }
@@ -167,10 +167,10 @@ def init_pymud_env(args):
                 CFG_TEMPLATE["language"] = "eng"
                 fp.writelines(json.dumps(CFG_TEMPLATE, indent = 4))
 
-        if not os.path.exists('examples.py'):
+        if not os.path.exists('pkuxkx.py'):
             from pymud import pkuxkx
             module_dir = pkuxkx.__file__
-            shutil.copyfile(module_dir, 'examples.py')
+            shutil.copyfile(module_dir, 'pkuxkx.py')
             print(f'The sample script has been copied to the script directory and added to the default configuration file')
 
         print(f"Afterwards, you can modify the pymud.cfg file in the {dir} directory for configuration.")

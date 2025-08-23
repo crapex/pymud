@@ -860,6 +860,57 @@ class Session:
         self.writeline(line)
         return await awaitable
         
+    async def wait_triggers(self, line: str, group: str = None, inc_subgroup: bool = False, tri_list: List[Trigger] = None, tri_id_list: List[str] = None, timeout: Optional[float] = 10, return_when = "FIRST_COMPLETED", wait_time = 0.05):
+        """
+        调用writline向服务器中写入一行后，等待指定触发器响应后返回结果。
+
+        :param line: 使用writeline写入的行
+        :param group: 触发对象组名（可选，三选一，优先级： 组名 > 列表 > ID列表）
+        :param inc_subgroup: 是否包含子组（默认False）
+        :param tri_list: 等待的触发对象列表（可选，三选一，优先级： 组名 > 列表 > ID列表）
+        :param tri_id_list: 等待的触发对象ID列表（可选，三选一，优先级： 组名 > 列表 > ID列表）
+        :param timeout: 等待的超时时间，单位为s，默认为10s。设置为None时，即没有超时，会一直等待
+        :param return_when: 等待的触发对象返回方式
+        :param wait_time: 写入行前等待的延时，单位为s。默认0.05
+
+        :return: 成功触发的触发器数量、id列表、值列表
+
+        """
+        awts = []
+        if group:
+            for tri in self._triggers.values():
+                if inc_subgroup and tri.group.startswith(group):
+                        awts.append(self.create_task(tri.triggered()))
+
+                elif tri.group == group:
+                    awts.append(self.create_task(tri.triggered()))
+
+        elif tri_list:
+            for tri in tri_list:
+                awts.append(self.create_task(tri.triggered()))
+
+        elif tri_id_list:
+            for tri_id in tri_id_list:
+                if tri_id in self._triggers.keys():
+                    awts.append(self.create_task(self._triggers[tri_id].triggered()))
+
+        await asyncio.sleep(wait_time)
+        self.writeline(line)
+        done, pending = await asyncio.wait(awts, timeout = timeout, return_when = return_when)
+        
+        for task in pending:
+            self.remove_task(task)
+
+        done = list(done)
+        done_ids = []
+        done_values = []
+        if len(done) > 0:
+            for task in done:
+                state = task.result()
+                done_ids.append(state.id)
+                done_values.append(state)
+
+        return len(done_ids), done_ids, done_values
 
     def exec(self, cmd: str, name = None, *args, **kwargs):
         r"""

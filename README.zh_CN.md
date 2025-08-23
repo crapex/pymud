@@ -14,7 +14,7 @@
 
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
-+ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>`_ 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
++ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
 + 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
 + 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作），极低资源需求，在单核1GB内存的Linux VPS上也可流畅运行
 + 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
@@ -39,7 +39,7 @@
 
 ## 版本更新信息
 
-### 0.22.0 (2025-08-17)
+### 0.22.0 (2025-08-23)
 
 + 问题修复: beautify 对齐恢复成以往的实现方式，即统一在右侧添加字符。
 + 问题修复: 修复了 #var 命令中，使用中文变量名时，= 显示不对齐的问题。
@@ -50,7 +50,11 @@
 + 功能新增: 现在上箭头在光标处于最右侧时，也是优先使用自动补完了。若无自动补完，则进行历史命令切换。
 + 功能新增: 按键ESC可以直接清除命令行中的全部内容（受限于终端对按键的处理，需要连续按三次ESC按键才能生效）。
 + 功能新增: 现在Tab按键也具有自动补完功能了。
++ 功能新增: 为IConfigBase接口新增了info, warning, error方法，以后继承 IConfig 的类型，可以直接 self.info 了。
 + 功能新增: 现在 @alias, @trigger, @timer, @gmcp, @exception 等装饰器可以直接装饰在async def的异步函数上了。同步的，所有继承自 BaseObject 对象的类型，包括 Trigger, Alias, Timer, GMCPTrigger 等， 其onSuccess, onFailure等回调可以直接赋值为异步函数。
++ 功能调整: 移除了顶部菜单栏最右侧阻挡事件响应的空白菜单。原因是有时焦点位于此空白菜单时，单击窗口焦点不能正常移动到命令栏，会造成误解。
++ 功能新增: 在 @exception 输出异常信息时，会定位标记了 @exception 并产生异常的函数及所在文件。
++ 弃用预告: 由于 @exception 装饰器可以直接对异步函数使用， @async_exception 装饰器将在下一版本移除。
 
 ### 0.21.8 (2025-08-08)
 

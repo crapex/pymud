@@ -98,7 +98,7 @@ TRANSLATION = {
         "exception_message"             : "异常信息: <{}> {}",
         "exception_traceback"           : '脚本执行异常, 异常位于文件"{}"中的第{}行的"{}"函数中。',
         "script_error"                  : "脚本错误",
-
+        "script_error_hint"             : f"在脚本函数 {0} (文件 {1}, {2} 行)中发生异常 {3}, 详细信息为:",
 
         # text display in session.py
         "msg_var_autoload_success"      : "自动从 {0} 中加载保存变量成功。",

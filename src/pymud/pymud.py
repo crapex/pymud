@@ -158,8 +158,6 @@ class PyMudApp:
         self.loggers = dict()           # 所有记录字典K
         self.showLog = False            # 是否显示记录页
         self.logFileShown = ''          # 记录页显示的记录文件名
-        #self.logSessionBuffer = SessionBuffer()
-        #self.logSessionBuffer.name = "LOGBUFFER"
         self.logSessionBuffer = LogFileBuffer("LOGBUFFER")
 
         self.load_plugins()
@@ -532,11 +530,9 @@ class PyMudApp:
     def split_screen(self, event: KeyPressEvent, increase: bool = True):
         """快捷键Alt +/-: 分屏"""
         if increase:
-            #Settings.client["split_ratio"] = min(0.85, Settings.client.get("split_ratio", 0.5) + 0.05)
             self.console.move_split(1)
         else:
             self.console.move_split(-1)
-            #Settings.client["split_ratio"] = max(0.15, Settings.client.get("split_ratio", 0.5) - 0.05)
 
         self.invalidate()
 

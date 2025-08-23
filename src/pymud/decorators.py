@@ -1,12 +1,18 @@
 from asyncio import iscoroutinefunction
-import functools, traceback
+import functools, traceback, warnings, inspect
 from typing import Union, Optional, List
 
-def print_exception(session, e: Exception):
+def print_exception(session, e: Exception, func: callable = None):
     """打印异常信息"""
     from .settings import Settings
     from .session import Session
     if isinstance(session, Session):
+        if func and isinstance(func, callable):
+            filename = inspect.getfile(func)
+            lineno = inspect.getlineno(func)
+            funcname = func.__name__
+            session.error(Settings.gettext("script_error_hint", funcname, filename, lineno, e.__qualname__), Settings.gettext("script_error"))
+
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
 
 def exception(func: callable):
@@ -29,10 +35,7 @@ def exception(func: callable):
                     session = None
                     
                 if isinstance(session, Session):
-                    #session.error(traceback.format_exc(), Settings.gettext("script_error"))
-                    print_exception(session, e)
-                    #session.error(Settings.gettext("exception_message", e, type(e)))
-                    #session.error(Settings.gettext("exception_traceback", traceback.format_exc()))
+                    print_exception(session, e, func)
                 else:
                     raise  # 当没有会话时，选择重新抛出异常
 
@@ -54,7 +57,7 @@ def exception(func: callable):
                     session = None
 
                 if isinstance(session, Session):
-                    print_exception(session, e)
+                    print_exception(session, e, func)
 
                 else:
                     raise  # 当没有会话时，选择重新抛出异常
@@ -62,7 +65,9 @@ def exception(func: callable):
         return async_wrapper
 
 def async_exception(func):
-    """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息"""
+    """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。（已废弃，请使用 @exception 代替）"""
+
+    warnings.warn("async_exception decorator is deprecated, please use exception decorator instead.", DeprecationWarning)
     @functools.wraps(func)
     async def wrapper(self, *args, **kwargs):
         from .objects import BaseObject

@@ -31,7 +31,7 @@ PyMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境
     # 或者使用uv工具
     uv init                                                   # 初始化项目
     uv add pymud                                              # 添加pymud依赖   
-    uv add pymud==0.21.0a4                                    # 添加指定版本pymud依赖
+    uv add pymud==0.22.0a3                                    # 添加指定版本pymud依赖
 
 
 1.3 初始化环境
@@ -100,7 +100,7 @@ PyMUD 支持命令行参数配置启动行为。具体参数及含义可以通�
 1.5 Windows下安装与启动示例
 --------------------------------------------
 
-- 建议使用 `Windows Terminal`_ 作为shell，并使用 `PowerShell 7`_ 作为启动终端
+- 建议使用 `Windows Terminal`_ 或者 `WezTerm`_ 作为shell，并使用 `PowerShell 7`_ 作为启动终端
 - 使用uv初始化项目: ``uv init``
 - 添加pymud依赖: ``uv add pymud``
 - 通过init创建自己的脚本目录: ``uv run pymud init``
@@ -127,3 +127,4 @@ PyMUD 支持命令行参数配置启动行为。具体参数及含义可以通�
 .. _PowerShell 7: https://aka.ms/powershell-release?tag=stable
 .. _prompt toolkit 3 source : https://github.com/prompt-toolkit/python-prompt-toolkit
 .. _prompt toolkit 3 help : https://python-prompt-toolkit.readthedocs.io
+.. _WezTerm: https://wezterm.org/

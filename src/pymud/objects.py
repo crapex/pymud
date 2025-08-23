@@ -445,8 +445,8 @@ class BaseObject:
         "若session存在，session中输出error；同时在logging中输出error"
         if self.session:
             self.session.error(msg, *args)
-        else:
-            self.log.error(msg)
+        
+        self.log.error(msg)
 
     def __repr__(self) -> str:
         return self.__detailed__()
@@ -517,11 +517,11 @@ class MatchObject(BaseObject):
     支持匹配内容的对象，包括Alias, Trigger, Command 等对象以及其子类对象。继承自 BaseObject
     
     :param session: 同 BaseObject , 本对象所属的会话
-    :param patterns: 用于匹配的模式。详见 patterns 属性
     :param args: 兼容与扩展所需
     :param kwargs: 兼容与扩展所需
 
     MatchObject 新增了部分 kwargs 关键字，包括：
+        :patterns: 用于匹配的模式。详见 patterns 属性
         :ignoreCase: 忽略大小写，默认为 False
         :isRegExp: 是否是正则表达式，默认为 True
         :keepEval: 是否持续匹配，默认为 False

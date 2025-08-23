@@ -98,6 +98,7 @@ TRANSLATION = {
         "exception_message"             : "Exception information: <{}> {}",
         "exception_traceback"           : "Exception occurred at line number {1} in file '{0}', and function name is '{2}'",
         "script_error"                  : "Script Error",
+        "script_error_hint"             : f"Exception {3} occurred in script function {0} (file: {1}, lineno: {2})",
 
         # text display in session.py
         "msg_var_autoload_success"      : "Variables automatically loaded from {0} successfully.",

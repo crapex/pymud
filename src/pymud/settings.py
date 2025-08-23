@@ -15,7 +15,7 @@ class Settings:
     "APP 简要描述"
     __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-06-29"
+    __release__   = "2025-08-23"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -53,7 +53,6 @@ class Settings:
     "MUD协议所需的的默认MNES(Mud New-Environment Standard)配置信息"
 
     client = {
-        "var_eval"          : "@",                  # 变量取值标记
         "cursor"            : "BLINKING_BEAM",      # 光标形状
         "buffer_lines"      : 5000,                 # 保留缓冲行数
         
@@ -63,6 +62,7 @@ class Settings:
         "tabstop"           : 8,                    # 制表符改成空格
         "seperator"         : ";",                  # 多个命令分隔符（默认;）
         "appcmdflag"        : "#",                  # app命令标记（默认#）
+        "var_eval"          : "@",                  # 变量取值标记
         
         "interval"          : 10,                   # 在自动执行中，两次命令输入中的间隔时间（ms）
         "auto_connect"      : True,                 # 创建会话后，是否自动连接
@@ -182,7 +182,10 @@ class Settings:
         "blue"      : "fg:blue",
         "link"      : "fg:green underline",
         "title"     : "bold",
-        "value"     : "fg:green",
+        "value"     : "fg:lightgreen",
+        "value.better" : "fg:lightcyan",
+        "value.worse"  : "fg:yellow",
+        "value.worst"  : "fg:red"
     }
 
     INFO_STYLE     = "\x1b[48;5;22m\x1b[38;5;252m"     #"\x1b[38;2;0;128;255m"

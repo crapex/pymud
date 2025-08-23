@@ -10,9 +10,9 @@
 + DeepWiki: https://deepwiki.com/crapex/pymmud/
 + QQ Group Number: 554672580
 
-### FEATURES:
+## FEATURES:
 
-+ Native Python development, requiring no other third-party libraries except `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>`_ and its dependencies wcwidth, pygment, pyperclip.
++ Native Python development, requiring no other third-party libraries except `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` and its dependencies wcwidth, pygment, pyperclip.
 + Native Python asyncio-based communication protocol handling, supporting async/await syntax for direct use in scripts - you can choose between synchronous and asynchronous modes for your scripts.
 + Console-based full-screen UI design supporting mouse operations (touch screen operations on MobilePhone), with extremely low resource requirements - runs smoothly on a single-core 1GB RAM Linux VPS.
 + Split-screen display support, keeping the upper half static during rapid data scrolling to ensure you don't miss any information.
@@ -29,13 +29,15 @@
 + Provides web-based client interface plugins for PKU Knight-Errant, allowing direct character operation on the interface with multi-end synchronized data/state display and fullme images (see QQ group files).
 + I'm still actively using PYMUD to play MUD games, so this client will continue to be updated :)
 
-### Who is PyMUD suitable for
+## Who is PyMUD suitable for
 + Those familiar with Python programming -> PyMUD is pure native Python development, support almost all Python features.
 + Those not very familiar with Python but wanting to learn -> perfect for learning Python while playing Knight-Errant and writing scripts with PyMUD
 + Those who feel current clients lack certain features -> if you have needs, I'll add them, it's that convenient
 + Those who want to build their own customized client -> PyMUD is fully open-source, and except for the UI framework, all code is written from scratch line by line, making it a perfect reference for your own design.
 
-### UPDATE HISTORIES
+## UPDATE HISTORIES
+
+### 0.22.0
 
 + BUG FIX: 'Beautify' use the previous impletation. Uniformly adding characeters on the right side.
 + BUF FIX: Fixed the alignment issue when using Eastern-Asia characters variable names in #var command. (Left part before the "=" symbole was not properly aligned)
@@ -46,4 +48,7 @@
 + New Feature: The up arrow now prioritizes auto-completion when the cursor is at the far right position. If no auto-completion is available, it switches to history command navigation.
 + New Feature: ESC key can now clear all content in the command line (limited by terminal key handling, requires pressing ESC three times consecutively to take effect).
 + New Feature: Tab key now also has auto-completion functionality.
++ New Feature: Added info, warning, and error methods to the IConfigBase interface. Types inheriting from IConfig can now directly use self.info.
 + New Feature: @alias, @trigger, @timer, @gmcp, @exception decorators can now be directly applied to 'async def' asynchronous functions. Similarly, all types inheriting from BaseObject, including Trigger, Alias, Timer, GMCPTrigger, etc., can now have their onSuccess, onFailure callbacks directly assigned to asynchronous functions.
++ New Feature: In @exception output exception information, it will print the location of the function marked with @exception and the file where the exception occurred.
++ Deprecation Notice: Since the @exception decorator can now be directly used with async functions, the @async_exception decorator will be removed in the next version.

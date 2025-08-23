@@ -91,6 +91,7 @@
                     super().__init__(session, *args, **kwargs)
                     reload = kwargs.get('reload', False)
 
+                # 当__unload__里仅包含 super().__unload__()时，该方法可以省略不写，下同
                 def __unload__(self):
                     super().__unload__()
 
@@ -721,6 +722,14 @@
                 color = wildcards[1]        # 颜色，30,31,34,35为深色，32,33,36,37为浅色
                 wear  = wildcards[2]        # 着装是布衣/丝绸衣服、凉鞋/靴子等等
                 # 对捕获结果的进一步判断，此处省略
+
+            # 现在@trigger装饰器也可以对async def的异步函数进行装饰了（0.22.0新增）。
+            @trigger(r"^[> ]*你向平一指打听有关『工作』的消息。")
+            async def peiyao(self, id, line, wildcards):
+                self.session.exec("n")
+                await asyncio.sleep(0.5)
+                self.session.exec("peiyao")
+
 
         # 命令行中，可以使用 #tri, #trigger 操作触发器，比如
         # #ali tri_hpbrief off -> 停止上面创建的触发器

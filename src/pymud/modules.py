@@ -44,7 +44,7 @@ class ModuleInfo:
         for attr_name in dir(self._module):
             attr = getattr(self._module, attr_name)
             if isinstance(attr, type) and attr.__module__ == self._module.__name__:
-                if (attr_name == "Configuration") or issubclass(attr, IConfig):
+                if issubclass(attr, IConfig) or (attr_name == "Configuration"):
                     try:
                         self._config[f"{self.name}.{attr_name}"] = attr(self.session, reload = reload)
                         if not reload:
@@ -199,6 +199,21 @@ class IConfigBase(metaclass = PymudMeta):
     def obj(self, obj_id: str):
         "根据对象ID返回内联自动创建的对象"
         return self.__inline_objects__.get(obj_id, None) # type: ignore
+
+    def info(self, msg, *args):
+        "若session存在，session中输出info"
+        if self.session:
+            self.session.info(msg, *args)
+
+    def warning(self, msg, *args):
+        "若session存在，session中输出warning"
+        if self.session:
+            self.session.warning(msg, *args)
+
+    def error(self, msg, *args):
+        "若session存在，session中输出error"
+        if self.session:
+            self.session.error(msg, *args)
 
 class IConfig(IConfigBase):
     """

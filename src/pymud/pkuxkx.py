@@ -1,6 +1,6 @@
 # 示例脚本：如何在PyMud中玩PKUXKX
 
-import webbrowser, asyncio
+import webbrowser, asyncio, ast
 from pymud import Session, IConfig, alias, trigger, timer, gmcp, exception, Trigger, SimpleTrigger, SimpleAlias, GMCPTrigger, Command
 
 # 在PyMud中，使用#load {filename}可以加载对应的配置作为脚本文件以提供支撑。支持多脚本加载
@@ -77,12 +77,22 @@ class MyConfig(IConfig):
     @trigger([r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$'], group = "sys")
     def ontri_hpbrief_3lines(self, id, line, wildcards):
         # 注意注意，此处捕获的额内容在wildcards里都是str类型，直接用下面这种方式赋值的时候，保存的变量也是str类型，因此这种在status_window直接调用并用于计算时，需要另行处理
-        self.session.setVariables([
+        var_name = [
         "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli", 
         "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing", 
         "vigour/qi", "vigour/yuan", "food", "water", "fighting", "busy"
         ]
-        , wildcards)
+
+        # 因为hpbrief捕获到的是文本，因此尝试进行数字转换，若转换不成功则保留为文本
+        for k, v in zip(var_name, wildcards):
+            val = v
+            try:
+                val = ast.literal_eval(v)
+            except:
+                pass
+
+            self.session.setVariable(k, val)
+
         # 因为GMCP.Status传递来的是busy和fighting，与hpbrief逻辑相反，因此重新处理下，保证hpbrief和GMCP.Status一致
         is_busy = not wildcards[-1]
         is_fighting = not wildcards[-2]
@@ -301,8 +311,9 @@ class CmdScore(Command, IConfig):
         kwargs.setdefault("id", "cmd.score")
         super().__init__(session, "^(score|sc)$", *args, **kwargs)
 
-    def __unload__(self):
-        super().__unload__()
+    # 因为此处所有对象都是由IConfig自动管理的，在__unload__中若只存在 super().__unload__()时，该函数可以省略
+    # def __unload__(self):
+    #     super().__unload__()
 
     @trigger(r'^┌[─]+人物详情[─┬]+┐$', id = "cmd.score.start", group = "cmd.score")
     def start(self, name, line, wildcards):
@@ -369,7 +380,6 @@ class CmdScore(Command, IConfig):
         return self.SUCCESS
 
 
-
 class CmdHp(Command, IConfig):
     def __init__(self, session, *args, **kwargs):
         kwargs.setdefault("id", "cmd.hp")
@@ -387,12 +397,10 @@ class CmdHp(Command, IConfig):
             "raw_sm"    : GMCPTrigger(session, "GMCP.raw_status_me", onSuccess = self.raw_status, group = "cmd.hp"),
         }
 
+    # 此处由于unload时，需要卸载 self._tris 对象，因此不能省略，也不应遗漏 super().__unload__()
     def __unload__(self):
         self.session.delObjects(self._tris)
         super().__unload__()
-
-    def logdebug(self, id, line, wildcards):
-        self.info(f"trigger {id} has been triggered. wildcards is: {wildcards}")
 
     def raw_hp(self, id, line, wildcards): 
         hp = wildcards[0]

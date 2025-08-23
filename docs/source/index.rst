@@ -23,7 +23,7 @@ PyMUD 帮助文档
 
 最早想要自己写MUD客户端的念头，还是在几年前。但前几年事情太多，人太忙，我记得自20年疫情之后，到今年年初就没有再登陆过北侠了。
 23年春节之后空闲一些，于2023年2月19日重启MUD客户端的计划，2023年5月29日形成第一个发布版（0.05b），2023年12月5日发布首个支持
-pip安装的package版本（0.15），目前发布pip安装的最新版为0.20.4。
+pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.0。
 
 在自己写客户端之前，我主要用过zmud和mushclient两个客户端，北大侠客行一直是用mushclient（玩的那会儿还没有mudlet）。
 我认为mushclient是一个功能非常强大的客户端，唯一缺点是不支持跨平台。由于工作原因，上班的地方不能上网，手机玩的话，
@@ -37,7 +37,7 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.20.4
 特点
 ^^^^^^^^^
 
-+ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>`_ 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
++ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
 + 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
 + 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作），极低资源需求，在单核1GB内存的Linux VPS上也可流畅运行
 + 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
