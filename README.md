@@ -51,4 +51,5 @@
 + New Feature: Added info, warning, and error methods to the IConfigBase interface. Types inheriting from IConfig can now directly use self.info.
 + New Feature: @alias, @trigger, @timer, @gmcp, @exception decorators can now be directly applied to 'async def' asynchronous functions. Similarly, all types inheriting from BaseObject, including Trigger, Alias, Timer, GMCPTrigger, etc., can now have their onSuccess, onFailure callbacks directly assigned to asynchronous functions.
 + New Feature: In @exception output exception information, it will print the location of the function marked with @exception and the file where the exception occurred.
++ New Feature: Added a wait_triggers method to the Session type, which simplifies the code for handling waiting on multiple triggers.
 + Deprecation Notice: Since the @exception decorator can now be directly used with async functions, the @async_exception decorator will be removed in the next version.

@@ -25,5 +25,14 @@ docs/build/
 update
 update.*
 .vscode/
+.DS_Store
 src/.DS_Store
 docs/.DS_Store
+
+# uv files
+uv.lock
+uv.toml
+.venv
+.venv/
+
+contribution/
