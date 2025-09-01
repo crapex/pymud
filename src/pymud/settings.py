@@ -15,7 +15,7 @@ class Settings:
     "APP 简要描述"
     __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-08-24"
+    __release__   = "2025-09-01"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
@@ -86,7 +86,7 @@ class Settings:
     "客户端的默认配置信息"
 
     text = {
-        "welcome"           : "欢迎使用PYMUD客户端 - 北大侠客行，最好的中文MUD游戏",
+        "welcome"           : "欢迎使用PYMUD客户端",
         "world"             : "世界",
         "new_session"       : "创建新会话...",
         "show_log"          : "显示记录信息",

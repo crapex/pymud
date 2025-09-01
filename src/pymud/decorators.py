@@ -7,11 +7,14 @@ def print_exception(session, e: Exception, func: callable = None):
     from .settings import Settings
     from .session import Session
     if isinstance(session, Session):
-        if func and isinstance(func, callable):
+        if func and callable(func):
             filename = inspect.getfile(func)
-            lineno = inspect.getlineno(func)
             funcname = func.__name__
-            session.error(Settings.gettext("script_error_hint", funcname, filename, lineno, e.__qualname__), Settings.gettext("script_error"))
+            try:
+                lineno = inspect.getlineno(func)
+            except:
+                lineno = 0
+            session.error(Settings.gettext("script_error_hint", funcname, filename, lineno, type(e).__name__), Settings.gettext("script_error"))
 
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
 
@@ -85,7 +88,7 @@ def async_exception(func):
                 session = None
 
             if isinstance(session, Session):
-                print_exception(session, e)
+                print_exception(session, e, func)
 
             else:
                 raise  # 当没有会话时，选择重新抛出异常

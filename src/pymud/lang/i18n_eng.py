@@ -1,6 +1,6 @@
 TRANSLATION = {
     "text" : {
-        "welcome"           : "Welcome to PYMUD Client - PKUXKX, the best Chinese MUD game",  # the welcome text shown in the statusbar when pymud start
+        "welcome"           : "Welcome to PYMUD Client",  # the welcome text shown in the statusbar when pymud start
 
         # text in pymud.py
         "world"             : "World",                                                        # the display text of menu "world"

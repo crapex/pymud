@@ -37,6 +37,10 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.1
+
++ BUG FIX: Fixed the issue where script errors would not be properly displayed.
+
 ### 0.22.0
 
 + BUG FIX: 'Beautify' use the previous impletation. Uniformly adding characeters on the right side.
