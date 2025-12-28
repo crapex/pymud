@@ -180,13 +180,20 @@ class PyMudApp:
             self.app.invalidate()
 
             for callback in self._onTimerCallbacks.values():
-                try:
-                    if callable(callback):
-                        callback()
-                except Exception as e:
-                    #self..error("onSystemTimerTick error: {}".format(e))
-                    if self.current_session:
-                        self.current_session.error(Settings.gettext("msg_error_in_tick").format(e))
+                if callable(callback):
+                    callback()
+
+    async def _persistent_timer_tick(self):
+        """持久化运行的定时器任务，确保即使发生错误也会重启"""
+        while True:
+            try:
+                await self.onSystemTimerTick()
+            except Exception as e:
+                # 记录错误但继续运行
+                if self.current_session:
+                    self.current_session.error(Settings.gettext("msg_error_in_tick").format(e))
+                # 短暂延迟后重启定时器
+                await asyncio.sleep(0.5)
 
     def addTimerTickCallback(self, name, func):
         '注册一个系统定时器回调，每1s触发一次。指定name为回调函数关键字，func为回调函数。'
@@ -1356,7 +1363,8 @@ class PyMudApp:
 
         self.addTimerTickCallback("auto_chars", auto_chars)
 
-        asyncio.create_task(self.onSystemTimerTick())
+        #asyncio.create_task(self.onSystemTimerTick())
+        self.create_background_task(self._persistent_timer_tick())
         await self.app.run_async(set_exception_handler = False)
 
         # 当应用退出时，运行插件销毁应用
