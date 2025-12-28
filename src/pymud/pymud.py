@@ -92,6 +92,9 @@ class PyMudApp:
                     Settings.keys.update(cfg_data[key])
                 elif key == "language":
                     Settings.language = cfg_data[key]
+                elif key == "auto_chars":
+                    Settings.auto_chars.clear()
+                    Settings.auto_chars.extend(cfg_data[key])
 
 
         self._background_tasks = set()
@@ -175,9 +178,15 @@ class PyMudApp:
         while True:
             await asyncio.sleep(1)
             self.app.invalidate()
+
             for callback in self._onTimerCallbacks.values():
-                if callable(callback):
-                    callback()
+                try:
+                    if callable(callback):
+                        callback()
+                except Exception as e:
+                    #self..error("onSystemTimerTick error: {}".format(e))
+                    if self.current_session:
+                        self.current_session.error(Settings.gettext("msg_error_in_tick").format(e))
 
     def addTimerTickCallback(self, name, func):
         '注册一个系统定时器回调，每1s触发一次。指定name为回调函数关键字，func为回调函数。'
@@ -1332,6 +1341,21 @@ class PyMudApp:
             if isinstance(plugin, Plugin):
                 plugin.onAppInit(self)
                 
+        start_wait = 0
+        def auto_chars():
+            nonlocal start_wait
+            start_wait += 1
+            if start_wait >= 10:
+                # add new_session
+                #self.create_session()
+                for char in Settings.auto_chars:
+                    group, name = char.split('.')
+                    self._quickHandleSession(group, name)
+
+                self.removeTimerTickCallback("auto_chars")
+
+        self.addTimerTickCallback("auto_chars", auto_chars)
+
         asyncio.create_task(self.onSystemTimerTick())
         await self.app.run_async(set_exception_handler = False)
 

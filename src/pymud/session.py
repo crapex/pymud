@@ -616,7 +616,7 @@ class Session:
         nothandle = True
         if name in self._gmcp.keys():
             gmcp = self._gmcp[name]
-            if isinstance(gmcp, GMCPTrigger):
+            if isinstance(gmcp, GMCPTrigger) and gmcp.enabled:
                 gmcp(value)
                 nothandle = False
 

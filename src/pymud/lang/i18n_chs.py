@@ -54,6 +54,7 @@ TRANSLATION = {
         "msg_cmdline_input" : "命令行键入:",
         "msg_no_session"    : "当前没有正在运行的session.",
         "msg_invalid_plugins"   : "文件: {0} 不是一个合法的插件文件，加载错误，信息为: {1}",
+        "msg_error_in_tick"    : "系统定时器回调执行时发生错误: {1}",
 
         "status_nobeautify" : "美化已关闭",
         "status_mouseinh"   : "鼠标已禁用",

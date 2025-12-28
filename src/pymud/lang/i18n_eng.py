@@ -54,6 +54,7 @@ TRANSLATION = {
         "msg_cmdline_input" : "Command line input:",
         "msg_no_session"    : "No active session currently running.",
         "msg_invalid_plugins"   : "File: {0} is not a valid plugin file, loading error, message: {1}",
+        "msg_error_in_tick"    : "Error in system timer tick callback: {0}",
 
         "status_nobeautify" : "Beautify disabled",
         "status_mouseinh"   : "Mouse disabled",

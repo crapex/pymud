@@ -164,6 +164,8 @@ class Settings:
         }
     }
 
+    auto_chars = []
+
     styles = {
         "status"    : "reverse",
         "shadow"    : "bg:#440044",
