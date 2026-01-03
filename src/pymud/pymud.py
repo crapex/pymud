@@ -197,7 +197,7 @@ class PyMudApp:
 
     def addTimerTickCallback(self, name, func):
         '注册一个系统定时器回调，每1s触发一次。指定name为回调函数关键字，func为回调函数。'
-        if callable(func) and (not name in self._onTimerCallbacks.keys()):
+        if callable(func):
             self._onTimerCallbacks[name] = func
 
     def removeTimerTickCallback(self, name):
@@ -1364,7 +1364,8 @@ class PyMudApp:
         self.addTimerTickCallback("auto_chars", auto_chars)
 
         #asyncio.create_task(self.onSystemTimerTick())
-        self.create_background_task(self._persistent_timer_tick())
+        asyncio.create_task(self._persistent_timer_tick())
+        #self.create_background_task(self._persistent_timer_tick())
         await self.app.run_async(set_exception_handler = False)
 
         # 当应用退出时，运行插件销毁应用

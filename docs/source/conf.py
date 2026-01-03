@@ -3,7 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 #import sphinx_rtd_theme, sphinx_book_theme, sphinxawesome_theme, sphinx_nefertiti, piccolo_theme
-import recommonmark, os, sys
+import recommonmark, os, sys, piccolo_theme
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
 from importlib.metadata import version as get_version
@@ -39,5 +39,9 @@ language = 'zh_CN'
 # sphinx_bootstrap_theme  sphinx_rtd_theme sphinx_nefertiti
 
 html_theme = 'piccolo_theme'
+html_theme_options = {
+    "theme_source_icon": "github",
+    "theme_source_url" : 'https://github.com/crapex/pymud-pip'
+}
 html_static_path = ['css']
 html_css_files = ['custom.css']
