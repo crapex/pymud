@@ -179,7 +179,8 @@ class PyMudApp:
             await asyncio.sleep(1)
             self.app.invalidate()
 
-            for callback in self._onTimerCallbacks.values():
+            # Create a copy of values to avoid RuntimeError when dict is modified during iteration
+            for callback in list(self._onTimerCallbacks.values()):
                 if callable(callback):
                     callback()
 

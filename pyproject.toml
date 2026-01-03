@@ -1,7 +1,7 @@
 [project]
 
 name = "pymud"  # Required
-version = "0.22.2a1"  # Required
+version = "0.22.2a2"  # Required
 description = "a MUD Client written in Python"  # Optional
 readme = "README.md" # Optional
 requires-python = ">=3.8"
@@ -45,10 +45,11 @@ dependencies = [
 ]
 
 [project.urls]  # Optional
-"Homepage" = "https://github.com/crapex/pymud/"
+"Homepage" = "https://www.pymud.cn/"
 "Bug Reports" = "https://github.com/crapex/pymud/issues"
 "Source" = "https://github.com/crapex/pymud/"
-"document" = "https://pymud.readthedocs.io/"
+"document" = "https://www.pymud.cn/doc/"
+"discussion" = "https://bbs.pymud.cn/"
 
 [project.scripts]  # Optional
 pymud = "pymud:main"

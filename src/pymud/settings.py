@@ -15,13 +15,13 @@ class Settings:
     "APP 简要描述"
     __version__   = importlib.metadata.version("pymud")
     "APP 当前版本"
-    __release__   = "2025-09-01"
+    __release__   = "2026-01-03"
     "APP 当前版本发布日期"
     __author__    = "本牛(newstart)@北侠"
     "APP 作者"
-    __email__     = "crapex@crapex.cc"
+    __email__     = "contact@pymud.cn"
     "APP 作者邮箱"
-    __website__     = "https://pymud.readthedocs.io/"
+    __website__     = "https://www.pymud.cn/doc/"
     "帮助文档发布网址"
 
     language = "chs"

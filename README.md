@@ -4,7 +4,8 @@
 ## 简介
 
 + 官方网站：  https://www.pymud.cn
-+ 帮助文档地址： https://doc.pymud.cn
++ 官方文档： https://www.pymud.cn/doc
++ 官方论坛:  https://bbs.pymud.cn
 + 源代码地址: https://github.com/crapex/pymud
 + PyPi项目地址： https://pypi.org/project/pymud
 + 由deepwiki自动生成的项目理解文档地址： https://deepwiki.com/crapex/pymud
@@ -39,10 +40,12 @@
 
 ## 版本更新信息
 
-### 0.22.2 (2025-11-02)
+### 0.22.1a2 测试版 (2026-01-03)
 
-+ 问题修复: 修复GMCPTrigger类型enabled属性不生效问题。 
 + 功能新增: 可以通过.cfg文件指定 "auto_chars" 来定义启动pymud时自动打开的会话。
++ 问题修复: 修复GMCPTrigger类型enabled属性不生效问题。 
++ 问题修复: 修复添加/删除系统时钟回调时，可能会导致的异常问题。
++ 问题修复: 修复在增加系统时钟回调时，如果回调函数代码错误产生异常，会导致系统时钟停顿的问题。
 
 ### 0.22.1 (2025-09-01)
 

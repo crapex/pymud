@@ -11,11 +11,11 @@ PyMUD 帮助文档
 ^^^^^^^^^
 
 - 官方网站: https://www.pymud.cn
-- 帮助文档地址: https://www.pymud.cn/doc
+- 官方文档: https://www.pymud.cn/doc
+- 官方论坛: https://bbs.pymud.cn
 - QQ交流群: `554672580 <http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=xRiuBmhdZ5EpYd6djSY4xTdi6fdo2PDk&authKey=Rv0zHUgcMoMJ7TT%2F4Uj%2BYpohBawOk%2BsZstZkWzyo8kKCwXuRYgSyyAUoMzTPlGS7&noverify=0&group_code=554672580>`_
 - GitHub地址: https://github.com/crapex/pymud
 - PyPi地址: https://pypi.org/project/pymud
-- 北侠地址: https://www.pkuxkx.net/
 - deepwiki自动生成的项目理解文档地址: https://deepwiki.com/crapex/pymud
 - PyMUD用户shanghua写的入门教程文档: https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
 
