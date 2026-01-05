@@ -1823,7 +1823,11 @@ class Session:
             try:
                 index = int(key_or_index)
                 current = current[index]
-
+            
+            except IndexError:
+                current = default
+                break
+            
             except ValueError:
                 if (key_or_index.startswith("'") and key_or_index.endswith("'")) or \
                    (key_or_index.startswith('"') and key_or_index.endswith('"')):
