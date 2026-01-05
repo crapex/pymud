@@ -703,6 +703,9 @@ class SessionBufferV1(BufferBase):
         return self._lines[lineno]
 
 class  SessionBuffer(BufferBase):
+    BUF_A = 0
+    BUF_B = 1
+    BUF_C = 2
     def __init__(
         self,
         name,
@@ -712,23 +715,62 @@ class  SessionBuffer(BufferBase):
 
         super().__init__(name, newline, max_buffered_lines)
         self.HALF_BUFFER_SIZE = max_buffered_lines // 2
+        self.BUFFER_SIZE = 2 * self.HALF_BUFFER_SIZE
         self._bufA = [None] * self.HALF_BUFFER_SIZE
         self._bufB = [None] * self.HALF_BUFFER_SIZE
         self._bufC = [None] * self.HALF_BUFFER_SIZE
+        self._buf_list = [self._bufA, self._bufB, self._bufC]
 
         self.clear()
-        # self._c_count = 0
-        # self._count = 0
 
-        # self._startBuf = self._bufA
-        # self._startOffset = 0
-        # self._cursorBuf = self._bufA
-        # self._cursorOffset = 0
+    def clear(self):
+        self._c_count = 0
+        self._count = 0
 
-        # self._hold = False
-        # self._isnewline = True
+        # startBuf指向缓冲区保存内容的第一行
+        self._startBufIndex = self.BUF_A
+        self._startOffset = 0
+        # endBuf指向缓冲区保存内容的最后一行
+        self._endBufIndex = self.BUF_A
+        self._endOffset = 0
+        # cursorBuf指向缓冲区保存下一行新数据的空白行
+        self._cursorBufIndex = self.BUF_A
+        self._cursorOffset = 0
 
+        self._hold = False
+        self._isnewline = True
 
+        if len(self._bufC) > self.HALF_BUFFER_SIZE:
+            del self._bufC[self.HALF_BUFFER_SIZE:]
+
+    # 切换缓冲索引，仅可以 bufA/bufB相互切换，bufC为缓存，不应指向
+    def _nextBufIndex(self, buf_index: int) -> int:
+        if buf_index == 0:
+            return 1
+        elif buf_index == 1:
+            return 0
+        
+    @property
+    def _startBuf(self):
+        return self._buf_list[self._startBufIndex]
+    
+    @property
+    def _endBuf(self):
+        return self._buf_list[self._endBufIndex]
+    
+    @property
+    def _cursorBuf(self):
+        return self._buf_list[self._cursorBufIndex]
+
+    def _getNextLine_normal(self, bufIndex: int, offset: int):
+        newBufIndex = bufIndex
+        newOffset = offset + 1
+        if newOffset >= self.HALF_BUFFER_SIZE:
+            newBufIndex = self._nextBufIndex(bufIndex)
+            newOffset = 0
+
+        return newBufIndex, newOffset
+    
     @BufferBase.start_lineno.setter    
     def start_lineno(self, value: int):
         self._start_lineno = value
@@ -747,7 +789,7 @@ class  SessionBuffer(BufferBase):
             if value:
                 # 切换到hold模式时，如果循环缓冲已满，则立即切换到cache缓冲区（bufC)
                 if self._count == 2 * self.HALF_BUFFER_SIZE:
-                    self._cursorBuf = self._bufC
+                    self._cursorBufIndex = self.BUF_C
                     self._cursorOffset = 0
 
                 # 如果循环缓冲未满，则保持不变
@@ -756,7 +798,7 @@ class  SessionBuffer(BufferBase):
 
             else:
                 # 切换退出hold模式时，如果当前光标位于缓存缓冲，则将其中的正常缓冲能全部放下的部分移动回正常缓冲
-                if self._cursorBuf == self._bufC:
+                if self._cursorBufIndex == self.BUF_C:
                     if self._c_count < 2 * self.HALF_BUFFER_SIZE:
                         copystart = 0
                         copyend = self._c_count
@@ -765,92 +807,98 @@ class  SessionBuffer(BufferBase):
                         copystart = self._c_count - 2 * self.HALF_BUFFER_SIZE
                         copyend = self._c_count
 
-                    self._cursorBuf = self._startBuf
+                    self._endBufIndex = self._startBufIndex
+                    self._endOffset = self._startOffset
+                    savedNewline = self._isnewline
+                    self._isnewline = True
+                    self._cursorBufIndex = self._startBufIndex
                     self._cursorOffset = self._startOffset
                     self._count = 2 * self.HALF_BUFFER_SIZE
 
                     for lineno in range(copystart, copyend):
                         self._appendLineNormal(self._bufC[lineno])
 
+                    self._isnewline = savedNewline
                     self._c_count = 0
                     del self._bufC[self.HALF_BUFFER_SIZE:]
             
             self._hold = value
 
     def _appendLineNormal(self, line: str, newline: bool = True):
-        # 将行信息放到正常缓冲中。若为新行，则覆盖；否则追加到上一行尾。
-        if self._isnewline:
-            self._cursorBuf[self._cursorOffset] = line
+        # 本函数仅处理非hold状态下的新增行。
+        # 将行信息放到正常缓冲中。若为新行，则处理新行；否则追加到上一行尾。
+        if not self._isnewline:
+            # 追加到上一行行尾，所有索引位置不变，总行数不变
+            self._endBuf[self._endOffset] += line
+
         else:
-            self._cursorBuf[self._cursorOffset] += line
-
-        # 如果本行是新行，则更新光标位置
-        if newline:
-            newOffset = self._cursorOffset + 1
-            if newOffset < self.HALF_BUFFER_SIZE:
-                self._cursorOffset = newOffset
+            # 否则，添加到新行，且调整索引位置
+            self._cursorBuf[self._cursorOffset] = line
+            # 此时endBuf指向当前cursorBuf
+            self._endBufIndex = self._cursorBufIndex
+            self._endOffset = self._cursorOffset
+            # cursorBuf指向下一行
+            self._cursorBufIndex, self._cursorOffset = self._getNextLine_normal(self._cursorBufIndex, self._cursorOffset)
+            # 判定缓存行数，并适时调缓存整行首位置
+            if self._count == self.BUFFER_SIZE:
+                # 如果缓冲数量等于缓冲大小，则调整startBuf指向下一行，总数量不变
+                self._startBufIndex, self._startOffset = self._getNextLine_normal(self._startBufIndex, self._startOffset)
+            elif self._count < self.BUFFER_SIZE:
+                self._count += 1
 
             else:
-                self._cursorBuf = self._bufB if self._cursorBuf == self._bufA else self._bufA
-                self._cursorOffset = 0
+                # 不应出现此种情况，先写个报错供调试使用
+                raise Exception("count out of range.")
             
-            if self._count == 2 * self.HALF_BUFFER_SIZE:
-                self._startBuf = self._cursorBuf
-                self._startOffset = self._cursorOffset
+        # 后续是否为新行由本次newline确定
+        self._isnewline = newline
+        
+    def _appendLineHold(self, line: str, newline: bool = True):
+        # 本函数仅处理 hold 情况下的新增行
+        # 将行信息放到正常缓冲中。若为新行，则处理新行；否则追加到上一行尾。
+        if not self._isnewline:
+            # 追加到上一行行尾，所有索引位置不变，总行数不变
+            self._endBuf[self._endOffset] += line
 
-            else:
+        else:
+            # 否则，添加新行，且调整索引位置
+            if self._count < self.BUFFER_SIZE:
+                # 缓冲未填满时，hold操作与非hold操作一致
+                self._appendLineNormal(line, newline)
+
+            # 恰好与缓冲一致时，切换到cache
+            elif self._count == self.BUFFER_SIZE:
+                self._cursorBufIndex = self.BUF_C
+                self._cursorOffset = 0
+                self._cursorBuf[self._cursorOffset] = line
+                self._cursorOffset = 1
+                self._c_count = 1
+                self._count += 1
+
+            # 若游标已经移动到cache缓冲
+            elif self._cursorBufIndex == self.BUF_C:
+                if self._cursorOffset < self.HALF_BUFFER_SIZE:
+                    self._cursorBuf[self._cursorOffset] = line
+                else:
+                    self._cursorBuf.append(line)
+
+                self._cursorOffset += 1
+                self._c_count += 1
                 self._count += 1
 
         self._isnewline = newline
-        
+
     def _appendLine(self, line: str, newline: bool = True):
         if self._hold:
-            # 缓冲区未满，则优先追加到缓存缓冲
-            if self._count < 2 * self.HALF_BUFFER_SIZE:
-                self._appendLineNormal(line, newline)
-
-            # 如果缓冲区恰好满了，则追加到缓存缓冲
-            elif self._count == 2 * self.HALF_BUFFER_SIZE:
-                #self._cursorBuf = self._bufC
-                if self._isnewline:
-                    self._bufC[0] = line
-                    self._cursorBuf = self._bufC
-                else:
-                    self._cursorBuf[self._cursorOffset] += line
-
-                # 追加的行带换行符，则更新光标指向下一行
-                if newline:
-                    self._cursorOffset = 1
-                    self._c_count = 1
-                    self._count += 1
-                else:
-                    self._cursorOffset = 0
-
-            elif self._cursorBuf == self._bufC:
-                # 标准缓冲大小内，直接复制，超出后添加新行
-                if self._cursorOffset < self.HALF_BUFFER_SIZE:
-                    if self._isnewline:
-                        self._bufC[self._cursorOffset] = line
-                    else:
-                        self._bufC[self._cursorOffset] += line
-                else:
-                    if self._isnewline:
-                        self._bufC.append(line)
-                    else:
-                        self._bufC[-1] += line
-
-                if newline:
-                    self._cursorOffset += 1
-                    self._c_count += 1
-                    self._count += 1
-
-            self._isnewline = newline
+            self._appendLineHold(line, newline)
 
         # 非hold模式下，直接追加到正常缓冲
         else:
             self._appendLineNormal(line, newline)
 
     def append(self, line: str):
+        # import time
+        # start_time = time.perf_counter()
         newline_after_append = False
         if line.endswith(self.newline):
             line = line.rstrip(self.newline)
@@ -865,57 +913,43 @@ class  SessionBuffer(BufferBase):
                 self._appendLine(line, True)
 
             self._appendLine(lines[-1], newline_after_append)
-
+        # end_time = time.perf_counter()
+        # elapse_time = end_time - start_time
         get_app().invalidate()
 
     @property
     def lineCount(self) -> int:
-        return self._count + (0 if self._isnewline else 1)
+        return self._count
 
     def getLine(self, lineno: int) -> str:
-        if self.lineCount == 0:
+        if self._count == 0:
             line = ""
 
-        if lineno < 0 or lineno >= self.lineCount:
-            lineno = lineno % self.lineCount
+        if lineno < 0 or lineno >= self._count:
+            lineno = lineno % self._count
 
         bufSizeIn1 = self.HALF_BUFFER_SIZE - self._startOffset
         bufSizeIn2 = bufSizeIn1 + self.HALF_BUFFER_SIZE
-        bufSizeIn1Again = 2 * self.HALF_BUFFER_SIZE
+        # bufSizeIn1Again = self.BUFFER_SIZE
         
         if lineno < bufSizeIn1:
             line = self._startBuf[lineno + self._startOffset]
         elif lineno < bufSizeIn2:
-            if self._startBuf == self._bufA:
+            if self._startBufIndex == self.BUF_A:
                 line = self._bufB[lineno - bufSizeIn1]
             else:
                 line = self._bufA[lineno - bufSizeIn1]
 
-        elif lineno < bufSizeIn1Again:
+        elif lineno < self.BUFFER_SIZE:
             line = self._startBuf[lineno - bufSizeIn2]
 
         else:
-            line = self._bufC[lineno - 2 * self.HALF_BUFFER_SIZE]
+            line = self._bufC[lineno - self.BUFFER_SIZE]
 
         return line
 
-    def clear(self):
-        self._c_count = 0
-        self._count = 0
-
-        self._startBuf = self._bufA
-        self._startOffset = 0
-        self._cursorBuf = self._bufA
-        self._cursorOffset = 0
-
-        self._hold = False
-        self._isnewline = True
-
-        del self._bufC[self.HALF_BUFFER_SIZE:]
-
     def forceNewline(self):
-        if not self._isnewline:
-            self._appendLine("", True)
+        self._isnewline = True
         
 
 class LogFileBuffer(BufferBase):
