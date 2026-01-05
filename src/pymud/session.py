@@ -1,4 +1,4 @@
-import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, dataclasses
+import asyncio, logging, re, math, os, pickle, datetime, sysconfig, time, dataclasses, tracemalloc
 from pathlib import Path
 from collections.abc import Iterable
 from collections import OrderedDict
@@ -82,6 +82,8 @@ class Session:
         "all",          # 所有会话执行
 
         "log",          # 记录处置
+
+        "memory",       # 内存使用情况
     )
 
     _commands_alias = {
@@ -103,6 +105,7 @@ class Session:
         "t-"  : "ignore",
         "show": "test",
         "echo": "test",
+        "mem" : "memory",
     }
 
     def __init__(self, app, name, host, port, encoding = None, after_connect = None, loop = None, **kwargs):
@@ -1803,7 +1806,7 @@ class Session:
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
         #return self._variables.get(name, default)
 
-        match = re.match(r"^(\w+)", name)
+        match = re.match(r"^(%?\w+)", name)
         if not match:
             # self.error(f"变量表达式: {name} 存在错误!")
             return default
@@ -3508,6 +3511,58 @@ class Session:
             exec(code.commandText[4:])
         except Exception as e:
             self.error(Settings.gettext("msg_py_exception", e))
+
+    def handle_memory(self, code: CodeLine, *args, **kwargs):
+        '''
+        嵌入命令 #memory 的执行函数，显示当前会话的内存使用情况。
+        该函数不应该在代码中直接调用。
+        为了完整查看内存占用情况，建议在运行时增加 -m 参数启动内存监控。如果是在命令行执行 #mem on 启动的内存监控，在启动监控前的内存分配将不会被显示出来。
+
+        使用:
+            - #memory on|start: 启动内存监控
+            - #memory off|stop: 关闭内存监控
+            - #memory diff: 显示当前内存占用与上次对比差异
+            - #memory: 显示当前内存占用最大的5个位置
+
+        相关命令:
+            - #info
+        '''
+        args = code.code[2:]
+
+        if len(args) == 1:
+            if args[0] in ("on", "start"):
+                tracemalloc.start()
+                self.application._tracemalloc = True
+                self.application._last_snapshot = tracemalloc.take_snapshot()
+                self.info("内存监控已启动!", "MEMORY")
+
+            elif args[0] in ("off", "stop"):
+                tracemalloc.stop()
+                self.application._tracemalloc = False
+                self.info("内存监控已关闭!", "MEMORY")
+
+            elif args[0] == "diff":
+                if self.application._tracemalloc:
+                    snapshot = tracemalloc.take_snapshot()
+                    snap_diff = snapshot.compare_to(self.application._last_snapshot, "filename")
+                    self.application._last_snapshot = snapshot
+
+                    self.info("与上次内存占用对比，变化最大的5处为:", "MEMORY")
+                    for stat in snap_diff[:5]:
+                        self.info(f"{stat.count:>6d} {stat.size / 1048576:4.1f} MiB {stat.traceback.format()}", f"MEMORY")
+
+        else:
+            if self.application._tracemalloc:
+                self.application._last_snapshot = tracemalloc.take_snapshot()
+                top_stats = self.application._last_snapshot.statistics('filename')
+
+                self.info("内存占用最大的5处为: ", "MEMORY")
+                for stat in top_stats[:5]:
+                    self.info(f"{stat.count:>6d} {stat.size / 1048576:4.1f} MiB {stat.traceback.format()}", f"MEMORY")
+
+            else:
+                self.info(f"内存监控未启动，无法显示内存占用情况!请在运行时增加 -m 参数启动内存监控，或者在命令行执行 #mem on 启动内存监控", "MEMORY")
+                
 
     def handle_info(self, code: CodeLine, *args, **kwargs):
         '''

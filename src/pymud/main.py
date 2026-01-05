@@ -1,4 +1,4 @@
-import os, sys, json, platform, shutil, logging, argparse, locale
+import os, sys, json, platform, shutil, logging, argparse, locale, tracemalloc
 from pathlib import Path
 from .pymud import PyMudApp
 from .settings import Settings
@@ -211,12 +211,18 @@ def startApp(args):
             cfg_data = json.load(fp)
 
     app = PyMudApp(cfg_data)
+    
+    if args.tracemalloc:
+        app._tracemalloc = True
+    else:
+        app._tracemalloc = False
+
     app.run()
 
 def main():
     parser = argparse.ArgumentParser(prog = "pymud", description = "PyMUD命令行参数帮助")
+    
     subparsers = parser.add_subparsers(help = 'init用于初始化运行环境')
-
     par_init = subparsers.add_parser('init', description = '初始化pymud运行环境, 包括建立脚本目录, 创建默认配置文件, 创建样例脚本等.')
     par_init.add_argument('-d', '--dir', dest = 'dir', metavar = 'dir', type = str, help = '指定构建脚本目录的名称, 不指定时会根据操作系统选择不同默认值')
     par_init.set_defaults(func = init_pymud_env)
@@ -225,12 +231,16 @@ def main():
     parser.add_argument('-l', '--logfile', dest = 'logfile', metavar = 'logfile', default = 'pymud.log', help = '指定调试模式下记录文件名，不指定时，默认为当前目录下的pymud.log')
     parser.add_argument('-a', '--appendmode', dest = 'filemode', action = 'store_true', default = True, help = '指定log文件的访问模式是否为append尾部添加模式，默认为True。当为False时，使用w模式，即每次运行清空之前记录')
     parser.add_argument('-s', '--startup_dir', dest = 'startup_dir', metavar = 'startup_dir', default = '.', help = '指定启动目录，默认为当前目录。使用该参数可以在任何目录下，通过指定脚本目录来启动')
+    parser.add_argument('-m', '--tracemalloc', dest = 'tracemalloc', action = 'store_true', default = False, help = '指定是否开启内存泄漏检测，默认为False。当为True时，会在启动时自动执行tracemalloc.start()')
 
     args=parser.parse_args()
 
     if hasattr(args, 'func'):
         args.func(args)
     else:
+        if args.tracemalloc:
+            tracemalloc.start()
+
         startApp(args)
 
 if __name__ == "__main__":
