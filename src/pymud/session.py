@@ -1801,7 +1801,38 @@ class Session:
         """
         """获取一个变量的值. 当name指定的变量不存在时，返回default"""
         assert isinstance(name, str), Settings.gettext("msg_shall_be_string", "name")
-        return self._variables.get(name, default)
+        #return self._variables.get(name, default)
+
+        match = re.match(r"^(\w+)", name)
+        if not match:
+            # self.error(f"变量表达式: {name} 存在错误!")
+            return default
+
+        root = match.group(1)
+
+        if root not in self._variables.keys():
+            # self.error(f"会话中不存在名为 {root} 的变量!")
+            return default
+
+        current = self._variables[root]
+
+        tokens = re.findall(r"\[[^\]]+\]", name)
+
+        for token in tokens:
+            key_or_index = token[1:-1]
+            try:
+                index = int(key_or_index)
+                current = current[index]
+
+            except ValueError:
+                if (key_or_index.startswith("'") and key_or_index.endswith("'")) or \
+                   (key_or_index.startswith('"') and key_or_index.endswith('"')):
+                    key_or_index = key_or_index[1:-1]
+
+                current = current.get(key_or_index, default)
+
+        return current
+
     
     def setVariables(self, names: Union[List[str], Tuple[str]], values: Union[list, tuple]):
         """
@@ -2275,15 +2306,7 @@ class Session:
                 self.writetobuffer(line, newline = True)
 
         elif len(args) == 1:
-            if args[0] in self._variables.keys():
-                obj = self.getVariable(args[0])
-                var_dict = DotDict({args[0] : obj})
-                lines = self.buildDisplayLines(var_dict, f" VARIABLE [{args[0]}] IN SESSION {self.name} ")
-
-                for line in lines:
-                    self.writetobuffer(line, newline = True)
-            
-            elif args[0].endswith("*"):
+            if args[0].endswith("*"):
                 filter_vars = DotDict()
                 for key in self._variables.keys():
                     if key.startswith(args[0][:-1]):
@@ -2304,8 +2327,16 @@ class Session:
                 for line in lines:
                     self.writetobuffer(line, newline = True)
 
-            else:
-                self.warning(Settings.gettext("msg_no_object", args[0], Settings.gettext("variable")))
+            else: #if args[0] in self._variables.keys():
+                obj = self.getVariable(args[0])
+                var_dict = DotDict({args[0] : obj})
+                lines = self.buildDisplayLines(var_dict, f" VARIABLE [{args[0]}] IN SESSION {self.name} ")
+
+                for line in lines:
+                    self.writetobuffer(line, newline = True)
+
+            #else:
+            #    self.warning(Settings.gettext("msg_no_object", args[0], Settings.gettext("variable")))
             
         elif len(args) == 2:
             val = None
