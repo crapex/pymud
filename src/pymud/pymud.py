@@ -506,9 +506,13 @@ class PyMudApp:
                     self.console._scroll_up()
                     b.start_lineno = b.lineCount - self.get_height() * 3 // 2
                 else:
-                    b.start_lineno += lines
-                    if b.start_lineno < 0:
+                    new_start = b.start_lineno + lines
+                    if new_start < 0:
                         b.start_lineno = 0
+                    else:
+                        b.start_lineno = new_start
+                    #if b.start_lineno < 0:
+                    #    b.start_lineno = 0
 
             else:
                 if b.start_lineno < 0:

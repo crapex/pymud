@@ -781,7 +781,7 @@ class  SessionBuffer(BufferBase):
 
     @property
     def hold(self) ->bool:
-        return self._hold
+        return self._hold or (self._start_lineno >= 0)
 
     @hold.setter
     def hold(self, value: bool):
@@ -874,6 +874,8 @@ class  SessionBuffer(BufferBase):
                 self._cursorOffset = 1
                 self._c_count = 1
                 self._count += 1
+                self._endBufIndex = self.BUF_C
+                self._endOffset = 0
 
             # 若游标已经移动到cache缓冲
             elif self._cursorBufIndex == self.BUF_C:
@@ -885,6 +887,7 @@ class  SessionBuffer(BufferBase):
                 self._cursorOffset += 1
                 self._c_count += 1
                 self._count += 1
+                self._endOffset += 1
 
         self._isnewline = newline
 
