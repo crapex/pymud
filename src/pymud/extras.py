@@ -1,6 +1,5 @@
 # External Libraries
 import asyncio
-from collections.abc import Buffer
 from unicodedata import east_asian_width
 from wcwidth import wcwidth, wcswidth
 from dataclasses import dataclass
