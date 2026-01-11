@@ -271,6 +271,10 @@ class Session:
         if callable(event_connected):
             event_connected(self)
 
+        # 恢复所有被置为enabled的定时器。只需要重新设置enabled属性即可。
+        for timer in self._timers.values():
+                timer.enabled = timer.enabled
+
     def disconnect(self):
         "断开到服务器的连接。"
         if self.connected:
@@ -3512,56 +3516,118 @@ class Session:
         except Exception as e:
             self.error(Settings.gettext("msg_py_exception", e))
 
+    def _format_trace_location(self, frame):
+        path = Path(frame.filename)
+        cwd = Path.cwd()
+
+        stdlib_dir = Path(sysconfig.get_paths()["stdlib"])
+        import site
+        site_dirs = [Path(p) for p in site.getsitepackages()]
+        is_std = str(path).startswith(str(stdlib_dir) + os.sep)
+        is_site = any(str(path).startswith(str(d) + os.sep) for d in site_dirs)
+
+        if is_std or is_site:
+            parts = path.parts
+            if len(parts) >= 2:
+                short = os.path.join(parts[-2], parts[-1])
+            else:
+                short = path.name
+            prefix = "lib"
+        else:
+            try:
+                rel = path.relative_to(cwd)
+                short = str(rel)
+            except ValueError:
+                short = path.name
+            prefix = "app"
+
+        max_len = 40
+        if len(short) > max_len:
+            short = "…" + short[-(max_len - 1):]
+
+        return f"[{prefix}] {short}"
+
     def handle_memory(self, code: CodeLine, *args, **kwargs):
         '''
-        嵌入命令 #memory 的执行函数，显示当前会话的内存使用情况。
+        嵌入命令 #memory / #mem 的执行函数，显示当前会话的内存使用情况。
         该函数不应该在代码中直接调用。
         为了完整查看内存占用情况，建议在运行时增加 -m 参数启动内存监控。如果是在命令行执行 #mem on 启动的内存监控，在启动监控前的内存分配将不会被显示出来。
+        但要注意的一点是，内存监控会增加一定的性能开销，特别是运行时增加 -m 参数开销更大，因此请自行平衡性能开销与内存占用问题定位。
 
         使用:
-            - #memory on|start: 启动内存监控
-            - #memory off|stop: 关闭内存监控
-            - #memory diff: 显示当前内存占用与上次对比差异
-            - #memory: 显示当前内存占用最大的5个位置
+            - #mem on|start: 启动内存监控
+            - #mem off|stop: 关闭内存监控
+            - #mem filename|lineno: 切换处理方式为按文件名或者按行号
+            - #mem diff: 显示当前内存占用与上次对比差异
+            - #mem: 显示当前内存占用最大的5个位置
 
-        相关命令:
-            - #info
         '''
         args = code.code[2:]
 
         if len(args) == 1:
-            if args[0] in ("on", "start"):
+            if args[0] in ("filename", "lineno"):
+                self.application._tracemalloc_mode = args[0]
+                self.info(Settings.gettext("msg_mem_mode", args[0]), "MEMORY")
+                
+            elif args[0] in ("on", "start"):
                 tracemalloc.start()
                 self.application._tracemalloc = True
                 self.application._last_snapshot = tracemalloc.take_snapshot()
-                self.info("内存监控已启动!", "MEMORY")
+                self.info(Settings.gettext("msg_mem_start"), "MEMORY")  
 
             elif args[0] in ("off", "stop"):
                 tracemalloc.stop()
                 self.application._tracemalloc = False
-                self.info("内存监控已关闭!", "MEMORY")
+                self.info(Settings.gettext("msg_mem_stop"), "MEMORY")
 
             elif args[0] == "diff":
                 if self.application._tracemalloc:
                     snapshot = tracemalloc.take_snapshot()
-                    snap_diff = snapshot.compare_to(self.application._last_snapshot, "filename")
+                    snap_diff = snapshot.compare_to(self.application._last_snapshot, self.application._tracemalloc_mode)
                     self.application._last_snapshot = snapshot
 
-                    self.info("与上次内存占用对比，变化最大的5处为:", "MEMORY")
+                    self.info(Settings.gettext("msg_mem_diff"), "MEMORY")
                     for stat in snap_diff[:5]:
-                        self.info(f"{stat.count:>6d} {stat.size / 1048576:4.1f} MiB {stat.traceback.format()}", f"MEMORY")
+                        tb = stat.traceback
+                        if tb:
+                            frame = tb[0]
+                            base = self._format_trace_location(frame)
+                            if self.application._tracemalloc_mode == "lineno":
+                                location = f"{base}, Line {frame.lineno}"
+                            else:
+                                location = base
+                        else:
+                            location = ""
+                        size_mib = stat.size / 1048576
+                        size_diff_mib = stat.size_diff / 1048576
+                        self.info(
+                            f"{stat.count:>6d}({stat.count_diff:+6d}) "
+                            f"{size_mib:4.1f}MiB({size_diff_mib:+6.1f}MiB) "
+                            f"{location}",
+                            "MEMORY",
+                        )
 
         else:
             if self.application._tracemalloc:
                 self.application._last_snapshot = tracemalloc.take_snapshot()
-                top_stats = self.application._last_snapshot.statistics('filename')
+                top_stats = self.application._last_snapshot.statistics(self.application._tracemalloc_mode)
 
-                self.info("内存占用最大的5处为: ", "MEMORY")
+                self.info(Settings.gettext("msg_mem_top"), "MEMORY")
                 for stat in top_stats[:5]:
-                    self.info(f"{stat.count:>6d} {stat.size / 1048576:4.1f} MiB {stat.traceback.format()}", f"MEMORY")
+                    tb = stat.traceback
+                    if tb:
+                        frame = tb[0]
+                        base = self._format_trace_location(frame)
+                        if self.application._tracemalloc_mode == "lineno":
+                            location = f"{base}, Line {frame.lineno}"
+                        else:
+                            location = base
+                    else:
+                        location = ""
+                    self.info(f"{stat.count:>6d} {stat.size / 1048576:4.1f} MiB {location}", "MEMORY")
 
             else:
-                self.info(f"内存监控未启动，无法显示内存占用情况!请在运行时增加 -m 参数启动内存监控，或者在命令行执行 #mem on 启动内存监控", "MEMORY")
+                self.info(Settings.gettext("msg_mem_not_started"), "MEMORY")
                 
 
     def handle_info(self, code: CodeLine, *args, **kwargs):
@@ -3761,4 +3827,3 @@ class Session:
                     
                 else:
                     self.application.show_logSelectDialog()
-

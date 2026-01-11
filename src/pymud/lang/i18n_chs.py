@@ -212,6 +212,13 @@ TRANSLATION = {
 
         "exception_logmode_error"       : "错误的记录模式： {0}",
         "exception_plugin_file_not_found"   : "指定的插件文件 {0} 不存在或者格式不正确。",
+
+        "msg_mem_mode"                  : "内存监控已切换为按{0}处理!",
+        "msg_mem_start"                 : "内存监控已启动!", 
+        "msg_mem_stop"                  : "内存监控已关闭!",
+        "msg_mem_diff"                  : "与上次内存占用对比，变化最大的5处为:",
+        "msg_mem_top"                   : "内存占用最大的5处为: ",
+        "msg_mem_not_started"           : "内存监控未启动，无法显示内存占用情况!请在运行时增加 -m 参数启动内存监控，或者在命令行执行 #mem on 启动内存监控",
     },
 
     "docstring" : {

@@ -1,3 +1,4 @@
+import trace
 import os, sys, json, platform, shutil, logging, argparse, locale, tracemalloc
 from pathlib import Path
 from .pymud import PyMudApp
@@ -212,8 +213,11 @@ def startApp(args):
 
     app = PyMudApp(cfg_data)
     
+    # 内存追踪默认按文件名，待各json加载完毕，PyMudApp对象创建之后再启动
+    app._tracemalloc_mode = "filename"
     if args.tracemalloc:
         app._tracemalloc = True
+        tracemalloc.start()
     else:
         app._tracemalloc = False
 
@@ -238,8 +242,6 @@ def main():
     if hasattr(args, 'func'):
         args.func(args)
     else:
-        if args.tracemalloc:
-            tracemalloc.start()
 
         startApp(args)
 

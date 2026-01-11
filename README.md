@@ -9,7 +9,6 @@
 + 源代码地址: https://github.com/crapex/pymud
 + PyPi项目地址： https://pypi.org/project/pymud
 + 由deepwiki自动生成的项目理解文档地址： https://deepwiki.com/crapex/pymud
-+ PyMUD用户shanghua写的入门教程文档：https://www.pkuxkx.net/forum/forum.php?mod=viewthread&tid=49999&forumuid=12067
 + 交流QQ群：554672580
 
 
@@ -40,12 +39,17 @@
 
 ## 版本更新信息
 
-### 0.22.1a2 测试版 (2026-01-03)
+### 0.22.2 (2026-01-11)
 
 + 功能新增: 可以通过.cfg文件指定 "auto_chars" 来定义启动pymud时自动打开的会话。
 + 问题修复: 修复GMCPTrigger类型enabled属性不生效问题。 
++ 问题修复: 原本enabled的定时器，修复了在会话断开重连后不会生效的问题。
 + 问题修复: 修复添加/删除系统时钟回调时，可能会导致的异常问题。
 + 问题修复: 修复在增加系统时钟回调时，如果回调函数代码错误产生异常，会导致系统时钟停顿的问题。
++ 功能优化: 优化了SessionBuffer的实现方式，改为环形缓冲+缓存缓冲双缓冲形式，减少运行中内存分配和清除的次数。
++ 功能新增: #var增加了对嵌套变量的显示支持，可以支持list、dict等嵌套类型的变量，详细请查看论坛信息。
++ 功能新增: 增加了#mem/#memory命令以支持内存监控，增加了启动时的-m参数在启动时直接打开内存监控，详细请#help memory或者查看论坛信息。
++ 其他变更: F1快捷键指向的帮助网站修改为官方网站的文档页面 https://www.pymud.cn/doc/
 
 ### 0.22.1 (2025-09-01)
 

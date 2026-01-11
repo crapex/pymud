@@ -212,6 +212,13 @@ TRANSLATION = {
 
         "exception_logmode_error"       : "Invalid log mode: {0}",
         "exception_plugin_file_not_found"   : "Specified plugin file {0} does not exist or format is incorrect.",
+
+        "msg_mem_mode"                  : "Memory monitoring mode switched to {0}.",
+        "msg_mem_start"                 : "Memory monitoring started.", 
+        "msg_mem_stop"                  : "Memory monitoring stopped.",
+        "msg_mem_diff"                  : "Top 5 changes in memory usage since last snapshot:",
+        "msg_mem_top"                   : "Top 5 locations by current memory usage:",
+        "msg_mem_not_started"           : "Memory monitoring is not enabled, unable to show memory usage. Start it with the -m option at runtime, or run #mem on in the command line.",
     },
 
     "docstring" : {
@@ -861,6 +868,30 @@ TRANSLATION = {
             - #connect
             - #close
         ''',
+
+            "handle_memory" :
+        '''
+        Execution function for the embedded commands #memory / #mem, which shows
+        the memory usage of the current session.
+        This function should not be called directly from code.
+        To see the full picture of memory usage, it is recommended to enable
+        memory monitoring at startup with the -m option. If memory monitoring
+        is started by running `#mem on` from the command line, allocations made
+        before monitoring was enabled will not be shown.
+        Note that memory monitoring introduces some performance overhead.
+        In particular, enabling it with the -m option at runtime has even
+        higher overhead, so you should balance the performance cost against
+        the need to diagnose memory usage issues.
+
+        Usage:
+            - #mem on|start: start memory monitoring
+            - #mem off|stop: stop memory monitoring
+            - #mem filename|lineno: switch whether statistics are grouped by
+            filename or by line number
+            - #mem diff: show the difference between current memory usage and
+            the previous snapshot
+            - #mem: show the 5 locations with the highest current memory usage
+        '''
         }
     },
 }

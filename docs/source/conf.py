@@ -20,7 +20,7 @@ source_suffix = ['.rst', '.md']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'PyMUD 帮助文档'
-copyright = '2023-2025, crapex@crapex.cc'
+copyright = '2023-2026, www.pymud.cn'
 author = 'crapex'
 release = get_version('pymud')
 

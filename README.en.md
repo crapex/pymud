@@ -5,7 +5,8 @@
 ## INTRODUCTION
 
 + Website: https://www.pymud.cn
-+ Documentation (only Chinese Version currently): https://doc.pymud.cn
++ Documentation (only Chinese Version currently): https://www.pymud.cn/doc/
++ Discussion Forum: https://bbs.pymud.cn
 + Source Code: https://github.com/pkuxkx/pymud
 + Pypi Porject: https://pypi.org/project/pymud/
 + DeepWiki: https://deepwiki.com/crapex/pymmud/
@@ -38,11 +39,18 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.2 (2026-01-11)
 
-### 0.22.2
++ NEW FEATURE: You can specify "auto_chars" in the .cfg file to define which sessions are automatically opened when starting pymud.
++ BUG FIX: Fixed an issue where the enabled property of GMCPTrigger was not taking effect.
++ BUG FIX: Fixed an issue where timers that were previously enabled would not fire after the session was disconnected and reconnected.
++ BUG FIX: Fixed a potential exception when adding or removing system clock callbacks.
++ BUG FIX: Fixed an issue where an exception raised inside a newly added system clock callback could cause the system clock to stop.
++ IMPROVEMENT: Optimized the implementation of SessionBuffer to use a ring buffer plus a cached buffer in a double‑buffered design, reducing the number of memory allocations and clears during runtime.
++ NEW FEATURE: #var now supports displaying nested variables, including list, dict and other nested types. See the forum for details.
++ NEW FEATURE: Added #mem/#memory commands to support memory monitoring, and a -m option at startup to enable memory monitoring immediately. See #help memory or the forum for details.
++ OTHER: The help website opened by the F1 shortcut now points to the official documentation page at https://www.pymud.cn/doc/
 
-+ BUG FIX: Fixed the issue where the enableb property of GMCPTrigger has no effect.。 
-+ New Feature: Add field "auto_chars" in pymud.cfg to define the auto-opened sessions when pymud start.
 
 ### 0.22.1
 
