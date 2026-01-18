@@ -10,7 +10,7 @@ PyMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境
 
 - 操作系统需求：不限，能运行Python是必要条件。可以windows（推荐使用 `Windows Terminal`_ 作为终端）、linux（不需要X支持）、macOS（推荐使用 iTerm2 终端）、Android（使用termux）、iOS（使用iSH）。
 - 版本需求：要求 >=3.7(0.21.0已测试3.8可正常运行,3.7版本机无法安装因此不确定能否使用，请自行尝试），32位/64位随意，建议用64位版，可以支持4G以上的内存访问。
-- 支持库需求：prompt-toolkit 3.0（ `prompt toolkit 3 source`_ ), 以及由 ``prompt-toolkit`` 所依赖的 ``wcwidth、pygment、pyperclip`` 。
+- 支持库需求：prompt-toolkit 3.0（ `prompt toolkit 3 source`_ ), 以及由 ``prompt-toolkit`` 所依赖的 ``wcwidth、pygments、pyperclip`` 。
 - prompt-toolkit 帮助页面： `prompt toolkit 3 help`_
 
 1.2 安装

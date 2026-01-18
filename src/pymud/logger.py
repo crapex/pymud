@@ -1,11 +1,15 @@
-import datetime, threading
-from queue import SimpleQueue, Empty
+import datetime
+import threading
 from pathlib import Path
+from queue import Empty, SimpleQueue
+
 from .settings import Settings
+
+
 class Logger:
     """
     PyMUD 的记录器类型，可用于会话中向文件记录数据。记录文件保存在当前目录下的 log 子目录中
-    
+
     :param name: 记录器名称，各记录器名称应保持唯一。记录器名称会作为记录文件名称的主要参数
     :param mode: 记录模式。可选模式包括 a, w, n 三种。
        - a为添加模式，当新开始记录时，会添加在原有记录文件（name.log）之后。
@@ -18,7 +22,7 @@ class Logger:
 
     # _esc_regx = re.compile(r"\x1b\[[\d;]+[abcdmz]", flags = re.IGNORECASE)
 
-    def __init__(self, name, mode = 'a', encoding = "utf-8", errors = "ignore", raw = False):
+    def __init__(self, name, mode="a", encoding="utf-8", errors="ignore", raw=False):
         self._name = name
         self._enabled = False
         self._raw = raw
@@ -27,7 +31,7 @@ class Logger:
         self._errors = errors
         self._lock = threading.RLock()
         self._stream = None
-        
+
         self._queue = SimpleQueue()
 
     @property
@@ -58,16 +62,19 @@ class Logger:
                     filename = f"{self.name}.{now}.log"
 
                 else:
-                    raise ValueError(Settings.gettext("exception_logmode_error", self._mode))
+                    raise ValueError(
+                        Settings.gettext("exception_logmode_error", self._mode)
+                    )
 
-                
-                logdir = Path.cwd().joinpath('log')
+                logdir = Path.cwd().joinpath("log")
                 if not logdir.exists() or not logdir.is_dir():
                     logdir.mkdir()
 
                 filename = logdir.joinpath(filename)
-                #filename = os.path.abspath(filename)
-                self._stream = open(filename, mode = mode, encoding = self._encoding, errors = self._errors)
+                # filename = os.path.abspath(filename)
+                self._stream = open(
+                    filename, mode=mode, encoding=self._encoding, errors=self._errors
+                )
                 self._thread = t = threading.Thread(target=self._monitor)
                 t.daemon = True
                 t.start()
@@ -85,7 +92,7 @@ class Logger:
     def raw(self):
         "属性，设置和获取是否记录带有ANSI标记的原始记录"
         return self._raw
-    
+
     @raw.setter
     def raw(self, val: bool):
         self._raw = val
@@ -94,7 +101,7 @@ class Logger:
     def mode(self):
         "属性，记录器模式，可为 a, w, n"
         return self._mode
-    
+
     @mode.setter
     def mode(self, value):
         if value in ("a", "w", "n"):
@@ -120,7 +127,7 @@ class Logger:
         """
         向记录器记录信息。记录的信息会通过队列发送到独立的记录线程。
         当记录器未使能时，使用该函数调用也不会记录。
-        
+
         :param msg: 要记录的信息
         """
         if self._enabled:
@@ -137,7 +144,7 @@ class Logger:
         newline = True
         while self._stream:
             try:
-                data = self._queue.get(block = True)
+                data = self._queue.get(block=True)
                 if data:
                     self._lock.acquire()
 
@@ -153,8 +160,9 @@ class Logger:
 
                     if not self._raw:
                         from .session import Session
+
                         data = Session.PLAIN_TEXT_REGX.sub("", data)
-                        #data = self._esc_regx.sub("", data)
+                        # data = self._esc_regx.sub("", data)
 
                     self._stream.write(data)
 

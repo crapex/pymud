@@ -1,25 +1,28 @@
-import asyncio, webbrowser
+import asyncio
+import webbrowser
 from typing import Any
-from prompt_toolkit.layout import AnyContainer, VSplit, HSplit, Window, WindowAlign
-from prompt_toolkit.widgets import Dialog, Label, TextArea, Frame, RadioList 
-from prompt_toolkit.layout.dimension import D
-from prompt_toolkit import HTML
-from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.formatted_text import FormattedText, AnyFormattedText
-from prompt_toolkit.application.current import get_app
-from .extras import EasternButton
 
+from prompt_toolkit import HTML
+from prompt_toolkit.application import get_app
+from prompt_toolkit.formatted_text import AnyFormattedText, FormattedText
+from prompt_toolkit.layout import AnyContainer, HSplit, VSplit, Window, WindowAlign
+from prompt_toolkit.layout.dimension import D
+from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
+from prompt_toolkit.widgets import Dialog, Frame, Label, RadioList, TextArea
+
+from .extras import EasternButton
 from .settings import Settings
 
+
 class BasicDialog:
-    def __init__(self, title: AnyFormattedText = "", modal = True):
+    def __init__(self, title: AnyFormattedText = "", modal=True):
         self.future = asyncio.Future()
         self.dialog = Dialog(
-            body = self.create_body(),
-            title = title,
-            buttons = self.create_buttons(),
-            modal = modal,
-            width = D(preferred=80),
+            body=self.create_body(),
+            title=title,
+            buttons=self.create_buttons(),
+            modal=modal,
+            width=D(preferred=80),
         )
 
     def set_done(self, result: Any = True):
@@ -29,7 +32,9 @@ class BasicDialog:
         return HSplit([Label(text=Settings.gettext("basic_dialog"))])
 
     def create_buttons(self):
-        ok_button = EasternButton(text=Settings.gettext("ok"), handler=(lambda: self.set_done()))
+        ok_button = EasternButton(
+            text=Settings.gettext("ok"), handler=(lambda: self.set_done())
+        )
         return [ok_button]
 
     def set_exception(self, exc):
@@ -38,92 +43,194 @@ class BasicDialog:
     def __pt_container__(self):
         return self.dialog
 
+
 class MessageDialog(BasicDialog):
-    def __init__(self, title="", message = "", modal=True):
+    def __init__(self, title="", message="", modal=True):
         self.message = message
         super().__init__(title, modal)
 
     def create_body(self) -> AnyContainer:
         return HSplit([Label(text=self.message)])
-    
+
+
 class QueryDialog(BasicDialog):
-    def __init__(self, title: AnyFormattedText = "", message: AnyFormattedText = "", modal = True):
+    def __init__(
+        self, title: AnyFormattedText = "", message: AnyFormattedText = "", modal=True
+    ):
         self.message = message
         super().__init__(title, modal)
 
     def create_body(self) -> AnyContainer:
         return HSplit([Label(text=self.message)])
-    
+
     def create_buttons(self):
-        ok_button = EasternButton(text=Settings.gettext("ok"), handler=(lambda: self.set_done(True)))
-        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(
+            text=Settings.gettext("ok"), handler=(lambda: self.set_done(True))
+        )
+        cancel_button = EasternButton(
+            text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False))
+        )
         return [ok_button, cancel_button]
+
 
 class WelcomeDialog(BasicDialog):
     def __init__(self, modal=True):
         self.website = FormattedText(
-            [('', f'{Settings.gettext("visit")} '),
-             #('class:b', 'GitHub:'), 
-             ('', Settings.__website__, self.open_url),
-             ('', f' {Settings.gettext("displayhelp")}')]
-             )
+            [
+                ("", f"{Settings.gettext('visit')} "),
+                # ('class:b', 'GitHub:'),
+                ("", Settings.__website__, self.open_url),
+                ("", f" {Settings.gettext('displayhelp')}"),
+            ]
+        )
         super().__init__("PYMUD", modal)
-        
+
     def open_url(self, event: MouseEvent):
         if event.event_type == MouseEventType.MOUSE_UP:
             webbrowser.open(Settings.__website__)
 
     def create_body(self) -> AnyContainer:
-        import platform, sys
-        body = HSplit([
-            Window(height=1),
-            Label(HTML(Settings.gettext("appinfo", Settings.__version__, Settings.__release__)), align=WindowAlign.CENTER),
-            Label(HTML(Settings.gettext("author", Settings.__author__, Settings.__email__)), align=WindowAlign.CENTER),
-            Label(self.website, align=WindowAlign.CENTER),
-            Label(Settings.gettext("sysversion", platform.system(), platform.version(), platform.python_version()), align = WindowAlign.CENTER),
+        import platform
+        import sys
 
-            Window(height=1),
-        ])
-        
+        body = HSplit(
+            [
+                Window(height=1),
+                Label(
+                    HTML(
+                        Settings.gettext(
+                            "appinfo", Settings.__version__, Settings.__release__
+                        )
+                    ),
+                    align=WindowAlign.CENTER,
+                ),
+                Label(
+                    HTML(
+                        Settings.gettext(
+                            "author", Settings.__author__, Settings.__email__
+                        )
+                    ),
+                    align=WindowAlign.CENTER,
+                ),
+                Label(self.website, align=WindowAlign.CENTER),
+                Label(
+                    Settings.gettext(
+                        "sysversion",
+                        platform.system(),
+                        platform.version(),
+                        platform.python_version(),
+                    ),
+                    align=WindowAlign.CENTER,
+                ),
+                Window(height=1),
+            ]
+        )
+
         return body
+
 
 class NewSessionDialog(BasicDialog):
     def __init__(self):
         super().__init__(Settings.gettext("new_session"), True)
-    
+
     def create_body(self) -> AnyContainer:
-        body = HSplit([
-            VSplit([
-                HSplit([
-                    Label(f" {Settings.gettext('sessionname')}:"),
-                    Frame(body=TextArea(name = "session", text="session", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=10), focus_on_click=True, read_only=False),)
-                ]),
-                HSplit([
-                    Label(f" {Settings.gettext('host')}:"),
-                    Frame(body=TextArea(name = "host", text="mud.pkuxkx.net", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(preferred=20), focus_on_click=True, read_only=False),)
-                ]),
-                HSplit([
-                    Label(f" {Settings.gettext('port')}:"),
-                    Frame(body=TextArea(name = "port", text="8081", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
-                ]),
-                HSplit([
-                    Label(f" {Settings.gettext('encoding')}:"),
-                    Frame(body=TextArea(name = "encoding", text="utf8", multiline=False, wrap_lines=False, height = 1, dont_extend_height=True, width = D(max=8), focus_on_click=True, read_only=False),)
-                ]),
-            ])
-        ])
+        body = HSplit(
+            [
+                VSplit(
+                    [
+                        HSplit(
+                            [
+                                Label(f" {Settings.gettext('sessionname')}:"),
+                                Frame(
+                                    body=TextArea(
+                                        name="session",
+                                        text="session",
+                                        multiline=False,
+                                        wrap_lines=False,
+                                        height=1,
+                                        dont_extend_height=True,
+                                        width=D(preferred=10),
+                                        focus_on_click=True,
+                                        read_only=False,
+                                    ),
+                                ),
+                            ]
+                        ),
+                        HSplit(
+                            [
+                                Label(f" {Settings.gettext('host')}:"),
+                                Frame(
+                                    body=TextArea(
+                                        name="host",
+                                        text="mud.pkuxkx.net",
+                                        multiline=False,
+                                        wrap_lines=False,
+                                        height=1,
+                                        dont_extend_height=True,
+                                        width=D(preferred=20),
+                                        focus_on_click=True,
+                                        read_only=False,
+                                    ),
+                                ),
+                            ]
+                        ),
+                        HSplit(
+                            [
+                                Label(f" {Settings.gettext('port')}:"),
+                                Frame(
+                                    body=TextArea(
+                                        name="port",
+                                        text="8081",
+                                        multiline=False,
+                                        wrap_lines=False,
+                                        height=1,
+                                        dont_extend_height=True,
+                                        width=D(max=8),
+                                        focus_on_click=True,
+                                        read_only=False,
+                                    ),
+                                ),
+                            ]
+                        ),
+                        HSplit(
+                            [
+                                Label(f" {Settings.gettext('encoding')}:"),
+                                Frame(
+                                    body=TextArea(
+                                        name="encoding",
+                                        text="utf8",
+                                        multiline=False,
+                                        wrap_lines=False,
+                                        height=1,
+                                        dont_extend_height=True,
+                                        width=D(max=8),
+                                        focus_on_click=True,
+                                        read_only=False,
+                                    ),
+                                ),
+                            ]
+                        ),
+                    ]
+                )
+            ]
+        )
 
         return body
 
     def create_buttons(self):
-        ok_button = EasternButton(text=Settings.gettext("ok"), handler=self.btn_ok_clicked)
-        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(
+            text=Settings.gettext("ok"), handler=self.btn_ok_clicked
+        )
+        cancel_button = EasternButton(
+            text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False))
+        )
         return [ok_button, cancel_button]
-    
+
     def btn_ok_clicked(self):
         def get_text_safely(buffer_name):
             buffer = get_app().layout.get_buffer_by_name(buffer_name)
             return buffer.text if buffer else ""
+
         name = get_text_safely("session")
         host = get_text_safely("host")
         port = get_text_safely("port")
@@ -138,23 +245,26 @@ class LogSelectionDialog(BasicDialog):
         self._selection_values = values
         self._itemsCount = len(values)
         if len(values) > 0:
-            self._radio_list = RadioList(values = self._selection_values)
+            self._radio_list = RadioList(values=self._selection_values)
         else:
             self._radio_list = Label(Settings.gettext("nolog").center(13))
         super().__init__(Settings.gettext("chooselog"), modal)
 
     def create_body(self) -> AnyContainer:
-        body=HSplit([
-            Label(text = self._header_text, dont_extend_height=True), 
-            self._radio_list
-            ])
+        body = HSplit(
+            [Label(text=self._header_text, dont_extend_height=True), self._radio_list]
+        )
         return body
-    
+
     def create_buttons(self):
-        ok_button = EasternButton(text=Settings.gettext("ok"), handler=self.btn_ok_clicked)
-        cancel_button = EasternButton(text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False)))
+        ok_button = EasternButton(
+            text=Settings.gettext("ok"), handler=self.btn_ok_clicked
+        )
+        cancel_button = EasternButton(
+            text=Settings.gettext("cancel"), handler=(lambda: self.set_done(False))
+        )
         return [ok_button, cancel_button]
-    
+
     def btn_ok_clicked(self):
         if self._itemsCount:
             if isinstance(self._radio_list, RadioList):
@@ -164,4 +274,3 @@ class LogSelectionDialog(BasicDialog):
             self.set_done(result)
         else:
             self.set_done(False)
-    

@@ -14,7 +14,7 @@
 
 ## FEATURES:
 
-+ Native Python development, requiring no other third-party libraries except `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` and its dependencies wcwidth, pygment, pyperclip.
++ Native Python development, requiring no other third-party libraries except `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` and its dependencies wcwidth, pygments, pyperclip.
 + Native Python asyncio-based communication protocol handling, supporting async/await syntax for direct use in scripts - you can choose between synchronous and asynchronous modes for your scripts.
 + Console-based full-screen UI design supporting mouse operations (touch screen operations on MobilePhone), with extremely low resource requirements - runs smoothly on a single-core 1GB RAM Linux VPS.
 + Split-screen display support, keeping the upper half static during rapid data scrolling to ensure you don't miss any information.
@@ -38,6 +38,18 @@
 + Those who want to build their own customized client -> PyMUD is fully open-source, and except for the UI framework, all code is written from scratch line by line, making it a perfect reference for your own design.
 
 ## UPDATE HISTORIES
+
+0.22.3 (2026-01-18)
+
++ Bug Fixes:
+    - Removed unnecessary imports from various code files. Verified to work normally with Python 3.8.
+    - Fixed an issue in the getVariable method where non-alphabetic characters would cause the variable value to return None.
+    - Fixed a bug in #var nested variable support. Previously, if a digit was used as a dictionary key, it would be incorrectly identified as a list and return None.
++ Feature Improvements:
+    - Updated #mem diff to compare against the memory usage at initial startup, rather than against the previous execution.
++ Other Changes:
+    - Updated the help documentation for #close to include a description of its parameters, specifically support for the -f and session_name arguments (previously supported but undocumented).
+    - Refactored multiple instances of non-standard syntax and replaced deprecated code.
 
 ### 0.22.2 (2026-01-11)
 

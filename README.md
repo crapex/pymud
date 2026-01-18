@@ -14,7 +14,7 @@
 
 ### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
-+ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
++ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygments, pyperclip 外，不需要其他第三方库支持
 + 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
 + 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作），极低资源需求，在单核1GB内存的Linux VPS上也可流畅运行
 + 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
@@ -38,6 +38,15 @@
 + 觉得也想自己整一个定制客户端玩玩的 -> PyMUD完全开源，且除ui框架外全部都是一行一行代码自己写的，可以直接参考PyMUD的设计
 
 ## 版本更新信息
+
+### 0.22.3 (2026-01-18)
+
++ 问题修复: 删除了各代码文件中不需要的引用，经测试，Python 3.8 版可以正常运行。
++ 问题修复: 修复了getVariable方法中，如果有非字母字符时会导致获取变量值为None的情况。
++ 问题修复: 修复了#var对嵌套变量的支持中的BUG，原先如果使用数字作为dict的key时，会被识别为list然后返回None。
++ 功能优化: #mem diff现在是与首次启动时的内存进行对比，而不是与上一次执行时的内存进行对比。
++ 其他变更: #close的帮助中增加了对参数的描述，支持 -f 参数和 session_name 参数。之前只有改功能，帮助中未说明。
++ 其他变更: 修改了多处语法不规范、代码弃用替代的情况。
 
 ### 0.22.2 (2026-01-11)
 

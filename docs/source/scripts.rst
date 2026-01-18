@@ -20,7 +20,7 @@
 
     要在PyMUD中使用脚本的高级功能，则还需要掌握以下内容：
 
-    - asyncio 包的熟练使用，包括 async/await 语法、coroutine、Task概念与运用、Event/Future 的使用、事件循环等。 Python文档: `asyncio - 异步I/O <https://docs.python.org/zh-cn/3.10/library/asyncio.html>`_ 
+    - asyncio 包的熟练使用，包括 async/await 语法、coroutine、Task概念与运用、Event/Future 的使用、事件循环等。 Python文档: `asyncio - 异步I/O <https://docs.python.org/zh-cn/3.10/library/asyncio.html>`_
 
 
 6.2 一些概念与定义
@@ -71,7 +71,7 @@
         加载子配置模块时，相当于在 Python 中调用 import xxx 指令。
         加载子配置模块后， ModuleInfo 对象的 config 为 空字典
 
-    PyMUD主配置模块:    
+    PyMUD主配置模块:
         模块中包含一个或多个 IConfig 子类型的PyMUD模块。该类型构造函数接受一个 `pymud.Session`_ 对象作为参数，还接受一个用于指定是否为重新加载的 reload 布尔值标记。
         这种模块在加载时，除了如子配置模块执行相同操作之外，还将自动创建所有 IConfig 子类型的实例对象。
         所有创建的对象，以其对象类型名称为 key ，保存在 ModuleInfo 对象的 config 字典中.
@@ -81,7 +81,7 @@
         以下是一个基本的主配置模块的示例：
 
         .. code:: Python
-            
+
             # filename: mymainmodule.py
             from pymud import Session
 
@@ -108,7 +108,7 @@
 
                 async def execute(self, cmd, *args, **kwargs):
                     self.session.exec("smile")
-    
+
     PyMUD插件:
         PyMUD插件本身也是一个标准的 Python模块。插件应放在 pymud包目录的plugins子目录下，或者当前脚本目录的plugins子目录下，在PyMUD启动时自动加载。
 
@@ -148,7 +148,7 @@
                         SimpleTimer(session, 'xixi', timeout = 10),
                         TestTrigger(session)
                     ]
-                    
+
                 def __unload__(self):
                     self.session.delObjects(self.objs)
                     super().__unload__()
@@ -181,7 +181,7 @@
         - 单会话访问的变量
             即 Session 所属的 Variable 对象。此类对象包括了系统提供的部分变量，以及自行定义的变量。自行定义的变量在会话的所有脚本中都可以直接访问使用，并且可以通过 pymud.cfg 设置（默认已设置），在应用退出、会话关闭、脚本重新加载时，进行了持久化存储操作。
             Variable 对象，通过会话对象的属性字典实现和保存。PyMUD 规定，字典的键key作为变量名，必须为 str 类型，值 value 为变量的值，可以为任意 Python 类型，但仍建议采用可以持久化的类型。
-        
+
         - 跨会话访问的变量
              即 PyMUD 所属的 Global 对象。此类对象与 Variable 对象区别为，这些对象可以在不同的会话之间进行访问，共享同一个变量对象。
              Global 对象通过 PyMudApp 对象的属性字典实现和保存。该对象不会被持久化，字典的键key作为变量名，必须为 str 类型。值可以为任何 Python 支持的类型。
@@ -189,7 +189,7 @@
     在设计自己脚本的时候，要根据上述不同类型变量的特点，选择合适的类型。
     个人建议，默认首选 Variable 类型，若有跨会话访问需求，请选择 Global 类型。对于某些函数或方法中的临时变量，再使用 Python 变量。
 
-6.3.2 单会话访问的变量 (Variable) 
+6.3.2 单会话访问的变量 (Variable)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     PyMUD 应用系统本身提供了部分 Variable 变量，这些变量均用 % 开头。其中，部分为单个函数中使用的局部变量，部分为可全局访问使用的变量。 系统提供的 Variable 变量包括：
@@ -200,28 +200,28 @@
     - :%copy: 使用PyMUD复制功能（非系统复制功能）复制到当前剪贴板中的内容。
 
     变量可以使用 Session 对象提供的方法以及 Session 对象提供的快捷点访问器在脚本中进行操作。也可以使用 `#var <syscommand.html#var>`_ 命令来进行操作。
-    
+
     会话的变量可以使用 #save 命令保存到会话名对应的.mud文件。当配置中设置了 var_autosave 为 True 时，当会话从远程断开连接时会自动保存。
     会话的保存使用了 Python 的 pickle 类型进行处理，因此虽然会话变量的值支持任意 Python类型, 但仍然强烈建议使用可序列化类型。
     会话变量保存的一个例外是，若一个变量名是以下划线开头的，则该变量被认为是临时变量，不会被保存到 .mud 文件中。
 
     创建变量/修改变量值的方法:
-    
+
     - 可以使用 `setVariable <references.html#pymud.Session.setVariable>`_, `setVariables <references.html#pymud.Session.setVariables>`_, `vars <references.html#pymud.Session.vars>`_ 来创建变量（当变量不存在时）或修改变量值（当变量存在时）。
     - 可以使用 `getVariable <references.html#pymud.Session.getVariable>`_, `getVariables <references.html#pymud.Session.getVariables>`_, `vars <references.html#pymud.Session.vars>`_ 来读取变量值。
     - 可以使用 `delVariable <references.html#pymud.Session.delVariable>`_ 来移除一个变量。
-    
+
     具体使用示例如下：
 
     .. code:: Python
 
         from pymud import IConfig, Session, Trigger, SimpleAlias, SimpleTrigger
-        
+
         class MyConfig(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
                 super().__init__(session, *args, **kwargs)
                 self._opVariables()
-                
+
             def __unload__(self):
                 super().__unload__()
 
@@ -261,21 +261,21 @@
                 self.session.exec('#save')
 
 
-6.3.3 跨会话访问的变量 (Global) 
+6.3.3 跨会话访问的变量 (Global)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     Global变量用在需要跨多个会话应用相互访问的情况，其使用与 Variable 变量基本相同。一点差异在于，#save 命令存储会话状态时，Global 变量状态不会被保存：
 
     Global变量可以使用 Session 对象提供的方法以及 Session 对象提供的快捷点访问器在脚本中进行操作。也可以使用 `#global <syscommand.html#global>`_ 命令来进行操作。
-    
+
     创建Global变量/修改Global变量值，可以使用Session类对象的以下方法:
-    
+
     - 可以使用 `session.setGlobal <references.html#pymud.Session.setGlobal>`_, `session.globals <references.html#pymud.Session.globals>`_ 来创建Global变量（当Global变量不存在时）或修改Global变量值（当Global变量存在时）。
     - 可以使用 `session.getGlobal <references.html#pymud.Session.getGlobal>`_, `session.globals <references.html#pymud.Session.globals>`_ 来读取Global变量值。
     - 可以使用 `session.delGlobal <references.html#pymud.Session.delGlobal>`_ 来移除一个变量。
-    
+
     也可以使用PyMudApp对象的以下方法:
-    
+
     - 可以使用 `app.set_globals <references.html#pymud.PyMudApp.set_globals>`_, `app.globals <references.html#pymud.PyMudApp.globals>`_ 来创建Global变量, 用法与 session.setGlobal 和 session.globals 相同。
     - 可以使用 `app.get_globals <references.html#pymud.PyMudApp.get_globals>`_, `app.globals <references.html#pymud.PyMudApp.globals>`_ 来读取Global变量值, 用法与 session.getGlobal 和 session.globals 相同。
     - 可以使用 `app.del_globals <references.html#pymud.PyMudApp.del_globals>`_, 来移除Global变量, 用法与 session.delGlobal 相同。
@@ -288,14 +288,14 @@
         # 定义一个chathook插件，并供全局各Session使用
 
         from pymud import PyMudApp, Session, Alias
-        
+
         class ChatHook:
             def __init__(self, app: PyMudApp) -> None:
                 self.app = app
-                
+
                 # 使用 PyMudApp.set_globals 设置一个布尔型全局变量 hooked，指示是否已与chat服务器连接
                 self.app.set_globals("hooked", False)
-                
+
                 # 使用 快捷点访问器 将本类型的实例赋值给全局变量 hook，用于各会话中使用该对象并调用对象函数
                 app.globals.hook = self
 
@@ -359,7 +359,7 @@
         class MyConfig(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
                 super().__init__(session, *args, **kwargs)
-                
+
             def __unload__(self):
                 super().__unload__()
 
@@ -390,7 +390,7 @@
     - 也可以自定义一个类型，继承自 Timer 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义定时器类型实例。
 
 6.4.2 类型定义与构造函数
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^    
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     `Timer`_ 是定时器的基础类，继承自 `BaseObject`_ 类。 `SimpleTimer`_ 继承自 `Timer`_ ，可以直接用命令而非函数来实现定时器超时的操作。
 
@@ -418,7 +418,7 @@
     + code: SimpleTimer独有，定时器到达超时时间后执行的代码串。该代码串类似于zmud的应用，可以用mud命令、别名以分号（；）隔开，也可以在命令之中插入PyMUD支持的#指令。
 
 6.4.3 定时器使用示例
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^        
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     下列代码中实现了3个定时器，均用于在莫高窟冥想时，每隔5s发送一次mingxiang命令。
     其中一个使用SimpleTimer实现，另一个使用标准Timer实现，并增加了仅在会话连接状态下发送的判断，第三个使用 @timer 装饰器快捷创建。
@@ -433,7 +433,7 @@
             def __init__(self, session: Session, *args, **kwargs):
                 # 调用父类构造函数，传入session参数，以支持装饰器对象的自动创建
                 super().__init__(session, *args, **kwargs)
-                
+
                 self._objs = [
                     # 使用SimpleTimer定义一个默认10s超时的定时器, id自动生成, 超时执行代码 mingxiang. 创建时，系统将自动将该实例加入会话，后通
                     SimpleTimer(session, code = 'mingxiang'),
@@ -453,7 +453,7 @@
                 # 调用父类的super().__unload__()，确保装饰器创建的对象也能成功卸载
                 super().__unload__()
 
-                
+
             # timer2的超时回调函数，该函数由系统自动调用，并传递定时器的 id 作为参数
             def onTimer2(self, id, *args, **kwargs):
                 # 定时器超时时若本会话处于连接状态, 则执行代码 mingxiang
@@ -472,7 +472,7 @@
         # #ti timer2 on  -> 启动上面创建的定时器2
         # #ti timer2 del -> 删除上面创建的定时器2
         # #ti timer2     -> 查看定时器2的详细信息
-        # #ti            -> 列出所有会话中的定时器              
+        # #ti            -> 列出所有会话中的定时器
 
 
 6.5 别名
@@ -489,7 +489,7 @@
     - 使用PyMUD提供的 @alias 装饰器快速定义一个别名。
     - 构建一个Alias类（或其子类）的实例。SimpleAlias是系统提供的Alias的子类，用于创建简单别名。
     - 也可以自定义一个类型，继承自 Alias 类，并同时继承 IConfig 类型，在调用子类构造函数之前指定其他参数默认值。系统在加载该模块文件时，会自动创建该自定义类型实例。
-    
+
 
 6.5.2 类型定义与构造函数
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -540,7 +540,7 @@
         class AliasTest(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
                 super().__init__(session, *args, **kwargs)
-                
+
                 self._objs = [
                     # 使用 SimpleAlias 建立一个简单别名，以 yz_xy 将从扬州中央广场到信阳小广场的路径设置为别名，可以如此建立：
                     SimpleAlias(self.session, "^yz_xy$", "#4 w;nw;#5 w"),
@@ -549,7 +549,7 @@
                     # 使用 Alias 建立一个标准别名，可以扩展 gp 别名的用法，此时，可以使用 gp2 gold 代替 get gold from corpse 2 命令
                     Alias(self.session, "^gp(\d+)?\s(.+)$", id = "ali_get", onSuccess = self.onali_getfromcorpse)
                 ]
-                
+
                 # 在脚本中，可以对指定id的别名通过 点访问器快速访问
                 self.session.alis.ali_get.enabled = False
                 # 也可以通过标准字典关键字形式访问，并且 patterns 参数也还可以动态调整 (别名一般不这样使用)
@@ -595,7 +595,7 @@
         # #ali ali_get on  -> 启动上面创建的别名
         # #ali ali_get del -> 删除上面创建的别名
         # #ali ali_get     -> 查看别名的详细信息
-        # #ali             -> 列出会话中的所有别名    
+        # #ali             -> 列出会话中的所有别名
 
 6.6 触发器
 ------------------------
@@ -665,14 +665,14 @@
 
 
         HP_KEYS = (
-                "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli", 
-                "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing", 
+                "combat_exp", "potential", "max_neili", "neili", "max_jingli", "jingli",
+                "max_qi", "eff_qi", "qi", "max_jing", "eff_jing", "jing",
                 "vigour/qi", "vigour/yuan", "food", "water", "fighting", "busy"
             )
 
         REGX_HPBRIEF   = [
-            r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$', 
-            r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$', 
+            r'^[> ]*#(\d+.?\d*[KM]?),(\d+),(\d+),(\d+),(\d+),(\d+)$',
+            r'^[> ]*#(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)$',
             r'^[> ]*#(\d+),(\d+),(-?\d+),(-?\d+),(\d+),(\d+)$'
         ]
 
@@ -681,9 +681,9 @@
         class TriggerTest(IConfig):
             def __init__(self, session: Session, *args, **kwargs):
                 super().__init__(session, *args, **kwargs)
-                
+
                 self._trisList = [
-                    # 简单触发器使用示例: 
+                    # 简单触发器使用示例:
                     # 在新手任务（平一指配药）任务中，要在要到任务后，自动n一步，并在延时500ms后进行配药;配药完成后自动s，并提交配好的药，并再次接下一个任务，则可以使用SimpleTrigger如此建立触发器：
                     SimpleTrigger(self.session, "^[> ]*你向平一指打听有关『工作』的消息。", "n;#wa 500;peiyao"),
                     SimpleTrigger(self.session, "^[> ]*不知过了多久，你终于把药配完。", "s;#wa 500;give ping yao;#wa 500;ask ping about 工作"),
@@ -736,7 +736,7 @@
         # #ali tri_hpbrief on  -> 启动上面创建的触发器
         # #ali tri_hpbrief del -> 删除上面创建的触发器
         # #ali tri_hpbrief     -> 查看指定触发器详细信息
-        # #ali                 -> 列出所有会话中的触发器    
+        # #ali                 -> 列出所有会话中的触发器
 
 
 6.6.4 异步触发器
@@ -869,7 +869,7 @@
             def ongmcp_buff(self, name, line, wildcards):
                 if isinstance(wildcards, dict):
                     buff = self.session.getVariable("buff", list())
-                    if wildcards["is_end"] == "false": 
+                    if wildcards["is_end"] == "false":
                         if not wildcards["name"] in buff:
                             buff.append(wildcards["name"])
                     elif wildcards["name"] in buff:
@@ -896,7 +896,7 @@
     要在PyMUD中使用命令，不能直接使用 `Command`_ 类型，应总是设计自己的命令子类型，继承自 `Command`_ 基类，并覆盖基类的 `execute <references.html#pymud.Command.execute>`_ 方法。
 
     当对继承Command的自定义命令足够熟悉后，对于某些特定应用场景，可以使用 `SimpleCommand`_ 子类来简化代码写法。
-    
+
     要在会话中使用命令，需要：
 
     - 设计一个 Command 类型的子类类型，并创建一个该子类类型的实例。
@@ -933,7 +933,7 @@
         DIRECTIONS = (
             "n","s","w","e","ne","nw","se","sw",
             "u","d","nu","su","wu","eu","nd","sd","wd","ed",
-            "north", "south", "west", "east", "northeast", "northwest", "southeast", "southwest", 
+            "north", "south", "west", "east", "northeast", "northwest", "southeast", "southwest",
             "up", "down","northup","southup","westup","eastup","northdown","southdown","westdown","eastdown",
             "enter(\s\S+)?", "out", "zuan(\s\S+)?", "\d", "leave(\s\S+)?", "jump\s(jiang|out)", "climb(\s(ya|yafeng|up|west|wall|mount))?",
             "sheshui", "tang", "act zuan to mao wu", "wander", "xiaolu", "cai\s(qinyun|tingxiang|yanziwu)", "row mantuo", "leave\s(\S+)"
@@ -941,25 +941,25 @@
 
         # 移动失败（无法移动）的描述正则匹配清单
         MOVE_FAIL = (
-            r'^[> ]*哎哟，你一头撞在墙上，才发现这个方向没有出路。$', 
+            r'^[> ]*哎哟，你一头撞在墙上，才发现这个方向没有出路。$',
             r'^[> ]*这个方向没有出路。$',
             r'^[> ]*守军拦住了你的去路，大声喝到：干什么的？要想通过先问问我们守将大人！$',
         )
 
         # 本次移动失败（但可以重新再走的）的描述正则匹配清单
         MOVE_RETRY = (
-            r'^[> ]*你正忙着呢。$', 
-            r'^[> ]*你的动作还没有完成，不能移动。$', 
-            r'^[> ]*你还在山中跋涉，一时半会恐怕走不出这(六盘山|藏边群山|滇北群山|西南地绵绵群山)！$', 
+            r'^[> ]*你正忙着呢。$',
+            r'^[> ]*你的动作还没有完成，不能移动。$',
+            r'^[> ]*你还在山中跋涉，一时半会恐怕走不出这(六盘山|藏边群山|滇北群山|西南地绵绵群山)！$',
             r'^[> ]*你一脚深一脚浅地沿着(\S+)向着(\S+)方走去，虽然不快，但离目标越来越近了。',
             r'^[> ]*你一脚深一脚浅地沿着(\S+)向着(\S+)方走去，跌跌撞撞，几乎在原地打转。',
-            r'^[> ]*你小心翼翼往前挪动，遇到艰险难行处，只好放慢脚步。$', 
-            r'^[> ]*山路难行，你不小心给拌了一跤。$', 
+            r'^[> ]*你小心翼翼往前挪动，遇到艰险难行处，只好放慢脚步。$',
+            r'^[> ]*山路难行，你不小心给拌了一跤。$',
             r'^[> ]*你忽然不辨方向，不知道该往哪里走了。',
             r'^[> ]*走路太快，你没在意脚下，被.+绊了一下。$',
             r'^[> ]*你不小心被什么东西绊了一下，差点摔个大跟头。$',
-            r'^[> ]*青海湖畔美不胜收，你不由停下脚步，欣赏起了风景。$', 
-            r'^[> ]*(荒路|沙石地|沙漠中)几乎没有路了，你走不了那么快。$', 
+            r'^[> ]*青海湖畔美不胜收，你不由停下脚步，欣赏起了风景。$',
+            r'^[> ]*(荒路|沙石地|沙漠中)几乎没有路了，你走不了那么快。$',
             r'^[> ]*你小心翼翼往前挪动，生怕一不在意就跌落山下。$',
         )
 
@@ -1039,7 +1039,7 @@
                     # for tri in self._objs:
                     #    tasklist.append(self.create_task(tri.triggered()))
                     tasklist = [self.create_task(tri.triggered()) for tri in self._objs]
-                    
+
                     # 下面这一句是关键，表示向服务器发出 cmd 命令，然后等待 tasklist 里涉及的所有触发器中的第一个被触发，或者等待时间达到 timeout 秒
                     # self.session.waitfor 是为了简化写法。实际相当于三步命令的整合：
                     #    await asyncio.sleep(0.05)     # 将CPU的执行时间从本函数中断0.05秒，暂时不需要关注此处细节
@@ -1048,7 +1048,7 @@
                     #    上面有关 asyncio.wait 的详细信息，可以参考 Python 的官方文档， asyncio 库的说明
                     done, pending = await self.session.waitfor(cmd, asyncio.wait(tasklist, timeout = self.timeout, return_when = "FIRST_COMPLETED"))    # type: ignore
                     # 上述代码执行完毕后，返回两个 set， done表示已完成的任务列表， pending 表示还在等待状态的任务列表
-                    
+
                     # 当执行到此处时，首先，将所有还在等待状态的任务列表取消掉，因为到这里都还没有被触发，那么这些触发器在本次命令执行过程中不可能再被触发了。
                     tasks_pending = list(pending)
                     for t in tasks_pending:
@@ -1056,7 +1056,7 @@
 
                     # 获取已经完成的任务列表。由于set不能以下标访问内容，因此先转换为 list
                     tasks_done = list(done)
-                    
+
                     # 如果 task_done 里的任务数大于0  （即被触发的触发器数量>0）。根据北侠逻辑，被触发的触发器最多只可能有1个（或者超时的话，就1个都没有）
                     if len(tasks_done) > 0:
                         # 那么，从完成的任务中取出第1个任务，即为实际被触发的触发器
@@ -1067,7 +1067,7 @@
                         # 因此，后面就可以通过对这3个参数的解析，判断到底是哪一个触发器被成功触发了。
                         _, id, line, wildcards = task.result()
                         # 先通过返回的 id 获取实际被触发的触发器
-                        tri = self.session.tris[id] 
+                        tri = self.session.tris[id]
 
                         # 对触发器进行判断，看是哪一个
                         # 如果该触发器的组名为 moving.move.success，表示收到了新的房间标题内容，即移动成功
@@ -1075,7 +1075,7 @@
                         if tri.group == "moving.move.success":
                             result = self.SUCCESS
                             break
-                            
+
                         # 如果该触发器的组名为 moving.move.fail，表示收到了 MOVE_FAIL 中的某一个内容的触发
                         # 因为这种情况表示是该方向没有路，因此 self.error 打印出来该信息，并且返回 FAILURE
                         # 没有路，也不需要再执行 while 循环的内容了，直接通过 break 中止循环
@@ -1094,10 +1094,10 @@
                     # 如果 task_done 里的任务为0，表示没有任何触发器被触发，此时就是超过了等待的 timeout 时间，表示超时
                     # 当超时时，设置 TIMEOUT 标记，然后break中止循环。因为超时后，也不需要重试了。
                     else:
-                        self.warning(f'执行{cmd}超时{self.timeout}秒', '移动插件')  
+                        self.warning(f'执行{cmd}超时{self.timeout}秒', '移动插件')
                         result = self.TIMEOUT
                         break
-                
+
                 # 执行到这里，本次命令全部执行完毕，此时将所以触发器都关掉，减轻对其他命令或触发器判断的干扰
                 self.session.enableGroup(f"{PLUGIN_NAME}.move", False)
                 # 返回前面设置的的 result 值。此处的返回值，是让本 Command 被其他地方调用时，判断命令执行完后状态的标记
@@ -1112,18 +1112,18 @@
     另外，在代码中也可以使用以下方式来调用该命令：
 
     .. code:: Python
-        
+
         # 方式一: 直接使用session方法同步调用。由于同步调用会立即返回，因此该调用方法无发获取返回值
-        self.session.exec('e')        
+        self.session.exec('e')
         self.session.exec('s;#wa 100;e;#wa 100;s')        # 还可以在调用中同时指定多个命令。通过 CmdMove 设计中的重试机制，可以确保三步行走到对应的位置
-        
+
         # 方式二: 直接使用session方法异步调用, 该调用方法可以获取返回值, 但这样使用由于需要搜索命令，因此会存在一些性能损失
         result = await self.session.exec_async('e')       # 此处 e 会被匹配为 CmdMove 运行，因此其返回值即为 CmdMove 的 execute 方法运行的返回值。若未被匹配为某个 Command 对象，则返回 None
-        result = await self.session.exec_async('s;e;s')   # 异步调用中也可以同时指定多个命令，但此时返回值为最后一个命令的返回值。          
-        
+        result = await self.session.exec_async('s;e;s')   # 异步调用中也可以同时指定多个命令，但此时返回值为最后一个命令的返回值。
+
         # 方式三: 直接调用该命令的execute方法, 该调用方法也可以获取返回值，这种性能损失最小，并且也可以延迟到对象调用时刻再获取
         #         这种方式下，execute 只能接受一条指令，不能像前面一样传入 "s;e;s" 这种连续指令。
-        result = await self.session.cmds.cmd_move.execute("w") 
+        result = await self.session.cmds.cmd_move.execute("w")
         result = await self.session.cmds["cmd_move"].execute("w")       # 与上面一行等价
 
         # 上面建议使用方式三来进行命令调用，因为这种调用将获取命令对象实例延迟到调用的时刻。如果修改了模块配置需要 #reload 的时候，引用此命令的模块不需要重新 #reload。方式二虽然有相同效果，但是方式二存在
@@ -1139,7 +1139,7 @@
         elif result == self.TIMEOUT:
             # 超时之后的代码
             pass
-        
+
 
 6.8.4 命令使用示例二：CmdDazuoto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1169,7 +1169,7 @@
             def __init__(self, session, *args, **kwargs):
                 id = kwargs.get("id", "cmd_dazuoto")    # 配置id默认值供自动加载使用
                 super().__init__(session, "^(dzt)(?:\s+(\S+))?$", *args, **kwargs)
-                                
+
                 self._triggers = {}
                 self._initTriggers()
 
@@ -1206,7 +1206,7 @@
                 # 根据有效内功等级，设置每次打坐的点数。具体为：有效等级-5后除以10圆整，最小为10
                 self._dazuo_point = (self._force_level - 5) // 10
                 if self._dazuo_point < 10:  self._dazuo_point = 10
-                
+
                 # 通过hpbrief命令获取当前的各种状态。若状态模式使用GMCP时，自动从GMCP中获取
                 if self.session.getVariable("status_type", "hpbrief") == "hpbrief":
                     await self.session.exec_async("hpbrief")    # 此处调用了其他模块中设计的 cmdHpbrief命令
@@ -1248,7 +1248,7 @@
                     if self._halted:
                         self.info("打坐任务已被手动中止。", '打坐')
                         break
-            
+
                     waited_tris = []
                     waited_tris.append(self.create_task(self.tri_dz_done.triggered()))
                     waited_tris.append(self.create_task(self.tri_dz_noqi.triggered()))
@@ -1273,7 +1273,7 @@
                     elif len(tasks_done) == 1:
                         task = tasks_done[0]
                         _, name, _, _ = task.result()
-                        
+
                         # 若完成的触发器任务是 tri_dz_done 或者 tri_dz_dz， 根据to的不同判断如何进行后续
                         if name in (self.tri_dz_done.id, self.tri_dz_dz.id):
                             if (to == "always"):
@@ -1363,7 +1363,7 @@
 
                             elif not param or param == "max":
                                 return await self.dazuo_to("max")
-                            
+
                 except Exception as e:
                     self.error(f"异步执行中遇到异常, {e}, 类型为 {type(e)}")
                     self.error(f"异常追踪为： {traceback.format_exc()}")
@@ -1389,7 +1389,7 @@
     .. code:: Python
 
         aSimpleMove = SimpleCommand(
-            session, 
+            session,
             "^({0})$".format("|".join(DIRECTIONS)),
             succ_tri = Trigger(self.session, REGX_ROOMNAME, id = "tri_move_succ", group = "cmdmove", keepEval = True, enabled = False),
             fail_tri = [Trigger(self.session, patterns = s, id = f"tri_move_fail{idx}", group = "cmdmove", enabled = False") for s in MOVE_FAIL],
@@ -1410,13 +1410,13 @@
     状态栏是指命令行下面的灰色背景的栏目，其左边部分可以通过代码设置显示纯文本信息。设置代码为：
 
     .. code:: Python
-        
+
         session.application.set_status('您要显示的信息')
 
     可以通过 pymud.cfg 文件中的 status_display , status_width, status_height 的组合使用设置状态窗口的显示位置和尺寸，可以显示在下方、右方或不显示。
-    
+
     状态栏通过脚本定制状态窗口内容。要定制状态窗口的显示内容，将session.status_maker属性赋值为一个返回支持显示结果的函数即可。可以支持标准字符串或者prompt_toolkit所支持的格式化显示内容。
-    
+
     有关prompt_toolkit的格式化字符串显示，可以参见该库的官方帮助页面： https://python-prompt-toolkit.readthedocs.io/en/master/pages/printing_text.html
 
     以下是一个实现状态窗口的示例，使用了 FormattedTextTuple 形式展示了带格式并且可以支持鼠标操作的状态窗口。显示效果见下图
@@ -1457,9 +1457,19 @@
 
             # 自定义状态栏窗口
             def status_window(self):
-                from pymud.settings import Settings
                 try:
                     formatted_list = list()
+
+                    ins_loc = self.session.getVariable("ins_loc", None)
+                    tm_locs = self.session.getVariable("tm_locs", None)
+                    ins = False
+                    if isinstance(ins_loc, dict) and (len(ins_loc) >= 1):
+                        ins = True
+                        loc = ins_loc
+
+                    elif isinstance(tm_locs, list) and (len(tm_locs) == 1):
+                        ins = True
+                        loc = tm_locs[0]
 
                     # line 0. hp bar
                     jing = self.session.getVariable("jing", 0)
@@ -1476,22 +1486,44 @@
                     barstyle = "━"
                     screenwidth = self.session.application.get_width()
                     barlength = screenwidth // 2 - 1
-                    span = screenwidth - 2 * barlength
+                    span = screenwidth - 2 * barlength # - 4 * wcswidth("‖")
                     qi_bar = self.create_status_bar(qi, effqi, maxqi, barlength, barstyle)
                     jing_bar = self.create_status_bar(jing, effjing, maxjing, barlength, barstyle)
-
+                    #formatted_list.append(("", barstyle * (leftmargin - 2)))
+                    #formatted_list.append(("", "‖"))
                     formatted_list.extend(qi_bar)
+                    #formatted_list.append(("", "‖"))
                     formatted_list.append(("", " " * span))
+                    #formatted_list.append(("", "‖"))
                     formatted_list.extend(jing_bar)
+                    #formatted_list.append(("", "‖"))
+
                     formatted_list.append(("", "\n"))
 
                     # line 1. char, menpai, deposit, food, water, exp, pot
                     formatted_list.append((Settings.styles["title"], "【角色】"))
                     formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
                     formatted_list.append(("", " "))
-                
+
+                    # fullme time
+                    fullme = int(self.session.getVariable('%fullme', 0))
+                    delta = time.time() - fullme
+                    formatted_list.append((Settings.styles["title"], "【FULLME】"))
+                    if delta < 30 * 60:
+                        style = Settings.styles["value"]
+                    elif delta < 60 * 60:
+                        style = Settings.styles["value.worse"]
+                    else:
+                        style = Settings.styles["value.worst"]
+                    if fullme == 0:
+                        formatted_list.append((Settings.styles["value.worst"], "从未"))
+                    else:
+                        formatted_list.append((style, "{}".format(int(delta // 60))))
+                    formatted_list.append(("", " "))
+
+
                     formatted_list.append((Settings.styles["title"], "【食物】"))
-                    
+
                     food = int(self.session.getVariable('food', '0'))
                     max_food = self.session.getVariable('max_food', 350)
                     if food < 100:
@@ -1527,13 +1559,25 @@
                     formatted_list.append(("", " "))
 
                     formatted_list.append((Settings.styles["title"], "【门派】"))
-                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.vars['family/family_name'])))
                     formatted_list.append(("", " "))
                     formatted_list.append((Settings.styles["title"], "【存款】"))
                     formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
                     formatted_list.append(("", " "))
-                    
+
                     # line 2. hp
+                    #(jing, effjing, maxjing, jingli, maxjingli, qi, effqi, maxqi, neili, maxneili) = self.session.getVariables(("jing", "eff_jing", "max_jing", "jingli", "max_jingli", "qi", "eff_qi", "max_qi", "neili", "max_neili"))
+                    jing = self.session.getVariable("jing", 0)
+                    effjing = self.session.getVariable("eff_jing", 0)
+                    maxjing = self.session.getVariable("max_jing", 0)
+                    jingli = self.session.getVariable("jingli", 0)
+                    maxjingli = self.session.getVariable("max_jingli", 0)
+                    qi = self.session.getVariable("qi", 0)
+                    effqi = self.session.getVariable("eff_qi", 0)
+                    maxqi = self.session.getVariable("max_qi", 0)
+                    neili = self.session.getVariable("neili", 0)
+                    maxneili = self.session.getVariable("max_neili", 0)
+                    #if jing and effjing and maxjing and effqi and maxqi and qi and jingli and maxjingli and neili and maxneili:
                     # a new-line
                     formatted_list.append(("", "\n"))
 
@@ -1544,8 +1588,8 @@
                         style = Settings.styles["value.worse"]
                     else:
                         style = Settings.styles["value"]
-                    
-                    if maxjing == 0: 
+
+                    if maxjing == 0:
                         pct1 = pct2 = 0
                     else:
                         pct1 = 100.0*float(jing)/float(maxjing)
@@ -1562,7 +1606,7 @@
                     else:
                         style = Settings.styles["value"]
 
-                    if maxqi == 0: 
+                    if maxqi == 0:
                         pct1 = pct2 = 0
                     else:
                         pct1 = 100.0*float(qi)/float(maxqi)
@@ -1577,11 +1621,11 @@
                     elif int(neili) < 0.8 * int(maxneili):
                         style = Settings.styles["value.worse"]
                     elif int(neili) < 1.2 * int(maxneili):
-                        style = Settings.styles["value"]   
+                        style = Settings.styles["value"]
                     else:
                         style = Settings.styles["value.better"]
 
-                    if maxneili == 0: 
+                    if maxneili == 0:
                         pct = 0
                     else:
                         pct = 100.0*float(neili)/float(maxneili)
@@ -1595,267 +1639,103 @@
                     elif int(jingli) < 0.8 * int(maxjingli):
                         style = Settings.styles["value.worse"]
                     elif int(jingli) < 1.2 * int(maxjingli):
-                        style = Settings.styles["value"]   
+                        style = Settings.styles["value"]
                     else:
                         style = Settings.styles["value.better"]
-                    
-                    if maxjingli == 0: 
+
+                    if maxjingli == 0:
                         pct = 0
                     else:
                         pct = 100.0*float(jingli)/float(maxjingli)
 
                     formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
                     formatted_list.append(("", " "))
-                    
+
+                    # a new-line
+                    formatted_list.append(("", "\n"))
+                    formatted_list.append((Settings.styles["title"], "【任务】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.cmds.jobmanager.currentJob)))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【状态】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format(self.session.cmds.jobmanager.currentStatus)))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【持续】"))
+                    formatted_list.append((Settings.styles["value"], "{}".format("开启" if self.session.cmds.jobmanager.always else "关闭")))
+                    formatted_list.append(("", " "))
+                    formatted_list.append((Settings.styles["title"], "【范围】"))
+
+                    #formatted_list.append((Settings.styles["value"], "{}".format(self.session.cmds.jobmanager.activeJobs)))
+                    active_jobs_style = to_formatted_text(ANSI(self.session.cmds.jobmanager.activeJobs))
+                    formatted_list.extend(active_jobs_style)
+
+                    # a new-line
+                    formatted_list.append(("", "\n"))
+
+                    # line 3. GPS info
+                    formatted_list.append((Settings.styles["title"], "【惯导】"))
+                    if ins:
+                        formatted_list.append((Settings.styles["value"], "正常"))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【位置】"))
+                        formatted_list.append((Settings.styles["value"], f"{loc['city']} {loc['name']}({loc['id']})"))
+                    else:
+                        formatted_list.append((Settings.styles["value.worst"], "丢失"))
+                        formatted_list.append(("", " "))
+                        formatted_list.append((Settings.styles["title"], "【位置】"))
+                        formatted_list.append((Settings.styles["value"], f"{self.session.getVariable('city')} {self.session.getVariable('room')}"))
+
+                    if self.session.getVariable("is_busy", False):
+                        formatted_list.append((Settings.styles["value.worse"], "【忙】"))
+                    else:
+                        formatted_list.append((Settings.styles["value"], "【不忙】"))
+
+                    if self.session.getVariable("is_fighting", False):
+                        formatted_list.append((Settings.styles["value.worse"], "【战斗】"))
+                    else:
+                        formatted_list.append((Settings.styles["value"], "【空闲】"))
+
+                    if self.session.idletime > 60:
+                        formatted_list.append((Settings.styles["value.worse"], f"【发呆{self.session.idletime // 60:.0f}分钟】"))
+                    else:
+                        formatted_list.append((Settings.styles["value"], "【正常】"))
+
+                    formatted_list.append((Settings.styles["title"], "【状态】"))
+                    status = self.session.getVariable("status", list())
+                    buff = self.session.getVariable("buff", list())
+
+                    shown = status.copy()
+                    shown.extend(buff)
+
+                    buff_styled = to_formatted_text(ANSI(f"{' '.join(shown)}"))
+                    formatted_list.extend(buff_styled)
+
+                    # a new-line
+                    formatted_list.append(("", "\n"))
+
+                    def go_direction(dir, mouse_event: MouseEvent):
+                        if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                            self.session.exec_command(dir)
+                    if ins:
+                        formatted_list.append((Settings.styles["title"], "【路径】"))
+                        # formatted_list.append(("", "  "))
+                        links = self.session.vars["_map"].FindRoomLinks(loc['id'])
+                        for link in links:
+                            dir = link.path
+                            dir_cmd = dir
+                            if dir in DIRS_ABBR.keys():
+                                dir = DIRS_ABBR[dir]
+                            else:
+                                m = re.match(r'(\S+)\((.+)\)', dir)
+                                if m:
+                                    dir_cmd = m[2]
+
+                            formatted_list.append((Settings.styles["link"], f"{dir}: {link.city} {link.name}({link.linkto})", functools.partial(go_direction, dir_cmd)))
+                            formatted_list.append(("", " "))
+
                     return formatted_list
-            
+
                 except Exception as e:
                     return f"{e}"
-                    try:
-                        formatted_list = list()
-
-                        ins_loc = self.session.getVariable("ins_loc", None)
-                        tm_locs = self.session.getVariable("tm_locs", None)
-                        ins = False
-                        if isinstance(ins_loc, dict) and (len(ins_loc) >= 1):
-                            ins = True
-                            loc = ins_loc
-
-                        elif isinstance(tm_locs, list) and (len(tm_locs) == 1):
-                            ins = True
-                            loc = tm_locs[0]
-
-                        # line 1. char, menpai, deposit, food, water, exp, pot
-                        formatted_list.append((Settings.styles["title"], "【角色】"))
-                        formatted_list.append((Settings.styles["value"], "{0}({1})".format(self.session.getVariable('name'), self.session.getVariable('id'))))
-                        formatted_list.append(("", " "))
-
-                        # fullme time
-                        fullme = int(self.session.getVariable('%fullme', 0))
-                        delta = time.time() - fullme
-                        formatted_list.append((Settings.styles["title"], "【FULLME】"))
-                        if delta < 30 * 60:
-                            style = Settings.styles["value"]
-                        elif delta < 60 * 60:
-                            style = Settings.styles["value.worse"]
-                        else:
-                            style = Settings.styles["value.worst"]
-                        if fullme == 0:
-                            formatted_list.append((Settings.styles["value.worst"], "从未"))
-                        else:
-                            formatted_list.append((style, "{}".format(int(delta // 60))))
-                        formatted_list.append(("", " "))
-
-                        
-                        formatted_list.append((Settings.styles["title"], "【食物】"))
-                        
-                        food = int(self.session.getVariable('food', '0'))
-                        max_food = self.session.getVariable('max_food', 350)
-                        if food < 100:
-                            style = Settings.styles["value.worst"]
-                        elif food < 200:
-                            style = Settings.styles["value.worse"]
-                        elif food < max_food:
-                            style = Settings.styles["value"]
-                        else:
-                            style = Settings.styles["value.better"]
-
-                        formatted_list.append((style, "{}".format(food)))
-                        formatted_list.append(("", " "))
-
-                        formatted_list.append((Settings.styles["title"], "【饮水】"))
-                        water = int(self.session.getVariable('water', '0'))
-                        max_water = self.session.getVariable('max_water', 350)
-                        if water < 100:
-                            style = Settings.styles["value.worst"]
-                        elif water < 200:
-                            style = Settings.styles["value.worse"]
-                        elif water < max_water:
-                            style = Settings.styles["value"]
-                        else:
-                            style = Settings.styles["value.better"]
-                        formatted_list.append((style, "{}".format(water)))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【经验】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('combat_exp'))))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【潜能】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('potential'))))
-                        formatted_list.append(("", " "))
-
-                        formatted_list.append((Settings.styles["title"], "【门派】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('family/family_name'))))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【存款】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.session.getVariable('deposit'))))
-                        formatted_list.append(("", " "))
-                        
-                        # line 2. hp
-                        #(jing, effjing, maxjing, jingli, maxjingli, qi, effqi, maxqi, neili, maxneili) = self.session.getVariables(("jing", "eff_jing", "max_jing", "jingli", "max_jingli", "qi", "eff_qi", "max_qi", "neili", "max_neili"))
-                        jing = self.session.getVariable("jing", 0)
-                        effjing = self.session.getVariable("eff_jing", 0)
-                        maxjing = self.session.getVariable("max_jing", 0)
-                        jingli = self.session.getVariable("jingli", 0)
-                        maxjingli = self.session.getVariable("max_jingli", 0)
-                        qi = self.session.getVariable("qi", 0)
-                        effqi = self.session.getVariable("eff_qi", 0)
-                        maxqi = self.session.getVariable("max_qi", 0)
-                        neili = self.session.getVariable("neili", 0)
-                        maxneili = self.session.getVariable("max_neili", 0)
-                        #if jing and effjing and maxjing and effqi and maxqi and qi and jingli and maxjingli and neili and maxneili:
-                        # a new-line
-                        formatted_list.append(("", "\n"))
-
-                        formatted_list.append((Settings.styles["title"], "【精神】"))
-                        if int(effjing) < int(maxjing):
-                            style = Settings.styles["value.worst"]
-                        elif int(jing) < 0.8 * int(effjing):
-                            style = Settings.styles["value.worse"]
-                        else:
-                            style = Settings.styles["value"]
-                        
-                        if maxjing == 0: 
-                            pct1 = pct2 = 0
-                        else:
-                            pct1 = 100.0*float(jing)/float(maxjing)
-                            pct2 = 100.0*float(effjing)/float(maxjing)
-                        formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(jing, pct1, effjing, pct2)))
-
-                        formatted_list.append(("", " "))
-
-                        formatted_list.append((Settings.styles["title"], "【气血】"))
-                        if int(effqi) < int(maxqi):
-                            style = Settings.styles["value.worst"]
-                        elif int(qi) < 0.8 * int(effqi):
-                            style = Settings.styles["value.worse"]
-                        else:
-                            style = Settings.styles["value"]
-
-                        if maxqi == 0: 
-                            pct1 = pct2 = 0
-                        else:
-                            pct1 = 100.0*float(qi)/float(maxqi)
-                            pct2 = 100.0*float(effqi)/float(maxqi)
-                        formatted_list.append((style, "{0}[{1:3.0f}%] / {2}[{3:3.0f}%]".format(qi, pct1, effqi, pct2)))
-                        formatted_list.append(("", " "))
-
-                        formatted_list.append((Settings.styles["title"], "【精力】"))
-                        if int(jingli) < 0.6 * int(maxjingli):
-                            style = Settings.styles["value.worst"]
-                        elif int(jingli) < 0.8 * int(maxjingli):
-                            style = Settings.styles["value.worse"]
-                        elif int(jingli) < 1.2 * int(maxjingli):
-                            style = Settings.styles["value"]   
-                        else:
-                            style = Settings.styles["value.better"]
-                        
-                        if maxjingli == 0: 
-                            pct = 0
-                        else:
-                            pct = 100.0*float(jingli)/float(maxjingli)
-
-                        formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(jingli, maxjingli, pct)))
-                        formatted_list.append(("", " "))
-
-                        formatted_list.append((Settings.styles["title"], "【内力】"))
-                        if int(neili) < 0.6 * int(maxneili):
-                            style = Settings.styles["value.worst"]
-                        elif int(neili) < 0.8 * int(maxneili):
-                            style = Settings.styles["value.worse"]
-                        elif int(neili) < 1.2 * int(maxneili):
-                            style = Settings.styles["value"]   
-                        else:
-                            style = Settings.styles["value.better"]
-
-                        if maxneili == 0: 
-                            pct = 0
-                        else:
-                            pct = 100.0*float(neili)/float(maxneili)
-                        formatted_list.append((style, "{0} / {1}[{2:3.0f}%]".format(neili, maxneili, pct)))
-                        formatted_list.append(("", " "))
-
-                        
-
-                        # a new-line
-                        formatted_list.append(("", "\n"))
-                        formatted_list.append((Settings.styles["title"], "【任务】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentJob)))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【状态】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.currentStatus)))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【持续】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format("开启" if self.jobmanager.always else "关闭")))
-                        formatted_list.append(("", " "))
-                        formatted_list.append((Settings.styles["title"], "【范围】"))
-                        formatted_list.append((Settings.styles["value"], "{}".format(self.jobmanager.activeJobs)))
-
-                        # a new-line
-                        formatted_list.append(("", "\n"))
-
-                        # line 3. GPS info
-                        formatted_list.append((Settings.styles["title"], "【惯导】"))
-                        if ins:
-                            formatted_list.append((Settings.styles["value"], "正常"))
-                            formatted_list.append(("", " "))
-                            formatted_list.append((Settings.styles["title"], "【位置】"))
-                            formatted_list.append((Settings.styles["value"], f"{loc['city']} {loc['name']}({loc['id']})"))
-                        else:
-                            formatted_list.append((Settings.styles["value.worst"], "丢失"))
-                            formatted_list.append(("", " "))
-                            formatted_list.append((Settings.styles["title"], "【位置】"))
-                            formatted_list.append((Settings.styles["value"], f"{self.session.getVariable('room')}"))
-
-                        if self.session.getVariable("is_busy", False):
-                            formatted_list.append((Settings.styles["value.worse"], "【忙】"))
-                        else:
-                            formatted_list.append((Settings.styles["value"], "【不忙】"))
-
-                        if self.session.getVariable("is_fighting", False):
-                            formatted_list.append((Settings.styles["value.worse"], "【战斗】"))
-                        else:
-                            formatted_list.append((Settings.styles["value"], "【空闲】"))
-
-                        if self.session.idletime > 60:
-                            formatted_list.append((Settings.styles["value.worse"], f"【发呆{self.session.idletime // 60:.0f}分钟】"))
-                        else:
-                            formatted_list.append((Settings.styles["value"], "【正常】"))
-
-                        formatted_list.append((Settings.styles["title"], "【BUFF】"))
-                        buff = self.session.getVariable("buff", list())
-                        #formatted_list.append((Settings.styles["value"], f"{' '.join(buff)}"))
-                        #formatted_list.append(to_formatted_text(ANSI(f"{' '.join(buff)}")))
-                        buff_styled = to_formatted_text(ANSI(f"{' '.join(buff)}"))
-                        formatted_list.extend(buff_styled)
-
-                        # a new-line
-                        formatted_list.append(("", "\n"))
-
-                        def go_direction(dir, mouse_event: MouseEvent):
-                            if mouse_event.event_type == MouseEventType.MOUSE_UP:
-                                self.session.exec_command(dir)
-                        if ins:
-                            formatted_list.append((Settings.styles["title"], "【路径】"))
-                            # formatted_list.append(("", "  "))
-                            links = self.mapper.FindRoomLinks(loc['id'])
-                            for link in links:
-                                dir = link.path
-                                dir_cmd = dir
-                                if dir in DIRS_ABBR.keys():
-                                    dir = DIRS_ABBR[dir]
-                                else:
-                                    m = re.match(r'(\S+)\((.+)\)', dir)
-                                    if m:
-                                        dir_cmd = m[2]
-
-                                formatted_list.append((Settings.styles["link"], f"{dir}: {link.city} {link.name}({link.linkto})", functools.partial(go_direction, dir_cmd)))
-                                formatted_list.append(("", " "))
-                        
-                        return formatted_list
-                
-                    except Exception as e:
-                        self.session.error(f"状态窗口发生错误！错误信息为： {e}")
-                        return f"{e}"
 
 6.9 分组对象管理
 ------------------------
@@ -1905,7 +1785,7 @@
             session.enableGroup("group1", True, subgroup = False)
             # 以下调用可以同时禁用对应发器和别名，但不禁用定时器，因为通过types参数指定了有效范围：
             session.enableGroup("group1.subgroup1", False, types = [Trigger, Alias])
-            
+
             def deleteGroup(self, group: str, subgroup = True, types: Union[Type, Union[Tuple, List]] = (Alias, Trigger, Command, Timer, GMCPTrigger)):
                 pass
             # 各参数含义:

@@ -1,5 +1,7 @@
 # internationalization (i18n)
-import os, importlib
+import importlib
+import os
+
 
 def i18n_ListAvailableLanguages():
     """
@@ -12,7 +14,7 @@ def i18n_ListAvailableLanguages():
         list: A list containing all available language codes.
     """
     # Define the default language list, here the default language is Simplified Chinese
-    languages = []  
+    languages = []
     # Define the directory where the language files are located
     lang_dir = os.path.join(os.path.dirname(__file__), "lang")
 
@@ -23,7 +25,7 @@ def i18n_ListAvailableLanguages():
             # Check if the file starts with "i18n.", ends with ".py", and is not the default Simplified Chinese file
             if filename.startswith("i18n_") and filename.endswith(".py"):
                 # Extract the language code from the filename, removing "i18n." and ".py"
-                language = filename[5:-3]  
+                language = filename[5:-3]
                 # Add the extracted language code to the list of available languages
                 languages.append(language)
 
@@ -32,6 +34,7 @@ def i18n_ListAvailableLanguages():
 
     return languages
 
+
 def i18n_LoadLanguage(lang: str):
     lang_file = os.path.join(os.path.dirname(__file__), "lang", f"i18n_{lang}.py")
     if os.path.exists(lang_file):
@@ -39,6 +42,7 @@ def i18n_LoadLanguage(lang: str):
         TRANS = modLang.__dict__["TRANSLATION"]
         if isinstance(TRANS, dict):
             from .settings import Settings
+
             Settings.text.update(TRANS["text"])
 
             if "docstring" in TRANS.keys():
@@ -46,6 +50,7 @@ def i18n_LoadLanguage(lang: str):
                 if isinstance(docstring, dict):
                     if "Session" in docstring.keys():
                         from .session import Session
+
                         docstring_class_session = docstring["Session"]
                         if isinstance(docstring_class_session, dict):
                             for key, newdoc in docstring_class_session.items():
@@ -55,6 +60,7 @@ def i18n_LoadLanguage(lang: str):
 
                     if "PyMudApp" in docstring.keys():
                         from .pymud import PyMudApp
+
                         docstring_class_pymudapp = docstring["PyMudApp"]
                         if isinstance(docstring_class_pymudapp, dict):
                             for key, newdoc in docstring_class_pymudapp.items():

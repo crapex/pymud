@@ -1,31 +1,44 @@
-from asyncio import iscoroutinefunction
-import functools, traceback, warnings, inspect
-from typing import Union, Optional, List
+import functools
+import inspect
+import traceback
+import warnings
+from inspect import iscoroutinefunction
+from typing import List, Optional, Union
 
-def print_exception(session, e: Exception, func: callable = None):
+
+def print_exception(session, e: Exception, func: Optional[callable] = None):
     """打印异常信息"""
-    from .settings import Settings
     from .session import Session
+    from .settings import Settings
+
     if isinstance(session, Session):
         if func and callable(func):
             filename = inspect.getfile(func)
             funcname = func.__name__
             try:
                 lineno = inspect.getlineno(func)
-            except:
+            except Exception:
                 lineno = 0
-            session.error(Settings.gettext("script_error_hint", funcname, filename, lineno, type(e).__name__), Settings.gettext("script_error"))
+            session.error(
+                Settings.gettext(
+                    "script_error_hint", funcname, filename, lineno, type(e).__name__
+                ),
+                Settings.gettext("script_error"),
+            )
 
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
+
 
 def exception(func: callable):
     """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。可以用于同步方法和异步方法。"""
     if not iscoroutinefunction(func):
+
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
+            from .modules import IConfig, ModuleInfo
             from .objects import BaseObject
-            from .modules import ModuleInfo, IConfig
             from .session import Session
+
             try:
                 return func(self, *args, **kwargs)
             except Exception as e:
@@ -36,7 +49,7 @@ def exception(func: callable):
                     session = self.session
                 else:
                     session = None
-                    
+
                 if isinstance(session, Session):
                     print_exception(session, e, func)
                 else:
@@ -44,11 +57,13 @@ def exception(func: callable):
 
         return wrapper
     else:
+
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
+            from .modules import IConfig, ModuleInfo
             from .objects import BaseObject
-            from .modules import ModuleInfo, IConfig
             from .session import Session
+
             try:
                 return await func(self, *args, **kwargs)
             except Exception as e:
@@ -67,16 +82,22 @@ def exception(func: callable):
 
         return async_wrapper
 
+
 def async_exception(func):
     """异步方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。（已废弃，请使用 @exception 代替）"""
 
-    warnings.warn("async_exception decorator is deprecated, please use exception decorator instead.", DeprecationWarning)
+    warnings.warn(
+        "async_exception decorator is deprecated, please use exception decorator instead.",
+        DeprecationWarning,
+    )
+
     @functools.wraps(func)
     async def wrapper(self, *args, **kwargs):
+        from .modules import IConfig, ModuleInfo
         from .objects import BaseObject
-        from .modules import ModuleInfo, IConfig
         from .session import Session
         from .settings import Settings
+
         try:
             return await func(self, *args, **kwargs)
         except Exception as e:
@@ -92,17 +113,19 @@ def async_exception(func):
 
             else:
                 raise  # 当没有会话时，选择重新抛出异常
+
     return wrapper
 
 
 class PymudDecorator:
     """
     装饰器基类。使用装饰器可以快捷创建各类Pymud基础对象。
-    
+
         :param type: 装饰器的类型，用于区分不同的装饰器，为字符串类型。
         :param args: 可变位置参数，用于传递额外的参数。
         :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
     """
+
     def __init__(self, type: str, *args, **kwargs):
         self.type = type
         self.args = args
@@ -120,17 +143,19 @@ class PymudDecorator:
 
 
 def alias(
-        patterns: Union[List[str], str], 
-        id: Optional[str] = None, 
-        group: str = "", 
-        enabled: bool = True, 
-        ignoreCase: bool = False, 
-        isRegExp: bool = True, 
-        keepEval: bool = False, 
-        expandVar: bool = True, 
-        priority: int = 100, 
-        oneShot: bool = False,  
-        *args, **kwargs):
+    patterns: Union[List[str], str],
+    id: Optional[str] = None,
+    group: str = "",
+    enabled: bool = True,
+    ignoreCase: bool = False,
+    isRegExp: bool = True,
+    keepEval: bool = False,
+    expandVar: bool = True,
+    priority: int = 100,
+    oneShot: bool = False,
+    *args,
+    **kwargs,
+):
     """
     使用装饰器创建一个别名（Alias）对象。被装饰的函数将在别名成功匹配时调用。
     被装饰的函数，除第一个参数为类实例本身self之外，另外包括id, line, wildcards三个参数。
@@ -151,37 +176,43 @@ def alias(
     :return: PymudDecorator 实例，类型为 "alias"。
     """
     # 将传入的参数更新到 kwargs 字典中
-    kwargs.update({
-        "patterns": patterns,
-        "id": id, 
-        "group": group, 
-        "enabled": enabled, 
-        "ignoreCase": ignoreCase, 
-        "isRegExp": isRegExp, 
-        "keepEval": keepEval, 
-        "expandVar": expandVar, 
-        "priority": priority, 
-        "oneShot": oneShot})
-    
+    kwargs.update(
+        {
+            "patterns": patterns,
+            "id": id,
+            "group": group,
+            "enabled": enabled,
+            "ignoreCase": ignoreCase,
+            "isRegExp": isRegExp,
+            "keepEval": keepEval,
+            "expandVar": expandVar,
+            "priority": priority,
+            "oneShot": oneShot,
+        }
+    )
+
     # 如果 id 为 None，则从 kwargs 中移除 "id" 键
     if not id:
         kwargs.pop("id")
 
     return PymudDecorator("alias", *args, **kwargs)
 
+
 def trigger(
-        patterns: Union[List[str], str], 
-        id: Optional[str] = None, 
-        group: str = "", 
-        enabled: bool = True, 
-        ignoreCase: bool = False, 
-        isRegExp: bool = True, 
-        keepEval: bool = False, 
-        expandVar: bool = True, 
-        raw: bool = False, 
-        priority: int = 100, 
-        oneShot: bool = False,  
-        *args, **kwargs):
+    patterns: Union[List[str], str],
+    id: Optional[str] = None,
+    group: str = "",
+    enabled: bool = True,
+    ignoreCase: bool = False,
+    isRegExp: bool = True,
+    keepEval: bool = False,
+    expandVar: bool = True,
+    raw: bool = False,
+    priority: int = 100,
+    oneShot: bool = False,
+    *args,
+    **kwargs,
+):
     """
     使用装饰器创建一个触发器（Trigger）对象。
 
@@ -201,23 +232,34 @@ def trigger(
     :return: PymudDecorator 实例，类型为 "trigger"。
     """
     # 将传入的参数更新到 kwargs 字典中
-    kwargs.update({
-        "patterns": patterns,
-        "id": id, 
-        "group": group, 
-        "enabled": enabled, 
-        "ignoreCase": ignoreCase, 
-        "isRegExp": isRegExp, 
-        "keepEval": keepEval, 
-        "expandVar": expandVar, 
-        "raw": raw,
-        "priority": priority, 
-        "oneShot": oneShot})
+    kwargs.update(
+        {
+            "patterns": patterns,
+            "id": id,
+            "group": group,
+            "enabled": enabled,
+            "ignoreCase": ignoreCase,
+            "isRegExp": isRegExp,
+            "keepEval": keepEval,
+            "expandVar": expandVar,
+            "raw": raw,
+            "priority": priority,
+            "oneShot": oneShot,
+        }
+    )
     if not id:
         kwargs.pop("id")
     return PymudDecorator("trigger", *args, **kwargs)
 
-def timer(timeout: float, id: Optional[str] = None, group: str = "", enabled: bool = True, *args, **kwargs):
+
+def timer(
+    timeout: float,
+    id: Optional[str] = None,
+    group: str = "",
+    enabled: bool = True,
+    *args,
+    **kwargs,
+):
     """
     使用装饰器创建一个定时器（Timer）对象。
 
@@ -229,15 +271,11 @@ def timer(timeout: float, id: Optional[str] = None, group: str = "", enabled: bo
     :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
     :return: PymudDecorator 实例，类型为 "timer"。
     """
-    kwargs.update({
-        "timeout": timeout,
-        "id": id,
-        "group": group,
-        "enabled": enabled
-        })
+    kwargs.update({"timeout": timeout, "id": id, "group": group, "enabled": enabled})
     if not id:
         kwargs.pop("id")
     return PymudDecorator("timer", *args, **kwargs)
+
 
 def gmcp(name: str, group: str = "", enabled: bool = True, *args, **kwargs):
     """
@@ -250,10 +288,6 @@ def gmcp(name: str, group: str = "", enabled: bool = True, *args, **kwargs):
     :param kwargs: 可变关键字参数，用于传递额外的键值对参数。
     :return: PymudDecorator 实例，类型为 "gmcp"。
     """
-    kwargs.update({
-        "id": name,
-        "group": group,
-        "enabled": enabled
-        })
-    
+    kwargs.update({"id": name, "group": group, "enabled": enabled})
+
     return PymudDecorator("gmcp", *args, **kwargs)

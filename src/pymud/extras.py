@@ -1,49 +1,47 @@
 # External Libraries
 import asyncio
-from unicodedata import east_asian_width
-from wcwidth import wcwidth, wcswidth
+import linecache
+import os
+import re
+import time
 from dataclasses import dataclass
-import time, re, linecache, os
-from typing import Optional, List, Dict
-from typing import Iterable, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
+from unicodedata import east_asian_width
+
 from prompt_toolkit import ANSI
 from prompt_toolkit.application import get_app
-from prompt_toolkit.formatted_text import to_formatted_text
-from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
-from prompt_toolkit.layout.controls import UIContent, UIControl
-from prompt_toolkit.application.current import get_app
 from prompt_toolkit.data_structures import Point
-from prompt_toolkit.layout.controls import UIContent, FormattedTextControl
-from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
-
 from prompt_toolkit.formatted_text import (
     StyleAndTextTuples,
     to_formatted_text,
+)
+from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
+from prompt_toolkit.formatted_text.utils import (
+    fragment_list_width,
 )
 from prompt_toolkit.layout.containers import (
     Window,
     WindowAlign,
 )
 from prompt_toolkit.layout.controls import (
-    
     FormattedTextControl,
+    UIContent,
+    UIControl,
 )
-from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
+from prompt_toolkit.layout.screen import _CHAR_CACHE, Screen, WritePosition
+from prompt_toolkit.layout.utils import explode_text_fragments
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Button, MenuContainer, MenuItem
 from prompt_toolkit.widgets.base import Border
-
-from prompt_toolkit.layout.screen import _CHAR_CACHE, Screen, WritePosition
-from prompt_toolkit.layout.utils import explode_text_fragments
-from prompt_toolkit.formatted_text.utils import (
-    fragment_list_width,
-)
+from wcwidth import wcswidth, wcwidth
 
 from .settings import Settings
 
+
 class VSplitWindow(Window):
     "修改的分块窗口，向上翻页时，下半部保持最后数据不变"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # 增加一个属性，记录分割偏移量
@@ -67,8 +65,8 @@ class VSplitWindow(Window):
         always_hide_cursor: bool = False,
         has_focus: bool = False,
         align: WindowAlign = WindowAlign.LEFT,
-        get_line_prefix = None,
-        isNotMargin = True,
+        get_line_prefix=None,
+        isNotMargin=True,
     ):
         """
         Copy the UIContent into the output screen.
@@ -216,10 +214,10 @@ class VSplitWindow(Window):
 
         # Copy content.
         def copy() -> int:
-            y = -vertical_scroll_2        
+            y = -vertical_scroll_2
             lineno = vertical_scroll
             total = write_position.height
-            
+
             # 防止没有 ratio 参数，或者被配置为不合适的值
             ratio = Settings.client.get("split_ratio", 0.5)
             if ratio < 0.15 or ratio > 0.85:
@@ -232,14 +230,14 @@ class VSplitWindow(Window):
 
             elif self.split_offset > total - upper - 5:
                 self.split_offset = total - upper - 5
-            
+
             upper = upper + self.split_offset
 
             if isinstance(self.content, PyMudBufferControl):
                 b = self.content.buffer
                 if not b:
                     return y
-                    
+
                 line_count = b.lineCount
                 start_lineno = b.start_lineno
                 if start_lineno < 0:
@@ -265,15 +263,17 @@ class VSplitWindow(Window):
                         while y >= 0 and lineno >= 0:
                             lineno -= 1
                             # Take the next line and copy it in the real screen.
-                            display_lines = ui_content.get_height_for_line(lineno, width, None)
+                            display_lines = ui_content.get_height_for_line(
+                                lineno, width, None
+                            )
                             y -= display_lines
                             line = ui_content.get_line(lineno)
                             visible_line_to_row_col[y] = (lineno, horizontal_scroll)
                             copy_line(line, lineno, 0, y, is_input=True)
-                    
+
                 else:
                     # 有split window
-                    
+
                     # 先复制下半部分，倒序复制，确保即使有自动折行时，最后一行也保持在屏幕最底部
                     y = total
                     lineno = line_count
@@ -281,7 +281,9 @@ class VSplitWindow(Window):
                     while y > upper and lineno >= 0:
                         lineno -= 1
                         # Take the next line and copy it in the real screen.
-                        display_lines = ui_content.get_height_for_line(lineno, width, None)
+                        display_lines = ui_content.get_height_for_line(
+                            lineno, width, None
+                        )
                         y -= display_lines
                         if y <= upper:
                             break
@@ -301,8 +303,8 @@ class VSplitWindow(Window):
                         y += 1
 
                     # 最后复制分割线，若上下有由于折行额外占用的内容，都用分割线给覆盖掉
-                    copy_line([("","-"*width)], -1, 0, upper + 1, is_input=False)
-                    
+                    copy_line([("", "-" * width)], -1, 0, upper + 1, is_input=False)
+
             return y
 
         copy()
@@ -379,7 +381,9 @@ class VSplitWindow(Window):
             if not b:
                 return
             start_lineno = b.start_lineno
-            if (start_lineno >= 0) and (start_lineno < b.lineCount - (info.window_height - 1) // 2):
+            if (start_lineno >= 0) and (
+                start_lineno < b.lineCount - (info.window_height - 1) // 2
+            ):
                 b.start_lineno = b.start_lineno + 1
             else:
                 b.start_lineno = -1
@@ -398,7 +402,7 @@ class VSplitWindow(Window):
             start_lineno = b.start_lineno
             if start_lineno > 0:
                 b.start_lineno = b.start_lineno - 1
-                
+
             elif start_lineno == 0:
                 b.start_lineno = 0
 
@@ -411,10 +415,11 @@ class EasternButton(Button):
 
     def _get_text_fragments(self) -> StyleAndTextTuples:
         # 主要改动在这里
-        width = self.width - (
-            get_cwidth(self.left_symbol) + get_cwidth(self.right_symbol)
-        ) - (get_cwidth(self.text) - len(self.text))
-
+        width = (
+            self.width
+            - (get_cwidth(self.left_symbol) + get_cwidth(self.right_symbol))
+            - (get_cwidth(self.text) - len(self.text))
+        )
 
         text = (f"{{:^{width}}}").format(self.text)
 
@@ -427,10 +432,11 @@ class EasternButton(Button):
 
         return [
             ("class:button.arrow", self.left_symbol, handler),
-            #("[SetCursorPosition]", ""),
+            # ("[SetCursorPosition]", ""),
             ("class:button.text", text, handler),
             ("class:button.arrow", self.right_symbol, handler),
         ]
+
 
 class EasternMenuContainer(MenuContainer):
     "解决增加中文等东亚全宽字符后不对齐问题"
@@ -522,12 +528,16 @@ class SessionSelectionState:
     end_row: int = -1
     start_col: int = -1
     end_col: int = -1
+
     def is_valid(self):
-        return  (self.start_row >= 0) and \
-                (self.start_col >= 0) and \
-                (self.end_row >= 0) and \
-                (self.end_col >= 0) and \
-                abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col) > 0
+        return (
+            (self.start_row >= 0)
+            and (self.start_col >= 0)
+            and (self.end_row >= 0)
+            and (self.end_col >= 0)
+            and abs(self.start_row - self.end_row) + abs(self.start_col - self.end_col)
+            > 0
+        )
 
     @property
     def rows(self):
@@ -545,7 +555,7 @@ class SessionSelectionState:
                 return self.end_row
 
         return -1
-    
+
     @property
     def actual_start_col(self):
         if self.is_valid():
@@ -553,7 +563,7 @@ class SessionSelectionState:
                 return self.start_col
             else:
                 return self.end_col
-        
+
         return -1
 
     @property
@@ -578,7 +588,7 @@ class SessionSelectionState:
 
 
 class BufferBase:
-    def __init__(self, name, newline = "\n", max_buffered_lines = 10000) -> None:
+    def __init__(self, name, newline="\n", max_buffered_lines=10000) -> None:
         self.name = name
         self.newline = newline
         self.max_buffered_lines = max_buffered_lines
@@ -610,12 +620,14 @@ class BufferBase:
     def selection_range_at_line(self, lineno: int) -> Optional[Tuple[int, int]]:
         if self.selection.is_valid():
             if self.selection.rows > 1:
-                
                 if lineno == self.selection.actual_start_row:
                     return (self.selection.actual_start_col, len(self.getLine(lineno)))
                 elif lineno == self.selection.actual_end_row:
                     return (0, self.selection.actual_end_col)
-                elif lineno > self.selection.actual_start_row and lineno < self.selection.actual_end_row:
+                elif (
+                    lineno > self.selection.actual_start_row
+                    and lineno < self.selection.actual_end_row
+                ):
                     return (0, len(self.getLine(lineno)))
 
             elif self.selection.rows == 1:
@@ -634,15 +646,14 @@ class BufferBase:
 
 class SessionBufferOld(BufferBase):
     def __init__(
-        self, 
-        name, 
-        newline = "\n",
-        max_buffered_lines = 2000,
-        ) -> None:
-
+        self,
+        name,
+        newline="\n",
+        max_buffered_lines=2000,
+    ) -> None:
         super().__init__(name, newline, max_buffered_lines)
 
-        self._lines : List[str] = []
+        self._lines: List[str] = []
         self._isnewline = True
 
     def append(self, line: str):
@@ -655,8 +666,8 @@ class SessionBufferOld(BufferBase):
         if line.endswith(self.newline):
             line = line.rstrip(self.newline)
             newline_after_append = True
-            
-        if not self.newline in line:
+
+        if self.newline not in line:
             if self._isnewline:
                 self._lines.append(line)
             else:
@@ -695,32 +706,33 @@ class SessionBufferOld(BufferBase):
     @property
     def lineCount(self):
         return len(self._lines)
-        
+
     def getLine(self, lineno: int):
         if lineno < 0 or lineno >= len(self._lines):
             return ""
         return self._lines[lineno]
 
-class  SessionBuffer(BufferBase):
+
+class SessionBuffer(BufferBase):
     BUF_A = 0
     BUF_B = 1
     BUF_C = 2
+
     def __init__(
         self,
         name,
-        newline = "\n",
-        max_buffered_lines = 2000,
-        ) -> None:
-
+        newline="\n",
+        max_buffered_lines=2000,
+    ) -> None:
         super().__init__(name, newline, max_buffered_lines)
         self.BUFFER_SIZE = max_buffered_lines
-        self._buf = [None] * self.BUFFER_SIZE
+        self._buf = [""] * self.BUFFER_SIZE
         self.CACHE_BUFFER_SIZE = max_buffered_lines // 2
         if self.CACHE_BUFFER_SIZE < 500:
             self.CACHE_BUFFER_SIZE = 500
         elif self.CACHE_BUFFER_SIZE > 1000:
             self.CACHE_BUFFER_SIZE = 1000
-        self._bufC = [None] * self.CACHE_BUFFER_SIZE
+        self._bufC = [""] * self.CACHE_BUFFER_SIZE
 
         self.clear()
 
@@ -736,9 +748,9 @@ class  SessionBuffer(BufferBase):
         self._isnewline = True
 
         if len(self._bufC) > self.CACHE_BUFFER_SIZE:
-            del self._bufC[self.CACHE_BUFFER_SIZE:]
+            del self._bufC[self.CACHE_BUFFER_SIZE :]
 
-    @BufferBase.start_lineno.setter    
+    @BufferBase.start_lineno.setter
     def start_lineno(self, value: int):
         self._start_lineno = value
         if (value < 0) and self._hold:
@@ -747,7 +759,7 @@ class  SessionBuffer(BufferBase):
             self.hold = True
 
     @property
-    def hold(self) ->bool:
+    def hold(self) -> bool:
         return self._hold or (self._start_lineno >= 0)
 
     @hold.setter
@@ -771,7 +783,7 @@ class  SessionBuffer(BufferBase):
                 self._isnewline = savedNewline
                 self._c_count = 0
                 if len(self._bufC) > self.CACHE_BUFFER_SIZE:
-                    del self._bufC[self.CACHE_BUFFER_SIZE:]
+                    del self._bufC[self.CACHE_BUFFER_SIZE :]
 
             self._hold = value
 
@@ -793,7 +805,7 @@ class  SessionBuffer(BufferBase):
             else:
                 raise Exception("count out of range.")
         self._isnewline = newline
-        
+
     def _appendLineHold(self, line: str, newline: bool = True):
         if not self._isnewline:
             if self._endInCache:
@@ -825,8 +837,8 @@ class  SessionBuffer(BufferBase):
         if line.endswith(self.newline):
             line = line.rstrip(self.newline)
             newline_after_append = True
-            
-        if not self.newline in line:
+
+        if self.newline not in line:
             self._appendLine(line, newline_after_append)
 
         else:
@@ -858,19 +870,18 @@ class  SessionBuffer(BufferBase):
 
     def forceNewline(self):
         self._isnewline = True
-        
+
 
 class LogFileBuffer(BufferBase):
     def __init__(
         self,
         name,
         filepath: Optional[str] = None,
-        ) -> None:
-
+    ) -> None:
         super().__init__(name)
-        self._lines : Dict[int, str] = {}
+        self._lines: Dict[int, str] = {}
         self.loadfile(filepath)
-        
+
     def loadfile(self, filepath: Optional[str] = None):
         if filepath and os.path.exists(filepath):
             self.filepath = filepath
@@ -885,7 +896,7 @@ class LogFileBuffer(BufferBase):
         if not self.filepath or not os.path.exists(self.filepath):
             return 0
 
-        with open(self.filepath, 'r', encoding = 'utf-8', errors = 'ignore') as fp:
+        with open(self.filepath, "r", encoding="utf-8", errors="ignore") as fp:
             return sum(1 for _ in fp)
 
     def getLine(self, lineno: int):
@@ -897,20 +908,21 @@ class LogFileBuffer(BufferBase):
     def __del__(self):
         self._lines.clear()
 
+
 class PyMudBufferControl(UIControl):
     def __init__(self, buffer: Optional[BufferBase]) -> None:
         self.buffer = buffer
 
         # 为MUD显示进行校正的处理，包括对齐校正，换行颜色校正等
         self.FULL_BLOCKS = set("▂▃▅▆▇▄█")
-        self.TABLE_LINES  = set("┃││║┃")
+        self.TABLE_LINES = set("┃││║┃")
         self.SINGLE_LINES = set("┠┌└├┬┼┴╭╰─")
         self.SINGLE_LINES_LEFT = set("┨┘┐┤╮╯")
         self.DOUBLE_LINES = set("╔╚╠╦╪╩═")
         self.DOUBLE_LINES_LEFT = set("╗╝╣")
         self.THICK_LINES = set("┏┗━")
         self.THICK_LINES_LEFT = set("┓┛ ")
-        self.ALL_COLOR_REGX  = re.compile(r"(?:\[[\d;]+m)+")
+        self.ALL_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+")
         self.AVAI_COLOR_REGX = re.compile(r"(?:\[[\d;]+m)+(?!$)")
         self._color_start = ""
         self._color_correction = False
@@ -935,7 +947,6 @@ class PyMudBufferControl(UIControl):
         new_str = []
         for idx, ch in enumerate(line):
             if (east_asian_width(ch) in "FWA") and (wcwidth(ch) == 1):
-                
                 if ch in self.FULL_BLOCKS:
                     new_str.append(ch)
                     new_str.append(ch)
@@ -979,17 +990,20 @@ class PyMudBufferControl(UIControl):
                 new_str.append(ch)
 
         return "".join(new_str)
-    
+
     def return_correction(self, line: str):
         return line.replace("\r", "").replace("\x00", "")
-    
+
     def tab_correction(self, line: str):
         from .session import Session
+
         while "\t" in line:
             tab_index = line.find("\t")
-            left, right = line[:tab_index], line[tab_index + 1:]
+            left, right = line[:tab_index], line[tab_index + 1 :]
             left_width = get_cwidth(Session.PLAIN_TEXT_REGX.sub("", left))
-            tab_width = Settings.client["tabstop"] - (left_width % Settings.client["tabstop"])
+            tab_width = Settings.client["tabstop"] - (
+                left_width % Settings.client["tabstop"]
+            )
             line = left + " " * tab_width + right
 
         return line
@@ -997,7 +1011,7 @@ class PyMudBufferControl(UIControl):
     def line_correction(self, line: str):
         # 处理\r符号（^M）
         line = self.return_correction(line)
-        
+
         # 美化（解决中文英文在Console中不对齐的问题）
         if Settings.client["beautify"]:
             line = self.width_correction(line)
@@ -1005,7 +1019,7 @@ class PyMudBufferControl(UIControl):
         # 处理Tab(\r)符号（^I）对齐
         line = self.tab_correction(line)
 
-        line += " "    # 最后添加一个空格，用于允许选择行时选到最后一个字符
+        line += " "  # 最后添加一个空格，用于允许选择行时选到最后一个字符
 
         return line
 
@@ -1017,11 +1031,7 @@ class PyMudBufferControl(UIControl):
         """
         buffer = self.buffer
         if not buffer:
-            return UIContent(
-                get_line = lambda i: [],
-                line_count = 0,
-                cursor_position = None
-            )
+            return UIContent(get_line=lambda i: [], line_count=0, cursor_position=None)
 
         def get_line(i: int) -> StyleAndTextTuples:
             line = buffer.getLine(i)
@@ -1036,13 +1046,13 @@ class PyMudBufferControl(UIControl):
 
                     lastline = buffer.getLine(lineno)
                     allcolors = self.ALL_COLOR_REGX.findall(lastline)
-                    
+
                     if len(allcolors) == 0:
                         lineno = lineno - 1
 
                     elif len(allcolors) == 1:
                         colors = self.AVAI_COLOR_REGX.findall(lastline)
-                        
+
                         if len(colors) == 1:
                             line = f"{colors[0]}{line}"
                             break
@@ -1053,14 +1063,13 @@ class PyMudBufferControl(UIControl):
                     else:
                         break
 
-            
             # 其他校正
             line = self.line_correction(line)
-            #line = self.return_correction(line)
+            # line = self.return_correction(line)
 
             # 处理ANSI标记（生成FormmatedText）
             fragments = to_formatted_text(ANSI(line))
-            #fragments = explode_text_fragments(fragments)
+            # fragments = explode_text_fragments(fragments)
 
             # if Settings.client["beautify"]:
             #     fragments = self.fragment_correction(fragments)
@@ -1077,7 +1086,6 @@ class PyMudBufferControl(UIControl):
                 if to == len(buffer.getLine(i)):
                     to = total_display
 
-
                 fragments = explode_text_fragments(fragments)
 
                 if from_ == 0 and to == 0 and len(fragments) == 0:
@@ -1085,21 +1093,17 @@ class PyMudBufferControl(UIControl):
                     # visualize the selection.
                     return [(selected_fragment, " ")]
                 else:
-                    for i in range(from_, min(to, total_display+1)):
+                    for i in range(from_, min(to, total_display + 1)):
                         if i < len(fragments):
                             old_fragment, old_text, *_ = fragments[i]
                             fragments[i] = (old_fragment + selected_fragment, old_text)
                         # elif i == len(fragments):
                         #     fragments.append((selected_fragment, " "))
 
-
-
             return fragments
 
         content = UIContent(
-            get_line = get_line,
-            line_count = buffer.lineCount,
-            cursor_position = None
+            get_line=get_line, line_count=buffer.lineCount, cursor_position=None
         )
 
         return content
@@ -1127,7 +1131,6 @@ class PyMudBufferControl(UIControl):
         cur_buffer = get_app().layout.current_buffer
         # 这里是修改的内容
         if (cur_control == self) or (cur_buffer and cur_buffer.name == "input"):
-
             if buffer:
                 # Set the selection position.
                 buffer.mouse_point = position
@@ -1141,10 +1144,11 @@ class PyMudBufferControl(UIControl):
                     and mouse_event.button == MouseButton.LEFT
                 ):
                     # Click and drag to highlight a selection
-                    if buffer.selection.start_row >= 0 and not (position.y == 0 and position.x == 0):
+                    if buffer.selection.start_row >= 0 and not (
+                        position.y == 0 and position.x == 0
+                    ):
                         buffer.selection.end_row = position.y
                         buffer.selection.end_col = position.x
-                    
 
                 elif mouse_event.event_type == MouseEventType.MOUSE_UP:
                     # When the cursor was moved to another place, select the text.
@@ -1152,7 +1156,7 @@ class PyMudBufferControl(UIControl):
                     # selecting text in Vi navigation mode. In navigation mode,
                     # the cursor can never be after the text, so the cursor
                     # will be repositioned automatically.)
-                    
+
                     if buffer.selection.start_row >= 0 and position.y >= 0:
                         buffer.selection.end_row = position.y
                         buffer.selection.end_col = position.x
@@ -1185,9 +1189,10 @@ class PyMudBufferControl(UIControl):
 
         # Not focused, but focusing on click events.
         else:
-                return NotImplemented
+            return NotImplemented
 
         return None
+
 
 class DotDict(dict):
     """
@@ -1200,7 +1205,7 @@ class DotDict(dict):
         .. code:: Python
 
             mydict = DotDict()
-            
+
             # 以下写内容访问等价
             mydict["key1"] = "value1"
             mydict.key1 = "value1"
@@ -1211,7 +1216,7 @@ class DotDict(dict):
     """
 
     def __getattr__(self, __key):
-        if (not __key in self.__dict__) and (not __key.startswith("__")):
+        if (__key not in self.__dict__) and (not __key.startswith("__")):
             return self.__getitem__(__key)
 
     def __setattr__(self, __name: str, __value):
@@ -1222,35 +1227,36 @@ class DotDict(dict):
 
     def __getstate__(self):
         return self
-    
+
     def __setstate__(self, state):
         self.update(state)
 
 
 # 构建一个DStr类型，替代str类型进行显示对齐操作。该类型在str的基础上，len方法返回其显示宽度，ljust/rjust/center均以显示宽度返回对齐的字符串。
 
+
 class DStr(str):
     """增强的字符串类型，使用显示宽度进行对齐操作"""
-    
+
     def __len__(self):
         """返回字符串的显示宽度，而不是字符数量"""
         return wcswidth(self.__str__())
-    
-    def ljust(self, width, fillchar=' '):
+
+    def ljust(self, width, fillchar=" "):
         """左对齐字符串，使用显示宽度进行计算"""
         display_len = len(self)  # 使用重写的len方法获取显示宽度
         if display_len >= width:
             return self
         return self + fillchar * (width - display_len)
-    
-    def rjust(self, width, fillchar=' '):
+
+    def rjust(self, width, fillchar=" "):
         """右对齐字符串，使用显示宽度进行计算"""
         display_len = len(self)  # 使用重写的len方法获取显示宽度
         if display_len >= width:
             return self
         return fillchar * (width - display_len) + self
-    
-    def center(self, width, fillchar=' '):
+
+    def center(self, width, fillchar=" "):
         """居中对齐字符串，使用显示宽度进行计算"""
         display_len = len(self)  # 使用重写的len方法获取显示宽度
         if display_len >= width:
@@ -1267,6 +1273,7 @@ class ValuedEvent:
     一个可等待对象，结合了asyncio.Event和asyncio.Future的特性。
     支持set/clear重复使用，也可以设置返回值。
     """
+
     def __init__(self, loop=None):
         self._loop = loop or asyncio.get_event_loop()
         self._future = asyncio.Future(loop=self._loop)
@@ -1320,7 +1327,7 @@ class ValuedEvent:
         """
         等待事件被设置，类似于asyncio.Event.wait方法。
         如果事件已设置，立即返回结果值；否则等待直到事件被设置。
-        
+
         返回值：
             设置的结果值，如果事件已被取消则抛出CancelledError。
         """

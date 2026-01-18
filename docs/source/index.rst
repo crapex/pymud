@@ -38,7 +38,7 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.0
 特点
 ^^^^^^^^^
 
-+ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygment, pyperclip 外，不需要其他第三方库支持
++ 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygments, pyperclip 外，不需要其他第三方库支持
 + 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
 + 基于控制台的全屏UI界面设计，支持鼠标操作（Android上支持触摸屏操作），极低资源需求，在单核1GB内存的Linux VPS上也可流畅运行
 + 支持分屏显示，在数据快速滚动的时候，上半屏保持不动，以确保不错过信息
