@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import datetime
+import inspect
 import logging
 import math
 import os
@@ -1038,7 +1039,7 @@ class Session:
         if cl.length == 0:
             self.writeline("")
 
-        elif cl.code[0] == "#":
+        elif (len(cl.code) >= 2) and (cl.code[0] == "#"):
             ## handle # command codes
             cmd = cl.code[1]
             if cmd == "session":
@@ -1069,7 +1070,7 @@ class Session:
                         try:
                             cb = CodeBlock(sess_cmd)
                             cb.execute(session, *args, **kwargs)
-                        except Exception as e:
+                        except Exception:
                             session.exec_command(sess_cmd)
 
             else:
@@ -1078,7 +1079,7 @@ class Session:
 
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
-                    if asyncio.iscoroutinefunction(handler):
+                    if inspect.iscoroutinefunction(handler):
                         self.create_task(handler(code=cl, *args, **kwargs))
                     else:
                         handler(code=cl, *args, **kwargs)
@@ -1107,7 +1108,7 @@ class Session:
         if cl.length == 0:
             self.writeline("")
 
-        elif cl.code[0] == "#":
+        elif (len(cl.code) >= 2) and (cl.code[0] == "#"):
             ## handle # command codes
             cmd = cl.code[1]
             if cmd == "session":
@@ -1135,7 +1136,7 @@ class Session:
                     try:
                         cb = CodeBlock(sess_cmd)
                         return await cb.async_execute(session, *args, **kwargs)
-                    except Exception as e:
+                    except Exception:
                         return await session.exec_command_async(sess_cmd)
 
             else:
@@ -1144,7 +1145,7 @@ class Session:
 
                 handler = self._cmds_handler.get(cmd, None)
                 if handler and callable(handler):
-                    if asyncio.iscoroutinefunction(handler):
+                    if inspect.iscoroutinefunction(handler):
                         await self.create_task(handler(code=cl, *args, **kwargs))
                     else:
                         handler(code=cl, *args, **kwargs)
@@ -2206,7 +2207,7 @@ class Session:
         if code.length == 2:
             self._print_all_help()
 
-        elif code.length == 3:
+        elif len(code.code) == 3:
             # topic = args[0]
             topic = code.code[-1].lower()
 
@@ -2261,23 +2262,24 @@ class Session:
             - #exit
             - #session
         """
-        param = list(code.code)
+        if code:
+            param = list(code.code)
 
-        if "-f" in param:
-            prompt = False
-            param.remove("-f")
-        elif "--force" in param:
-            prompt = False
-            param.remove("--force")
-        else:
-            prompt = True
+            if "-f" in param:
+                prompt = False
+                param.remove("-f")  # type: ignore
+            elif "--force" in param:
+                prompt = False
+                param.remove("--force")  # type: ignore
+            else:
+                prompt = True
 
-        if len(param) >= 3:
-            session_name = param[2]
-        else:
-            session_name = self.name
-        # self.application.close_session()
-        self.application.act_close_session(session_name, prompt)
+            if len(param) >= 3:
+                session_name = param[2]
+            else:
+                session_name = self.name
+            # self.application.close_session()
+            self.application.act_close_session(session_name, prompt)
 
     async def handle_wait(self, code: CodeLine, *args, **kwargs):
         """
@@ -2299,6 +2301,8 @@ class Session:
             - #replace
         """
 
+        if len(code.code) < 3:
+            raise ValueError("Missing wait time")
         wait_time = code.code[2]
         if wait_time.isnumeric():
             msec = float(wait_time) / 1000.0
@@ -3034,45 +3038,45 @@ class Session:
             - #alias
             - #timer
         """
+        if len(code.code) >= 2:
+            cmd = code.code[1].lower()
+            if cmd in ("ig", "ignore"):
+                self._ignore = not self._ignore
+                if self._ignore:
+                    self.info(Settings.gettext("msg_ignore_on"))
+                else:
+                    self.info(Settings.gettext("msg_ignore_off"))
+            elif cmd == "t+":
+                if code.length <= 2:
+                    self.warning(Settings.gettext("msg_T_plus_incorrect"))
+                    return
 
-        cmd = code.code[1].lower()
-        if cmd in ("ig", "ignore"):
-            self._ignore = not self._ignore
-            if self._ignore:
-                self.info(Settings.gettext("msg_ignore_on"))
-            else:
-                self.info(Settings.gettext("msg_ignore_off"))
-        elif cmd == "t+":
-            if code.length <= 2:
-                self.warning(Settings.gettext("msg_T_plus_incorrect"))
-                return
+                groupname = code.code[2]
+                # 组名支持=, >两种，分别代表仅当前组组，当前组及子组
+                # #t+、t-不指定 >, =时，按 = 处理
+                if groupname.startswith(">"):
+                    cnts = self.enableGroup(groupname[1:])
+                elif groupname.startswith("="):
+                    cnts = self.enableGroup(groupname[1:], subgroup=False)
+                else:
+                    cnts = self.enableGroup(groupname, subgroup=False)
 
-            groupname = code.code[2]
-            # 组名支持=, >两种，分别代表仅当前组组，当前组及子组
-            # #t+、t-不指定 >, =时，按 = 处理
-            if groupname.startswith(">"):
-                cnts = self.enableGroup(groupname[1:])
-            elif groupname.startswith("="):
-                cnts = self.enableGroup(groupname[1:], subgroup=False)
-            else:
-                cnts = self.enableGroup(groupname, subgroup=False)
+                self.info(Settings.gettext("msg_group_enabled", groupname, *cnts))
 
-            self.info(Settings.gettext("msg_group_enabled", groupname, *cnts))
+            elif cmd == "t-":
+                if code.length <= 2:
+                    self.warning(Settings.gettext("msg_T_minus_incorrect"))
+                    return
 
-        elif cmd == "t-":
-            if code.length <= 2:
-                self.warning(Settings.gettext("msg_T_minus_incorrect"))
-                return
+                groupname = code.code[2]
+                if groupname.startswith(">"):
+                    cnts = self.enableGroup(groupname[1:], False)
+                elif groupname.startswith("="):
+                    cnts = self.enableGroup(groupname[1:], False, subgroup=False)
+                else:
+                    cnts = self.enableGroup(groupname, False)
 
-            groupname = code.code[2]
-            if groupname.startswith(">"):
-                cnts = self.enableGroup(groupname[1:], False)
-            elif groupname.startswith("="):
-                cnts = self.enableGroup(groupname[1:], False, subgroup=False)
-            else:
-                cnts = self.enableGroup(groupname, False)
-
-            self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
+                self.info(Settings.gettext("msg_group_disabled", groupname, *cnts))
 
     def handle_repeat(self, code: Optional[CodeLine] = None, *args, **kwargs):
         """
@@ -3330,7 +3334,6 @@ class Session:
         else:
             self.warning(Settings.gettext("msg_module_not_loaded", module_name))
 
-    @exception
     def reload_module(self, module_names=None):
         """
         模块重新加载函数。
@@ -3618,6 +3621,9 @@ class Session:
             - #test命令测试触发器时，触发器无论是否使能，均会真的响应。
             - #echo命令可以用来人工激发触发器。
         """
+        if len(code.code) < 2:
+            return
+
         cmd = code.code[1].lower()
         docallback = True
         if cmd == "show":
@@ -3957,29 +3963,29 @@ class Session:
 
         if len(args) == 1:
             if args[0] in ("filename", "lineno", "traceback"):
-                self.application._tracemalloc_mode = args[0]
+                self.application._tracemalloc_mode = args[0]  # type: ignore
                 self.info(Settings.gettext("msg_mem_mode", args[0]), "MEMORY")
 
             elif args[0] in ("on", "start"):
                 tracemalloc.start()
-                self.application._tracemalloc = True
-                self.application._snapshot_base = tracemalloc.take_snapshot()
+                self.application._tracemalloc = True  # type: ignore
+                self.application._snapshot_base = tracemalloc.take_snapshot()  # type: ignore
                 self.info(Settings.gettext("msg_mem_start"), "MEMORY")
 
             elif args[0] in ("off", "stop"):
                 tracemalloc.stop()
-                self.application._tracemalloc = False
+                self.application._tracemalloc = False  # type: ignore
                 self.info(Settings.gettext("msg_mem_stop"), "MEMORY")
 
             elif args[0] == "diff":
-                if self.application._tracemalloc:
+                if self.application._tracemalloc:  # type: ignore
                     snapshot = tracemalloc.take_snapshot()
                     cumulative = True
-                    if self.application._tracemalloc_mode == "traceback":
+                    if self.application._tracemalloc_mode == "traceback":  # type: ignore
                         cumulative = False
                     snap_diff = snapshot.compare_to(
-                        self.application._snapshot_base,
-                        self.application._tracemalloc_mode,
+                        self.application._snapshot_base,  # type: ignore
+                        self.application._tracemalloc_mode,  # type: ignore
                         cumulative,
                     )
                     # self.application._last_snapshot = snapshot
@@ -4007,14 +4013,12 @@ class Session:
                         )
 
         else:
-            if self.application._tracemalloc:
+            if self.application._tracemalloc:  # type: ignore
                 snapshot = tracemalloc.take_snapshot()
                 cumulative = True
-                if self.application._tracemalloc_mode == "traceback":
+                if self.application._tracemalloc_mode == "traceback":  # type: ignore
                     cumulative = False
-                top_stats = snapshot.statistics(
-                    self.application._tracemalloc_mode, cumulative
-                )
+                top_stats = snapshot.statistics(self.application._tracemalloc_mode, cumulative)  # type: ignore
 
                 self.info(Settings.gettext("msg_mem_top"), "MEMORY")
                 for stat in top_stats[:5]:

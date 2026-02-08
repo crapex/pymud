@@ -42,6 +42,7 @@ dependencies = [
   "pyperclip",
   "pygments",
   "prompt-toolkit>=3.0.51",
+  "recommonmark>=0.7.1",
 ]
 
 [project.urls]  # Optional
@@ -57,6 +58,10 @@ pymud = "pymud:main"
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
+
+[[tool.uv.index]]
+url = "https://mirrors.cloud.tencent.com/pypi/simple"
+default = true
 # If there are data files included in your packages that need to be
 # installed, specify them here.
 # package-data = {"sample" = ["*.dat"]}
