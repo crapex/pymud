@@ -3,10 +3,11 @@ import inspect
 import traceback
 import warnings
 from inspect import iscoroutinefunction
-from typing import List, Optional, Union
+from types import FunctionType, MethodType
+from typing import Any, Callable, List, Optional, Union
 
 
-def print_exception(session, e: Exception, func: Optional[callable] = None):
+def print_exception(session, e: Exception, func: Optional[Callable[..., Any]] = None):
     """打印异常信息"""
     from .session import Session
     from .settings import Settings
@@ -15,9 +16,9 @@ def print_exception(session, e: Exception, func: Optional[callable] = None):
         if func and callable(func):
             filename = inspect.getfile(func)
             funcname = func.__name__
-            try:
-                lineno = inspect.getlineno(func)
-            except Exception:
+            if isinstance(func, (FunctionType, MethodType)):
+                lineno = func.__code__.co_firstlineno
+            else:
                 lineno = 0
             session.error(
                 Settings.gettext(
@@ -29,7 +30,7 @@ def print_exception(session, e: Exception, func: Optional[callable] = None):
         session.error(traceback.format_exc(), Settings.gettext("script_error"))
 
 
-def exception(func: callable):
+def exception(func: Callable[..., Any]):
     """方法异常处理装饰器，捕获异常后通过会话的session.error打印相关信息。可以用于同步方法和异步方法。"""
     if not iscoroutinefunction(func):
 
@@ -96,7 +97,6 @@ def async_exception(func):
         from .modules import IConfig, ModuleInfo
         from .objects import BaseObject
         from .session import Session
-        from .settings import Settings
 
         try:
             return await func(self, *args, **kwargs)

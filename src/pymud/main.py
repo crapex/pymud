@@ -26,7 +26,7 @@ CFG_TEMPLATE = {
         "reconnect_wait": 15,  # 自动重连等待的时间（秒数）
         "var_autosave": True,  # 断开时自动保存会话变量
         "var_autoload": True,  # 初始化时自动加载会话变量
-        "remain_last_input": False,
+        "remain_last_input": True,  # 保留上一次输入的命令
         "echo_input": False,
         "beautify": True,  # 专门为解决控制台下PKUXKX字符画对不齐的问题
         "status_divider": True,  # 是否显示状态栏的分隔线

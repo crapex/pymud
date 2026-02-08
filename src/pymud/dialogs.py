@@ -91,7 +91,6 @@ class WelcomeDialog(BasicDialog):
 
     def create_body(self) -> AnyContainer:
         import platform
-        import sys
 
         body = HSplit(
             [

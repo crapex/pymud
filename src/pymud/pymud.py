@@ -203,7 +203,7 @@ class PyMudApp:
             clipboard = PyperclipClipboard()
             clipboard.set_text("test pyperclip")
             clipboard.set_text("")
-        except:
+        except Exception:
             clipboard = InMemoryClipboard()
 
         if Settings.client["cursor"] and Settings.client["cursor"] in [
@@ -594,9 +594,11 @@ class PyMudApp:
         for key, site in ss.items():
             menu = MenuItem(key)
             for name in site["chars"].keys():
-                sub = MenuItem(
-                    name, handler=functools.partial(self._quickHandleSession, key, name)
-                )  # type: ignore
+
+                def _make_handler(key=key, name=name) -> None:
+                    self._quickHandleSession(key, name)
+
+                sub = MenuItem(name, handler=_make_handler)
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -1192,7 +1194,7 @@ class PyMudApp:
                 if self.logFileShown:
                     return f"[LOG] {self.logFileShown}"
                 else:
-                    return f"[LOG]"
+                    return "[LOG]"
 
         title_formatted_list = []
         for key, session in self.sessions.items():
@@ -1219,7 +1221,7 @@ class PyMudApp:
             else:
                 style = Settings.styles["normal"]
 
-            title = f"[LOG] {self.logFileShown}" if self.logFileShown else f"[LOG]"
+            title = f"[LOG] {self.logFileShown}" if self.logFileShown else "[LOG]"
 
             title_formatted_list.append(
                 (style, title, functools.partial(self.btn_title_clicked, "[LOG]"))
@@ -1244,14 +1246,7 @@ class PyMudApp:
         if not self._mouse_support:
             mouse_support = Settings.gettext("status_mouseinh") + " "
 
-        mouse = "0, 0"
-
         if self.current_session:
-            buffer = self.current_session.buffer
-            if buffer:
-                position = buffer.mouse_point
-                mouse = f"{position.y}, {position.x}"
-
             if self.current_session._ignore:
                 tri_status = Settings.gettext("status_ignore") + " "
 
@@ -1260,7 +1255,7 @@ class PyMudApp:
             else:
                 dura = self.current_session.duration
                 DAY, HOUR, MINUTE = 86400, 3600, 60
-                days, hours, mins, secs = 0, 0, 0, 0
+                days, hours, mins = 0, 0, 0
                 days = dura // DAY
                 dura = dura - days * DAY
                 hours = dura // HOUR

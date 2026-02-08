@@ -211,7 +211,7 @@ class IConfigBase(metaclass=PymudMeta):
                             self.__inline_objects__[gmcp.id] = gmcp
 
         try:
-            super().__init__(session, *args, **kwargs)
+            super().__init__(session, *args, **kwargs)  # type: ignore[reportGeneralTypeIssues]
         except TypeError:
             super().__init__()
 
@@ -232,7 +232,7 @@ class IConfigBase(metaclass=PymudMeta):
 
         # 调用父类的__unload__方法，确保MRO链中的所有__unload__都被调用
         try:
-            super().__unload__()
+            super().__unload__()  # type: ignore[reportGeneralTypeIssues]
         except (AttributeError, TypeError):
             # 如果父类没有__unload__方法或调用出错，忽略错误
             pass

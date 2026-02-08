@@ -5,7 +5,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 from unicodedata import east_asian_width
 
 from prompt_toolkit import ANSI
@@ -77,7 +77,7 @@ class VSplitWindow(Window):
         """
         xpos = write_position.xpos + move_x
         ypos = write_position.ypos
-        line_count = ui_content.line_count
+        # line_count = ui_content.line_count
         new_buffer = new_screen.data_buffer
         empty_char = _CHAR_CACHE["", ""]
 
@@ -642,75 +642,6 @@ class BufferBase:
     def nosplit(self):
         self.start_lineno = -1
         get_app().invalidate()
-
-
-class SessionBufferOld(BufferBase):
-    def __init__(
-        self,
-        name,
-        newline="\n",
-        max_buffered_lines=2000,
-    ) -> None:
-        super().__init__(name, newline, max_buffered_lines)
-
-        self._lines: List[str] = []
-        self._isnewline = True
-
-    def append(self, line: str):
-        """
-        追加文本到缓冲区。
-        当文本以换行符结尾时，会自动添加到缓冲区。
-        当文本不以换行符结尾时，会自动添加到上一行。
-        """
-        newline_after_append = False
-        if line.endswith(self.newline):
-            line = line.rstrip(self.newline)
-            newline_after_append = True
-
-        if self.newline not in line:
-            if self._isnewline:
-                self._lines.append(line)
-            else:
-                self._lines[-1] += line
-
-        else:
-            lines = line.split(self.newline)
-            if self._isnewline:
-                self._lines.extend(lines)
-            else:
-                self._lines[-1] += lines[0]
-                self._lines.extend(lines[1:])
-
-        self._isnewline = newline_after_append
-
-        ## limit buffered lines
-        if self.start_lineno < 0 and len(self._lines) > self.max_buffered_lines:
-            diff = len(self._lines) - self.max_buffered_lines
-            del self._lines[:diff]
-            ## adjust selection
-            if self.selection.start_row >= 0:
-                self.selection.start_row -= diff
-                self.selection.end_row -= diff
-
-        get_app().invalidate()
-
-    def clear(self):
-        self.exit_selection()
-        self._isnewline = True
-        self._lines.clear()
-        self.nosplit()
-
-    def forceNewline(self):
-        self._isnewline = True
-
-    @property
-    def lineCount(self):
-        return len(self._lines)
-
-    def getLine(self, lineno: int):
-        if lineno < 0 or lineno >= len(self._lines):
-            return ""
-        return self._lines[lineno]
 
 
 class SessionBuffer(BufferBase):

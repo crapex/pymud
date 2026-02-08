@@ -89,7 +89,7 @@ TRANSLATION = {
         "exception_message": "异常信息: <{}> {}",
         "exception_traceback": '脚本执行异常, 异常位于文件"{}"中的第{}行的"{}"函数中。',
         "script_error": "脚本错误",
-        "script_error_hint": f"在脚本函数 {0} (文件 {1}, {2} 行)中发生异常 {3}, 详细信息为:",
+        "script_error_hint": "在脚本函数 {0} (文件 {1}, {2} 行)中发生异常 {3}, 详细信息为:",
         # text display in session.py
         "msg_var_autoload_success": "自动从 {0} 中加载保存变量成功。",
         "msg_var_autoload_fail": "自动从 {0} 中加载变量失败，错误消息为： {1}。",
@@ -153,7 +153,7 @@ TRANSLATION = {
         "msg_tri_triggered": "    {0} 正常触发。",
         "msg_tri_wildcards": "      捕获：{0}",
         "msg_tri_prevent": "      {0}该触发器未开启keepEval, 会阻止后续触发器。{1}",
-        "msg_tri_ignore": "    {1}{0} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{2}",
+        "msg_tri_ignored": "    {1}{0} 可以触发，但由于优先级与keepEval设定，触发器不会触发。{2}",
         "msg_tri_matched": "    {0} 可以匹配触发。",
         "msg_enabled_summary_0": "{0}  使能的触发器中，没有可以触发的。",
         "msg_enabled_summary_1": "{0}  使能的触发器中，共有 {1} 个可以触发，实际触发 {2} 个，另有 {3} 个由于 keepEval 原因实际不会触发。",

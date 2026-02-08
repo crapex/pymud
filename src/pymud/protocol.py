@@ -2,8 +2,6 @@ import datetime
 import logging
 from asyncio import BaseTransport, Protocol
 
-from prompt_toolkit.application import current
-
 from .settings import Settings
 
 IAC = b"\xff"  # TELNET 命令字 IAC
@@ -642,7 +640,8 @@ class MudClientProtocol(Protocol):
             self.session.write(sbneg)
             self.log.debug(f"回复MNES请求: {var} = {val}")
 
-        IS, SEND, INFO = 0, 1, 2
+        IS, SEND = 0, 1
+        # INFO = 2
         VAR, VAL = 0, 1
 
         request_var = list()

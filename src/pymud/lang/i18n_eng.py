@@ -89,7 +89,7 @@ TRANSLATION = {
         "exception_message": "Exception information: <{}> {}",
         "exception_traceback": "Exception occurred at line number {1} in file '{0}', and function name is '{2}'",
         "script_error": "Script Error",
-        "script_error_hint": f"Exception {3} occurred in script function {0} (file: {1}, lineno: {2})",
+        "script_error_hint": "Exception {3} occurred in script function {0} (file: {1}, lineno: {2})",
         # text display in session.py
         "msg_var_autoload_success": "Variables automatically loaded from {0} successfully.",
         "msg_var_autoload_fail": "Failed to automatically load variables from {0}, error message: {1}.",
@@ -153,7 +153,7 @@ TRANSLATION = {
         "msg_tri_triggered": "    {0} triggered normally.",
         "msg_tri_wildcards": "      Captured: {0}",
         "msg_tri_prevent": "      {0}This trigger does not have keepEval enabled, will prevent subsequent triggers.{1}",
-        "msg_tri_ignore": "    {1}{0} can trigger, but due to priority and keepEval settings, trigger will not activate.{2}",
+        "msg_tri_ignored": "    {1}{0} can trigger, but due to priority and keepEval settings, trigger will not activate.{2}",
         "msg_tri_matched": "    {0} can match trigger.",
         "msg_enabled_summary_0": "{0}  Among enabled triggers, none can trigger.",
         "msg_enabled_summary_1": "{0}  Among enabled triggers, {1} can trigger, actually triggered {2}, another {3} will not activate due to keepEval.",

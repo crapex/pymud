@@ -7,7 +7,6 @@ import inspect
 import json
 import logging
 import re
-from codecs import ignore_errors
 from collections import namedtuple
 from collections.abc import Iterable
 from typing import Any, List, Tuple, Union
@@ -285,7 +284,7 @@ class CodeBlock:
                 session.warning(Settings.gettext("exception_forced_async"))
                 sync = False
 
-        if sync is not None:
+        if sync:
             for code in self.codes:
                 if isinstance(code, CodeLine):
                     code.execute(session, *args, **kwargs)
@@ -373,7 +372,7 @@ class BaseObject:
         self.session.addObject(self)
 
         try:
-            super().__init__(session, *args, **kwargs)
+            super().__init__(session, *args, **kwargs)  # type: ignore[reportGeneralTypeIssues]
         except TypeError:
             super().__init__()
 
@@ -877,7 +876,7 @@ class Command(MatchObject):
         """
         # 调用父类的__unload__方法，确保MRO链中的所有__unload__都被调用
         try:
-            super().__unload__()
+            super().__unload__()  # type: ignore[reportGeneralTypeIssues]
         except (AttributeError, TypeError):
             pass
 
@@ -886,7 +885,7 @@ class Command(MatchObject):
         与__unload__方法相同，子类仅需覆盖一种方法就可以
         """
         try:
-            super().unload()
+            super().unload()  # type: ignore[reportGeneralTypeIssues]
         except (AttributeError, TypeError):
             pass
 
