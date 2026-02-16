@@ -4,7 +4,7 @@ PyMUD Settings 文件
 """
 
 import importlib.metadata
-
+from typing import Optional
 
 class Settings:
     "保存PyMUD配置的全局对象"
@@ -51,6 +51,20 @@ class Settings:
     }
     "MUD协议所需的的默认MNES(Mud New-Environment Standard)配置信息"
 
+    network = {
+        "ipv6": False,           # 是否支持IPv6（仅影响界面菜单显示）
+        "local_addr": "auto",    # 是否支持指定本地IP地址，可以设置 "disabled" | "auto" | "preset"
+        "ip_list": [             # 当指定 local_addr 为 "preset" 时，这里可以设置多个IP地址
+            # "192.168.1.100",
+            # "10.0.0.100",
+        ],
+        "proxy": False,          # 是否启用代理
+        "proxies": {
+
+        },
+    }
+    "与网络有关的配置信息"
+
     client = {
         "cursor": "BLINKING_BEAM",  # 光标形状
         "buffer_lines": 5000,  # 保留缓冲行数
@@ -76,6 +90,7 @@ class Settings:
         "status_width": 30,  # 右侧状态栏的宽度
         "status_height": 6,  # 下侧状态栏的高度
         "split_ratio": 0.5,  # 分屏比例
+
     }
     "客户端的默认配置信息"
 
@@ -190,3 +205,15 @@ class Settings:
             return text
         else:
             return text.format(*args, **kwargs)
+
+    @classmethod
+    def get_preset_ip(cls, index: int) -> Optional[str]:
+        if index < 1 or index > len(cls.network["ip_list"]):
+            return None
+        return cls.network["ip_list"][index-1]
+
+    @classmethod
+    def get_preset_proxy(cls, key: str) -> Optional[str]:
+        if key not in cls.network["proxies"].keys():
+            return None
+        return cls.network["proxies"][key]

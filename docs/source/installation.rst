@@ -16,7 +16,7 @@ PyMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境
 1.2 安装
 ----------------------
 
-- 3.11开始，Python官方推荐使用venv来管理Python环境，建议使用uv工具 `https://docs.astral.sh/uv/`_ 作为包及虚拟环境管理工具。
+- 3.11开始，Python官方推荐使用venv来管理Python环境，建议使用uv工具 _`https://docs.astral.sh/uv/` 作为包及虚拟环境管理工具。
 - 安装Python、pip。uv工具可以一并搞定（linux下pip是一个单独的包，debian/ubuntu可以使用 ``apt-get`` 分别安装）。
 - 使用pip安装（或更新）PyMUD程序本体：可以直接使用pip安装或更新。所需的支持库会自动安装。
 - 在Python 3.12 版本下，
@@ -25,12 +25,12 @@ PyMUD是一个原生基于Python语言的MUD客户端，因此最基本的环境
 
     pip install pymud                                       # 安装
     pip install --upgrade pymud                             # 更新
-    pip install --upgrade pymud==0.21.0                     # 指定版本  
-    pip install --upgrade pymud==0.21.0a1 -i https://pypi.org/simple  # 指定pypi官方源。由于镜像同步需要时间，所以有时候刚发布更新时，需指定到pypi官方源     
+    pip install --upgrade pymud==0.21.0                     # 指定版本
+    pip install --upgrade pymud==0.21.0a1 -i https://pypi.org/simple  # 指定pypi官方源。由于镜像同步需要时间，所以有时候刚发布更新时，需指定到pypi官方源
 
     # 或者使用uv工具
     uv init                                                   # 初始化项目
-    uv add pymud                                              # 添加pymud依赖   
+    uv add pymud                                              # 添加pymud依赖
     uv add pymud==0.22.0a3                                    # 添加指定版本pymud依赖
 
 
@@ -55,7 +55,7 @@ PyMUD 通过在当前目录下直接键入命令 ``pymud`` (直接安装时) 或
 
 PyMUD 支持命令行参数配置启动行为。具体参数及含义可以通过增加 -h 或者 --help 查看。列出如下：
 
-.. code:: 
+.. code::
 
     PS C:\> pymud -h
     usage: pymud [-h] [-d] [-l logfile] [-a] [-s startup_dir] {init} ...

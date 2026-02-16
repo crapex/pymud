@@ -1,9 +1,5 @@
-.. pymud-cookbook documentation master file, created by
-   sphinx-quickstart on Sun Feb  4 09:39:35 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
 
-PyMUD 帮助文档
+PyMUD文档
 ==========================================
 
 
@@ -24,7 +20,7 @@ PyMUD 帮助文档
 
 最早想要自己写MUD客户端的念头，还是在几年前。但前几年事情太多，人太忙，我记得自20年疫情之后，到今年年初就没有再登陆过北侠了。
 23年春节之后空闲一些，于2023年2月19日重启MUD客户端的计划，2023年5月29日形成第一个发布版（0.05b），2023年12月5日发布首个支持
-pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.0。
+pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.4。
 
 在自己写客户端之前，我主要用过zmud和mushclient两个客户端，北大侠客行一直是用mushclient（玩的那会儿还没有mudlet）。
 我认为mushclient是一个功能非常强大的客户端，唯一缺点是不支持跨平台。由于工作原因，上班的地方不能上网，手机玩的话，
@@ -66,7 +62,7 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.0
 
 .. toctree::
    :maxdepth: 3
-   :caption: 目录
+   :caption: 帮助文档
 
    installation
    ui
@@ -77,7 +73,16 @@ pip安装的package版本（0.15），目前发布pip安装的最新版为0.22.0
    plugins
    references
    updatehistory
-   
+
+.. toctree::
+    :maxdepth: 1
+    :caption: 外部链接
+
+    官方网站 <https://www.pymud.cn>
+    官方论坛 <https://bbs.pymud.cn>
+    QQ交流群 <http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=xRiuBmhdZ5EpYd6djSY4xTdi6fdo2PDk&authKey=Rv0zHUgcMoMJ7TT%2F4Uj%2BYpohBawOk%2BsZstZkWzyo8kKCwXuRYgSyyAUoMzTPlGS7&noverify=0&group_code=554672580>
+    GitHub <https://github.com/pymud/pymud>
+
 
 索引与表
 ==================

@@ -10,6 +10,7 @@ import re
 import sysconfig
 import time
 import tracemalloc
+import ipaddress
 from collections import OrderedDict
 from collections.abc import Iterable
 from pathlib import Path
@@ -35,7 +36,7 @@ from .objects import (
     Timer,
     Trigger,
 )
-from .protocol import MudClientProtocol
+from .protocol import MudClientProtocol, Socks5Proxy
 from .settings import Settings
 
 
@@ -129,9 +130,11 @@ class Session:
         name,
         host,
         port,
-        encoding=None,
-        after_connect=None,
-        loop=None,
+        encoding = None,
+        after_connect = None,
+        loop = None,
+        local_addr: Optional[str] = None,
+        proxy: Optional[str] = None,
         **kwargs,
     ):
         self.pyversion = sysconfig.get_python_version()
@@ -142,6 +145,10 @@ class Session:
 
         if isinstance(app, PyMudApp):
             self.application = app
+
+        self.local_address = local_addr
+        self.proxy = proxy
+
 
         self.name = name
         self._transport = None
@@ -225,7 +232,7 @@ class Session:
             self.load_module(self._auto_script)
 
         if Settings.client["auto_connect"]:
-            self.open()
+            self.open(self.local_address, self.proxy)
 
     def __del__(self):
         self.clean()
@@ -248,12 +255,12 @@ class Session:
 
         self._command_history: List[str] = []
 
-    def open(self):
+    def open(self, local_addr: Optional[str] = None, proxy: Optional[str] = None):
         "创建到远程服务器的连接，同步方式。通过调用异步connect方法实现。"
         # asyncio.ensure_future(self.connect(), loop = self.loop)
-        self.create_task(self.connect())
+        self.create_task(self.connect(local_addr, proxy))
 
-    async def connect(self):
+    async def connect(self, local_addr: Optional[str] = None, proxy: Optional[str] = None):
         "创建到远程服务器的连接，异步非阻塞方式。"
 
         def _protocol_factory():
@@ -265,10 +272,22 @@ class Session:
             )
 
         try:
-            # self.loop = asyncio.get_running_loop()
-            transport, protocol = await self.loop.create_connection(
-                _protocol_factory, self.host, self.port
-            )
+            if proxy:
+                sock5proxy = Socks5Proxy(proxy)
+                socket, (ip, port) = sock5proxy.connect(self.host, self.port)
+                self.info(Settings.gettext("msg_socks5_connect", ip, port))
+
+                transport, protocol = await self.loop.create_connection(
+                    _protocol_factory, sock = socket
+                )
+            elif local_addr:
+                transport, protocol = await self.loop.create_connection(
+                    _protocol_factory, self.host, self.port, local_addr = (local_addr, 0)
+                )
+            else:
+                transport, protocol = await self.loop.create_connection(
+                    _protocol_factory, self.host, self.port
+                )               
 
             self._transport = transport
             self._protocol = protocol
@@ -295,7 +314,7 @@ class Session:
         """
         self.info(Settings.gettext("msg_auto_reconnect", timeout))
         await asyncio.sleep(timeout)
-        await self.create_task(self.connect())
+        await self.create_task(self.connect(self.local_address, self.proxy))
 
     def onConnected(self):
         "当连接到服务器之后执行的操作。包括打印连接时间，执行自定义事件(若设置)等。"
@@ -2311,7 +2330,29 @@ class Session:
     def handle_connect(self, code: Optional[CodeLine] = None, *args, **kwargs):
         """
         嵌入命令 #connect / #con 的执行函数，连接到远程服务器（仅当远程服务器未连接时有效）。
+        当服务器处于连接状态时，该命令会显示出服务器已连接的时间。
         该函数不应该在代码中直接调用。
+
+        使用方法:
+            - #con [[>>|>>>]#IP-preset|@proxy-preset|ip-address|proxy-address]
+
+                - >>: 直接使用指定配置连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+                - >>>: 直接使用指定配置连接到远程服务器，但该配置不会覆盖当前会话的网络配置。
+                - #IP-preset: 配置文件中保存的IP地址预设，用于直接连接到指定IP地址的远程服务器。
+                - @proxy-preset: 配置文件中保存的socks5代理服务器预设，用于通过代理服务器连接到远程服务器。
+                - ip-address: 直接指定的IP地址，用于直接连接到指定IP地址的远程服务器。
+                - proxy-address: 直接指定的socks5代理服务器地址，用于通过代理服务器连接到远程服务器。
+        
+        使用示例
+            - #con 使用保存的网络配置连接到远程服务器（仅当远程服务器未连接时有效）。
+            - #con >>#1 使用配置文件中预设的第1个IP地址作为本地地址来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>>#2 使用配置文件中预设的第2个IP地址作为本地地址和远程地址来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
+            - #con >>>@proxy1 使用配置文件中指定的proxy1作为socks5代理服务器来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
+            - #con >>@proxy1 使用配置文件中指定的proxy1作为socks5代理服务器来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>192.168.1.100 直接使用192.168.1.100作为本地地址来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>>192.168.1.100 直接使用192.168.1.100作为本地地址和远程地址来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
+            - #con >>socks5://localhost:1080 使用socks5代理服务器localhost:1080来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>>socks5://localhost:1080 使用socks5代理服务器localhost:1080来连接到远程服务器，但该配置不会覆盖当前会话的网络配置。
 
         相关命令:
             - #disconnect
@@ -2320,7 +2361,66 @@ class Session:
         """
 
         if not self.connected:
-            self.open()
+            if len(code.code) == 2:
+                self.open()
+            elif len(code.code) == 3:
+                param = code.code[2]
+                if param.startswith(">>>"):
+                    store = False
+                    param = param[3:]
+
+                elif param.startswith(">>"):
+                    store = True
+                    param = param[2:]
+
+                else:
+                    self.error("Invalid connect parameter.")
+                    return
+
+                if param.startswith("#"):
+                    # IP-preset in config
+                    param = param[1:]
+                    ip = Settings.get_preset_ip(int(param))
+                    if ip is None:
+                        self.error(f"Invalid IP-preset index {param}.")
+                        return
+                    if store:
+                        self.local_address = ip
+                        self.proxy = None
+                    self.open(local_addr = ip)
+                elif param.startswith("@"):
+                    # proxy-preset in config
+                    param = param[1:]
+                    proxy = Settings.get_preset_proxy(param)
+                    if proxy is None:
+                        self.error(f"Invalid proxy-preset index {param}.")
+                        return
+                    if store:
+                        self.local_address = None
+                        self.proxy = proxy
+                    self.open(proxy = proxy)
+                elif param.startswith("socks5://"):
+                    # IP or proxy address
+                    socks5_proxy = param
+                    if store:
+                        self.local_address = None
+                        self.proxy = socks5_proxy
+                    self.open(proxy = socks5_proxy)
+                else:
+                    from ipaddress import ip_address, AddressValueError
+                    try:
+                        ip = str(ip_address(param))
+                        if store:
+                            self.local_address = ip
+                            self.proxy = None
+                        self.open(local_addr = ip)
+                    except AddressValueError:
+                        self.error("Invalid IP address.")
+                        return
+
+            else:
+                # 不应该有更多参数。
+                pass
 
         else:
             duration = 0

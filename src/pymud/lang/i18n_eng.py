@@ -198,6 +198,7 @@ TRANSLATION = {
         "msg_mem_diff": "Top 5 changes in memory usage since last snapshot:",
         "msg_mem_top": "Top 5 locations by current memory usage:",
         "msg_mem_not_started": "Memory monitoring is not enabled, unable to show memory usage. Start it with the -m option at runtime, or run #mem on in the command line.",
+        "msg_socks5_connect": "Socks5 proxy connection successful, server-side address port used: {}:{}",
     },
     "docstring": {
         "PyMudApp": {

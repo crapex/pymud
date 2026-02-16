@@ -2,5 +2,5 @@ sphinx
 recommonmark
 sphinx-markdown-tables
 sphinx-rtd-theme
-piccolo_theme
+sphinx-immaterial
 pymud

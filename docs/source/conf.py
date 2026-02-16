@@ -20,7 +20,7 @@ source_suffix = [".rst", ".md"]
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "PyMUD 帮助文档"
+project = "PyMUD"
 copyright = "2023-2026, pymud.cn"
 author = "crapex"
 release = get_version("pymud")
@@ -34,12 +34,13 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinx_immaterial",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = []
 
-language = "zh_CN"
+language = "zh"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -47,8 +48,42 @@ language = "zh_CN"
 
 
 # html_theme = "piccolo_theme"
-# html_static_path = ["css"]
-# html_css_files = ["custom.css"]
+
 # html_permalinks_icon = "<span>#</span>"
-html_theme = "pymud"
-html_theme_path = ["../sphinx_theme"]
+
+#html_theme = "pymud"
+#html_theme_path = ["../sphinx_theme"]
+
+html_logo = "_static/icon.jpg"
+html_theme = "sphinx_immaterial"
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+html_theme_options = {
+    "repo_url": "https://github.com/crapex/pymud",
+    "repo_name": "PyMUD",
+
+    "icon": {
+        "logo": "",
+    },
+
+    "features": [
+        "navigation.expand",
+        #"navigation.tabs",
+        "navigation.sections",
+        "toc.follow",
+        "toc.sticky",
+        "search.share",
+    ],
+    "social": [
+        {
+            "icon": "fontawesome/solid/house",
+            "link": "https://www.pymud.cn",
+            "name": "官方网站",
+        },
+        {
+            "icon": "fontawesome/solid/comments",
+            "link": "https://bbs.pymud.cn",
+            "name": "官方论坛",
+        },
+    ]
+}

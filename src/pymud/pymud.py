@@ -6,6 +6,7 @@ import webbrowser
 from datetime import datetime
 from enum import Enum
 from functools import partial
+from typing import Optional
 
 from prompt_toolkit import HTML
 from prompt_toolkit.application import Application
@@ -114,6 +115,8 @@ class PyMudApp:
             for key in cfg_data.keys():
                 if key == "sessions":
                     Settings.sessions = cfg_data[key]
+                elif key == "network":
+                    Settings.network.update(cfg_data[key])
                 elif key == "client":
                     Settings.client.update(cfg_data[key])
                 elif key == "text":
@@ -239,6 +242,36 @@ class PyMudApp:
         self.logSessionBuffer = LogFileBuffer("LOGBUFFER")
 
         self.load_plugins()
+
+    def getIPList(self, incIPv6 = False):
+        import socket, ipaddress
+        ip_list = []
+        seen = set()
+        for interface in socket.getaddrinfo(socket.gethostname(), None):
+            socktype = interface[1]
+            proto = interface[2]
+            if socktype not in (socket.SOCK_STREAM, 0) and proto != socket.IPPROTO_TCP:
+                continue
+            ip = interface[4][0]
+            ip_value = ip.split("%", 1)[0]
+            try:
+                addr = ipaddress.ip_address(ip_value)
+            except ValueError:
+                continue
+            
+            if addr.is_link_local or addr.is_loopback:
+                continue
+
+            if addr.version == 6:
+                if not incIPv6:
+                    continue
+
+            if ip_value in seen:
+                continue
+            seen.add(ip_value)
+            ip_list.append(ip_value)
+        return ip_list
+
 
     def create_background_task(self, coro):
         "创建后台任务。后台任务在应用退出前，必须全部等待其完成，用于清理和释放对象、资源。"
@@ -589,16 +622,44 @@ class PyMudApp:
         )
         menus.append(MenuItem("-", disabled=True))
 
+        route_list = []
+        ipv6_enabled = Settings.network.get("ipv6", False)
+        local_addr   = Settings.network.get("local_addr", "auto")
+        if local_addr == "auto":
+            ips = self.getIPList(ipv6_enabled)
+            route_list.extend(ips)
+            Settings.network["ip_list"] = ips
+        elif local_addr == "preset":
+            route_list.extend(Settings.network.get("ip_list", []))
+
+        proxy_enabled = Settings.network.get("proxy", False)
+        proxies = Settings.network.get("proxies", {})
+
         ss = Settings.sessions
 
         for key, site in ss.items():
             menu = MenuItem(key)
             for name in site["chars"].keys():
 
-                def _make_handler(key=key, name=name) -> None:
+                def _make_handler(key = key, name = name) -> None:
                     self._quickHandleSession(key, name)
 
                 sub = MenuItem(name, handler=_make_handler)
+
+                if local_addr != "disabled":
+                    for ip in route_list:
+                        def _make_handler_with_ipaddress(key = key, name = name, ip = ip) -> None:
+                            self._quickHandleSession(key, name, local_addr = ip)
+
+                        sub.children.append(MenuItem(f"IP: {ip}", handler=_make_handler_with_ipaddress)) 
+
+                if proxy_enabled:
+                    for _, proxy in proxies.items():
+                        def _make_handler_with_proxy(key = key, name = name, proxy = proxy) -> None:
+                            self._quickHandleSession(key, name, proxy = proxy)
+                        
+                        sub.children.append(MenuItem(f"PROXY: {proxy}", handler = _make_handler_with_proxy))
+
                 menu.children.append(sub)
             menus.append(menu)
 
@@ -826,6 +887,8 @@ class PyMudApp:
         after_connect=None,
         scripts=None,
         userid=None,
+        local_addr=None,
+        proxy=None,
     ):
         """
         创建一个会话。菜单或者#session命令均调用本函数执行创建会话。
@@ -837,13 +900,18 @@ class PyMudApp:
         :param after_connect: 连接后要向服务器发送的内容，用来实现自动登录功能
         :param scripts: 要加载的脚本清单
         :param userid: 自动登录的ID(获取自cfg文件中的定义，绑定到菜单)，将以该值在该会话中创建一个名为id的变量
+        :param local_addr: 本地IP地址，用于绑定到会话
+        :param proxy: Socks5代理服务器地址
         """
         result = False
         encoding = encoding or Settings.server["default_encoding"]
 
         if name not in self.sessions.keys():
             session = Session(
-                self, name, host, port, encoding, after_connect, scripts=scripts
+                self, name, host, port, encoding, after_connect,
+                local_addr = local_addr,
+                proxy = proxy,
+                scripts = scripts,
             )
             session.setVariable("id", userid)
             self.sessions[name] = session
@@ -1330,7 +1398,7 @@ class PyMudApp:
         self.status_message = msg
         self.app.invalidate()
 
-    def _quickHandleSession(self, group, name):
+    def _quickHandleSession(self, group, name, local_addr: Optional[str] = None, proxy: Optional[str] = None):
         """
         根据指定的组名和会话角色名，从Settings内容，创建一个会话
         """
@@ -1369,7 +1437,9 @@ class PyMudApp:
                             sess_scripts.extend(session_script)
 
                 self.create_session(
-                    name, host, port, encoding, after_connect, sess_scripts, charinfo[0]
+                    name, host, port, encoding, after_connect, sess_scripts, charinfo[0],
+                    local_addr=local_addr,
+                    proxy=proxy,
                 )
                 handled = True
 
@@ -1381,10 +1451,10 @@ class PyMudApp:
         该函数不应该在代码中直接调用。
 
         使用:
-            - #session {name} {host} {port} {encoding}
+            - #session {name} {host} {port} {encoding} [>>#IP-preset|@proxy-preset|ip-address|proxy-address}
             - 当不指定 Encoding: 时, 默认使用utf-8编码
             - 可以直接使用 #{名称} 切换会话和操作会话命令
-
+            - 可以在参数最后增加以 >> 开头的IP预设或代理预设，来指定会话的本地IP地址或代理服务器，使用方法同 #connect 命令。唯一差异是，#session 命令创建的网络配置一定会被保存到会话配置中。
             - #session {group}.{name}
             - 相当于直接点击菜单{group}下的{name}菜单来创建会话. 当该会话已存在时，切换到该会话
 
@@ -1413,6 +1483,7 @@ class PyMudApp:
                 通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。若该会话存在，则切换到该会话
 
         相关命令:
+            - #connect
             - #close
             - #exit
 
@@ -1420,11 +1491,50 @@ class PyMudApp:
 
         nothandle = True
         errmsg = "错误的#session命令"
+
+        local_addr = None
+        proxy = None
+
+        if len(args) > 1:
+            param = args[-1]
+
+            if param.startswith(">>"):
+                args = args[:-1]
+                param = param[2:]
+
+                if param.startswith("#"):
+                    # IP-preset in config
+                    param = param[1:]
+                    ip = Settings.get_preset_ip(int(param))
+                    if ip is None:
+                        errmsg = f"Invalid IP-preset index {param}."
+
+                    local_addr = ip
+                    
+                elif param.startswith("@"):
+                    # proxy-preset in config
+                    param = param[1:]
+                    proxy = Settings.get_preset_proxy(param)
+                    if proxy is None:
+                        errmsg = f"Invalid proxy-preset key {param}."
+
+                elif param.startswith("socks5://"):
+                    # IP or proxy address
+                    proxy = param
+
+                else:
+                    from ipaddress import ip_address, AddressValueError
+                    try:
+                        ip = str(ip_address(param))
+                        local_addr = ip
+                    except AddressValueError:
+                        errmsg = f"Invalid IP address: {param}."
+
         if len(args) == 1:
             host_session = args[0]
             if "." in host_session:
                 group, name = host_session.split(".")
-                nothandle = not self._quickHandleSession(group, name)
+                nothandle = not self._quickHandleSession(group, name, local_addr, proxy)
 
             else:
                 errmsg = Settings.gettext("msg_cmd_session_error")
@@ -1439,7 +1549,7 @@ class PyMudApp:
                 session_encoding = Settings.server["default_encoding"]
 
             self.create_session(
-                session_name, session_host, session_port, session_encoding
+                session_name, session_host, session_port, session_encoding, local_addr, proxy
             )
             nothandle = False
 

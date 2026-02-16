@@ -1,6 +1,10 @@
-import datetime
 import logging
+import re
+from datetime import datetime
+from socket import socket
+from ipaddress import ip_address, IPv4Address, IPv6Address, AddressValueError
 from asyncio import BaseTransport, Protocol
+from typing import Tuple
 
 from .settings import Settings
 
@@ -179,8 +183,8 @@ class MudClientProtocol(Protocol):
 
     def connection_made(self, transport: BaseTransport) -> None:
         self._transport = transport  # 保存传输
-        self._when_connected = datetime.datetime.now()  # 连接建立时间
-        self._last_received = datetime.datetime.now()  # 最后收到数据时间
+        self._when_connected = datetime.now()  # 连接建立时间
+        self._last_received = datetime.now()  # 最后收到数据时间
 
         # self.session.set_transport(self._transport)                         # 将传输赋值给session
 
@@ -202,8 +206,8 @@ class MudClientProtocol(Protocol):
         # self._waiter_connected.set_result(True)
 
     def connection_lost(self, exc) -> None:
-        if not self.connected:
-            return
+        # if not self.connected:
+        #     return
 
         self.connected = False
 
@@ -230,7 +234,7 @@ class MudClientProtocol(Protocol):
         self.connection_lost(None)
 
     def data_received(self, data: bytes) -> None:
-        self._last_received = datetime.datetime.now()
+        self._last_received = datetime.now()
 
         for byte in data:
             byte = bytes(
@@ -343,12 +347,12 @@ class MudClientProtocol(Protocol):
     @property
     def duration(self):
         """自客户端连接以来的总时间，以秒为单位，浮点数表示"""
-        return (datetime.datetime.now() - self._when_connected).total_seconds()
+        return (datetime.now() - self._when_connected).total_seconds()
 
     @property
     def idle(self):
         """自收到上一个服务器发送数据以来的总时间，以秒为单位，浮点数表示"""
-        return (datetime.datetime.now() - self._last_received).total_seconds()
+        return (datetime.now() - self._last_received).total_seconds()
 
     # public protocol methods
     def __repr__(self):
@@ -1116,3 +1120,156 @@ class MudClientProtocol(Protocol):
             self.log.warning(
                 f"收到服务器的未处理的MXP协商: IAC {name_command(cmd)} MXP"
             )
+
+class Socks5ProxyError(Exception):
+    """
+    SOCKS5代理异常基类
+    """
+    ERR_INVALID_PROXY_FORMAT = 1001
+    ERR_AUTH_REQUIRED_NO_CREDENTIALS = 1002
+    ERR_AUTH_FAILED = 1003
+    ERR_SERVER_UNKNOWN_ERROR = 1004
+    
+    ERR_SERVER_GENERAL_FAILURE = 1
+    ERR_SERVER_CONNECTION_NOT_ALLOWED = 2
+    ERR_SERVER_NETWORK_UNREACHABLE = 3
+    ERR_SERVER_HOST_UNREACHABLE = 4
+    ERR_SERVER_CONNECTION_REFUSED = 5
+    ERR_SERVER_TTL_EXPIRED = 6
+    ERR_SERVER_COMMAND_NOT_SUPPORTED = 7
+    ERR_SERVER_ADDRESS_TYPE_NOT_SUPPORTED = 8
+    
+    ERROR_MESSAGES = {
+        ERR_INVALID_PROXY_FORMAT: "无效的SOCKS5代理格式: {proxy}",
+        ERR_AUTH_REQUIRED_NO_CREDENTIALS: "服务器要求用户名密码认证，但未提供认证信息",
+        ERR_AUTH_FAILED: "SOCKS5代理用户名密码认证失败",
+        ERR_SERVER_UNKNOWN_ERROR: "未知错误 (状态码: {status_code})",
+        ERR_SERVER_GENERAL_FAILURE: "SOCKS服务出现错误",
+        ERR_SERVER_CONNECTION_NOT_ALLOWED: "不允许的连接",
+        ERR_SERVER_NETWORK_UNREACHABLE: "找不到网络",
+        ERR_SERVER_HOST_UNREACHABLE: "找不到主机",
+        ERR_SERVER_CONNECTION_REFUSED: "连接被拒绝",
+        ERR_SERVER_TTL_EXPIRED: "TTL超时",
+        ERR_SERVER_COMMAND_NOT_SUPPORTED: "不支持的CMD",
+        ERR_SERVER_ADDRESS_TYPE_NOT_SUPPORTED: "不支持的ATYP",
+    }
+    
+    def __init__(self, error_code: int, **kwargs):
+        self.error_code = error_code
+        self.kwargs = kwargs
+        message = self.ERROR_MESSAGES.get(error_code, "未知错误代码: {error_code}").format(
+            error_code=error_code, **kwargs
+        )
+        super().__init__(message)
+
+
+class Socks5Proxy:
+    """
+    SOCKS5 代理类
+    """
+    def __init__(self, proxy: str, *args, **kwargs):
+        """
+        初始化 SOCKS5 代理
+        :param proxy: 代理地址，格式为 "socks5://host:port" 或 "socks5://user:password@host:port"
+        """
+        
+        pattern = r'^socks5://(?:(.+?):(.+?)@)?(.+?):(\d+)$'
+        match = re.match(pattern, proxy)
+        
+        if not match:
+            raise Socks5ProxyError(Socks5ProxyError.ERR_INVALID_PROXY_FORMAT, proxy=proxy)
+        
+        username, password, host, port = match.groups()
+        
+        self.proxy_host = host
+        self.proxy_port = int(port)
+        self.requires_auth = username is not None and password is not None
+        self.username = username if self.requires_auth else None
+        self.password = password if self.requires_auth else None
+
+    def connect(self, host: str, port: int) -> Tuple[socket, Tuple[str, int]]:
+        """
+        首先连接代理并执行认证，认证成功后通过Socks5代理连接到目标主机
+        :param host: 目标主机地址
+        :param port: 目标主机端口
+        :return: 一个元组，包含连接到目标主机的socket对象和socks5代理返回的使用的地址/IP和端口
+        """
+        s = socket()
+        s.connect((self.proxy_host, self.proxy_port))
+        try:
+            # 1. 协商认证模式
+            s.send(bytes([5,2,0,2]))
+            resp1 = s.recv(2)
+            if resp1[1] == 0:
+                pass
+            elif resp1[1] == 2:
+                if not self.requires_auth:
+                    raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS)
+                
+                auth_data = bytearray([1])
+                auth_data.append(len(self.username))
+                auth_data.extend(self.username.encode('utf-8'))
+                auth_data.append(len(self.password))
+                auth_data.extend(self.password.encode('utf-8'))
+                s.send(auth_data)
+                
+                auth_resp = s.recv(2)
+                if auth_resp[1] != 0:
+                    raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_FAILED)
+
+            data = bytearray([5,1,0])
+            data.extend(self.get_hostport_bytes(host, port))
+            s.send(data)
+
+            response = s.recv(4)
+            
+            status_code = response[1]
+            if status_code == 0:
+                pass
+            elif status_code in Socks5ProxyError.ERROR_MESSAGES.keys():
+                raise Socks5ProxyError(status_code)
+            else:
+                raise Socks5ProxyError(Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR, status_code=status_code)
+
+            if response[3] == 1:
+                # ipv4
+                ip_port = s.recv(6)
+                ipaddr  = str(ip_address(ip_port[:-2]))
+                port    = int.from_bytes(ip_port[-2:])
+            elif response[3] == 4:
+                # ipv6
+                ip_port = s.recv(18)
+                ipaddr  = str(ip_address(ip_port[:-2]))
+                port    = int.from_bytes(ip_port[-2:])
+            elif response[3] == 3:
+                # host
+                host_len = int.from_bytes(s.recv(1))
+                ipaddr   = s.recv(host_len).decode('utf-8')
+                port    = int.from_bytes(s.recv(2), byteorder='big')
+
+            return s, (ipaddr, port)
+
+        except Exception as e:
+            self.info(f"连接发生错误，错误信息为： {e}")
+
+    def get_hostport_bytes(self, host: str, port: int) -> bytearray:
+        data = bytearray()
+        try:
+            addr = IPv4Address(host)
+            data.append(1)
+            data.extend(addr.packed)
+        except AddressValueError:
+            try:
+                addr = IPv6Address(host)
+                data.append(4)
+                data.extend(addr.packed)
+            except AddressValueError:
+                data.append(3)
+                data.extend(len(host).to_bytes(1, byteorder='big'))
+                data.extend(host.encode("utf-8"))
+
+        data.extend(int.to_bytes(port, 2, byteorder='big'))
+        return data
+
+
+        

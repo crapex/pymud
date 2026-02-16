@@ -198,6 +198,7 @@ TRANSLATION = {
         "msg_mem_diff": "与上次内存占用对比，变化最大的5处为:",
         "msg_mem_top": "内存占用最大的5处为: ",
         "msg_mem_not_started": "内存监控未启动，无法显示内存占用情况!请在运行时增加 -m 参数启动内存监控，或者在命令行执行 #mem on 启动内存监控",
+        "msg_socks5_connect": "Socks5代理连接成功, 服务器端使用的地址端口为 {}:{}",
     },
     "docstring": {
         "Session": {

@@ -6,6 +6,8 @@ import os
 import platform
 import shutil
 import sys
+import socket
+import ipaddress
 import tracemalloc
 from pathlib import Path
 
@@ -14,6 +16,20 @@ from .settings import Settings
 
 CFG_TEMPLATE = {
     "language": "chs",  # 语言设置，默认为简体中文
+    
+    "network" : {
+        "ipv6": False,           # 是否支持IPv6（仅影响界面菜单显示）
+        "local_addr": "auto",    # 是否支持指定本地IP地址，可以设置 "disabled" | "auto" | "preset"
+        "ip_list": [             # 当指定 local_addr 为 "preset" 时，这里可以设置多个IP地址
+            # "192.168.1.100",
+            # "10.0.0.100",
+        ],
+        "proxy": False,          # 是否启用代理
+        "proxies": {
+            # "ubuntu": "socks5://user:password@192.168.0.100:1080"
+        },
+    },
+
     "client": {
         "cursor": "BLINKING_BEAM",  # 光标形状
         "buffer_lines": 5000,  # 保留缓冲行数
@@ -35,6 +51,7 @@ CFG_TEMPLATE = {
         "status_height": 5,  # 下侧状态栏的高度
         "split_ratio": 0.5,  # 分屏比例
     },
+    
     "sessions": {
         "pkuxkx": {
             "host": "mud.pkuxkx.net",
