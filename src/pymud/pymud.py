@@ -654,11 +654,11 @@ class PyMudApp:
                         sub.children.append(MenuItem(f"IP: {ip}", handler=_make_handler_with_ipaddress)) 
 
                 if proxy_enabled:
-                    for _, proxy in proxies.items():
+                    for proxy_key, proxy in proxies.items():
                         def _make_handler_with_proxy(key = key, name = name, proxy = proxy) -> None:
                             self._quickHandleSession(key, name, proxy = proxy)
                         
-                        sub.children.append(MenuItem(f"PROXY: {proxy}", handler = _make_handler_with_proxy))
+                        sub.children.append(MenuItem(f"PROXY: {proxy_key}", handler = _make_handler_with_proxy))
 
                 menu.children.append(sub)
             menus.append(menu)
@@ -1067,6 +1067,10 @@ class PyMudApp:
                     new_sess = list(self.sessions.keys())[0]
                     self.activate_session(new_sess)
                     # self.set_status(f"当前会话已切换为 {self.current_session.name}")
+
+                else:
+                    # 若不再有会话，清空下面的session_status的信息
+                    self.statusView.text = ""
 
                 import gc
 
@@ -1480,7 +1484,11 @@ class PyMudApp:
                 使名称为newstart的会话执行give miui gold指令，但不切换到该会话
 
             ``#session pkuxkx.newstart``
-                通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。若该会话存在，则切换到该会话
+                通过指定快捷配置创建会话，相当于点击 世界->pkuxkx->newstart 菜单创建会话。
+
+            ``#session pkuxkx.newstart >>socks5://localhost:1080``
+                使用socks5://localhost:1080作为代理服务器，以及快捷配置 pkuxkx.newstart 创建会话。
+
 
         相关命令:
             - #connect
@@ -1490,7 +1498,7 @@ class PyMudApp:
         """
 
         nothandle = True
-        errmsg = "错误的#session命令"
+        errmsg = Settings.gettext("msg_session_cmd_error")
 
         local_addr = None
         proxy = None
@@ -1503,23 +1511,20 @@ class PyMudApp:
                 param = param[2:]
 
                 if param.startswith("#"):
-                    # IP-preset in config
                     param = param[1:]
                     ip = Settings.get_preset_ip(int(param))
                     if ip is None:
-                        errmsg = f"Invalid IP-preset index {param}."
+                        errmsg = Settings.gettext("msg_invalid_ip_preset", param)
 
                     local_addr = ip
                     
                 elif param.startswith("@"):
-                    # proxy-preset in config
                     param = param[1:]
                     proxy = Settings.get_preset_proxy(param)
                     if proxy is None:
-                        errmsg = f"Invalid proxy-preset key {param}."
+                        errmsg = Settings.gettext("msg_invalid_proxy_preset", param)
 
                 elif param.startswith("socks5://"):
-                    # IP or proxy address
                     proxy = param
 
                 else:
@@ -1528,7 +1533,7 @@ class PyMudApp:
                         ip = str(ip_address(param))
                         local_addr = ip
                     except AddressValueError:
-                        errmsg = f"Invalid IP address: {param}."
+                        errmsg = Settings.gettext("msg_invalid_ip_address", param)
 
         if len(args) == 1:
             host_session = args[0]

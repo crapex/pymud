@@ -199,6 +199,11 @@ TRANSLATION = {
         "msg_mem_top": "Top 5 locations by current memory usage:",
         "msg_mem_not_started": "Memory monitoring is not enabled, unable to show memory usage. Start it with the -m option at runtime, or run #mem on in the command line.",
         "msg_socks5_connect": "Socks5 proxy connection successful, server-side address port used: {}:{}",
+        "msg_session_cmd_error": "Invalid #session command",
+        "msg_invalid_ip_preset": "Invalid IP-preset index: {0}",
+        "msg_invalid_proxy_preset": "Invalid proxy-preset key: {0}",
+        "msg_invalid_ip_address": "Invalid IP address: {0}",
+        "msg_invalid_connect_param": "Invalid connect parameter.",
     },
     "docstring": {
         "PyMudApp": {
@@ -207,10 +212,10 @@ TRANSLATION = {
         This function should not be called directly in the code.
 
         Usage:
-            - #session {name} {host} {port} {encoding}
+            - #session {name} {host} {port} {encoding} [>>#IP-preset|@proxy-preset|ip-address|proxy-address]
             - When Encoding is not specified, the default encoding is utf-8.
             - You can directly use #{name} to switch sessions and operate session commands.
-
+            - You can add an IP preset or proxy preset starting with >> at the end of the parameters to specify the local IP address or proxy server for the session. The usage is the same as the #connect command. The only difference is that the network configuration created by the #session command will definitely be saved to the session configuration.
             - #session {group}.{name}
             - This is equivalent to directly clicking the {name} menu under the {group} menu to create a session. If the session already exists, switch to that session.
 
@@ -236,15 +241,52 @@ TRANSLATION = {
                 Make the session named newstart execute the "give miui gold" command without switching to that session.
 
             ``#session pkuxkx.newstart``
-                Create a session through the specified shortcut configuration, which is equivalent to clicking the World -> pkuxkx -> newstart menu to create a session. If the session exists, switch to that session.
+                Create a session through the specified shortcut configuration, which is equivalent to clicking the World -> pkuxkx -> newstart menu to create a session.
+
+            ``#session pkuxkx.newstart >>socks5://localhost:1080``
+                Create a session using socks5://localhost:1080 as the proxy server with the shortcut configuration pkuxkx.newstart.
 
         Related commands:
+            - #connect
             - #close
             - #exit
 
         """,
         },
         "Session": {
+            "handle_connect": """
+        The execution function of the embedded command #connect / #con, used to connect to a remote server (only effective when the remote server is not connected).
+        When the server is connected, this command will display the connection duration.
+        This function should not be called directly in the code.
+
+        Usage:
+            - #con [[>>|>>>]#IP-preset|@proxy-preset|ip-address|proxy-address]
+
+                - >>: Use the specified configuration to connect to the remote server directly, and overwrite the current session's network configuration with this configuration.
+                - >>>: Use the specified configuration to connect to the remote server directly, but this configuration will not overwrite the current session's network configuration.
+                - #IP-preset: The IP address preset saved in the configuration file or the sequence number of the automatically obtained IP address list (starting from 1), used to connect directly to the remote server at the specified IP address.
+                - #0: When specifying #0, skip all IP or proxy presets and use the local default network to connect to the remote server.
+                - @proxy-preset: The socks5 proxy server preset saved in the configuration file, used to connect to the remote server through a proxy server.
+                - ip-address: The directly specified IP address, used to connect directly to the remote server at the specified IP address.
+                - proxy-address: The directly specified socks5 proxy server address, used to connect to the remote server through a proxy server.
+        
+        Examples:
+            - #con: Connect to the remote server using the saved network configuration (only effective when the remote server is not connected).
+            - #con >>0: Use the local default network to connect to the remote server directly, and overwrite the current session's network configuration with this configuration.
+            - #con >>#1: Use the 1st IP address as the local address to connect to the remote server, and overwrite the current session's network configuration with this configuration.
+            - #con >>>#2: Use the 2nd IP address as the local address to connect to the remote server, this configuration will not overwrite the current session's network configuration.
+            - #con >>@proxy1: Use proxy1 specified in the configuration file as the socks5 proxy server to connect to the remote server, and overwrite the current session's network configuration with this configuration.
+            - #con >>>@proxy1: Use proxy1 specified in the configuration file as the socks5 proxy server to connect to the remote server, this configuration will not overwrite the current session's network configuration.
+            - #con >>192.168.1.100: Use 192.168.1.100 directly as the local address to connect to the remote server, and overwrite the current session's network configuration with this configuration.
+            - #con >>>192.168.1.100: Use 192.168.1.100 directly as the local address to connect to the remote server, this configuration will not overwrite the current session's network configuration.
+            - #con >>socks5://localhost:1080: Use the socks5 proxy server localhost:1080 to connect to the remote server, and overwrite the current session's network configuration with this configuration.
+            - #con >>>socks5://localhost:1080: Use the socks5 proxy server localhost:1080 to connect to the remote server, but this configuration will not overwrite the current session's network configuration.
+
+        Related commands:
+            - #disconnect
+            - #close
+            - #exit
+        """,
             "handle_exit": """
         The execution function of the embedded command #exit, used to exit the `PyMudApp` application.
         This function should not be called directly in the code.

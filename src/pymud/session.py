@@ -2338,17 +2338,19 @@ class Session:
 
                 - >>: 直接使用指定配置连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
                 - >>>: 直接使用指定配置连接到远程服务器，但该配置不会覆盖当前会话的网络配置。
-                - #IP-preset: 配置文件中保存的IP地址预设，用于直接连接到指定IP地址的远程服务器。
+                - #IP-preset: 配置文件中保存的IP地址预设或自动获取的IP地址列表序号(从1开始)，用于直接连接到指定IP地址的远程服务器。
+                - #0: 指定#0时，跳过所有IP或代理预设，直接使用本机的默认网络来连接到远程服务器。
                 - @proxy-preset: 配置文件中保存的socks5代理服务器预设，用于通过代理服务器连接到远程服务器。
                 - ip-address: 直接指定的IP地址，用于直接连接到指定IP地址的远程服务器。
                 - proxy-address: 直接指定的socks5代理服务器地址，用于通过代理服务器连接到远程服务器。
         
         使用示例
             - #con 使用保存的网络配置连接到远程服务器（仅当远程服务器未连接时有效）。
-            - #con >>#1 使用配置文件中预设的第1个IP地址作为本地地址来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
-            - #con >>>#2 使用配置文件中预设的第2个IP地址作为本地地址和远程地址来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
-            - #con >>>@proxy1 使用配置文件中指定的proxy1作为socks5代理服务器来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
+            - #con >>0 直接使用本机的默认网络来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>#1 使用第1个IP地址作为本地地址来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>>#2 使用第2个IP地址作为本地地址来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
             - #con >>@proxy1 使用配置文件中指定的proxy1作为socks5代理服务器来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
+            - #con >>>@proxy1 使用配置文件中指定的proxy1作为socks5代理服务器来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
             - #con >>192.168.1.100 直接使用192.168.1.100作为本地地址来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
             - #con >>>192.168.1.100 直接使用192.168.1.100作为本地地址和远程地址来连接到远程服务器，该配置不会覆盖当前会话的网络配置。
             - #con >>socks5://localhost:1080 使用socks5代理服务器localhost:1080来连接到远程服务器，并使用该配置覆盖当前会话的网络配置。
@@ -2374,33 +2376,36 @@ class Session:
                     param = param[2:]
 
                 else:
-                    self.error("Invalid connect parameter.")
+                    self.error(Settings.gettext("msg_invalid_connect_param"))
                     return
 
                 if param.startswith("#"):
-                    # IP-preset in config
                     param = param[1:]
-                    ip = Settings.get_preset_ip(int(param))
-                    if ip is None:
-                        self.error(f"Invalid IP-preset index {param}.")
-                        return
-                    if store:
-                        self.local_address = ip
-                        self.proxy = None
-                    self.open(local_addr = ip)
+                    if param == "0":
+                        if store:
+                            self.local_address = None
+                            self.proxy = None
+                        self.open()
+                    else:
+                        ip = Settings.get_preset_ip(int(param))
+                        if ip is None:
+                            self.error(Settings.gettext("msg_invalid_ip_preset", param))
+                            return
+                        if store:
+                            self.local_address = ip
+                            self.proxy = None
+                        self.open(local_addr = ip)
                 elif param.startswith("@"):
-                    # proxy-preset in config
                     param = param[1:]
                     proxy = Settings.get_preset_proxy(param)
                     if proxy is None:
-                        self.error(f"Invalid proxy-preset index {param}.")
+                        self.error(Settings.gettext("msg_invalid_proxy_preset", param))
                         return
                     if store:
                         self.local_address = None
                         self.proxy = proxy
                     self.open(proxy = proxy)
                 elif param.startswith("socks5://"):
-                    # IP or proxy address
                     socks5_proxy = param
                     if store:
                         self.local_address = None
@@ -2415,7 +2420,7 @@ class Session:
                             self.proxy = None
                         self.open(local_addr = ip)
                     except AddressValueError:
-                        self.error("Invalid IP address.")
+                        self.error(Settings.gettext("msg_invalid_ip_address", param))
                         return
 
             else:
