@@ -1196,61 +1196,58 @@ class Socks5Proxy:
         """
         s = socket()
         s.connect((self.proxy_host, self.proxy_port))
-        try:
-            # 1. 协商认证模式
-            s.send(bytes([5,2,0,2]))
-            resp1 = s.recv(2)
-            if resp1[1] == 0:
-                pass
-            elif resp1[1] == 2:
-                if not self.requires_auth:
-                    raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS)
-                
-                auth_data = bytearray([1])
-                auth_data.append(len(self.username))
-                auth_data.extend(self.username.encode('utf-8'))
-                auth_data.append(len(self.password))
-                auth_data.extend(self.password.encode('utf-8'))
-                s.send(auth_data)
-                
-                auth_resp = s.recv(2)
-                if auth_resp[1] != 0:
-                    raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_FAILED)
 
-            data = bytearray([5,1,0])
-            data.extend(self.get_hostport_bytes(host, port))
-            s.send(data)
-
-            response = s.recv(4)
+        # 1. 协商认证模式
+        s.send(bytes([5,2,0,2]))
+        resp1 = s.recv(2)
+        if resp1[1] == 0:
+            pass
+        elif resp1[1] == 2:
+            if not self.requires_auth:
+                raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS)
             
-            status_code = response[1]
-            if status_code == 0:
-                pass
-            elif status_code in Socks5ProxyError.ERROR_MESSAGES.keys():
-                raise Socks5ProxyError(status_code)
-            else:
-                raise Socks5ProxyError(Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR, status_code=status_code)
+            auth_data = bytearray([1])
+            auth_data.append(len(self.username))
+            auth_data.extend(self.username.encode('utf-8'))
+            auth_data.append(len(self.password))
+            auth_data.extend(self.password.encode('utf-8'))
+            s.send(auth_data)
+            
+            auth_resp = s.recv(2)
+            if auth_resp[1] != 0:
+                raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_FAILED)
 
-            if response[3] == 1:
-                # ipv4
-                ip_port = s.recv(6)
-                ipaddr  = str(ip_address(ip_port[:-2]))
-                port    = int.from_bytes(ip_port[-2:])
-            elif response[3] == 4:
-                # ipv6
-                ip_port = s.recv(18)
-                ipaddr  = str(ip_address(ip_port[:-2]))
-                port    = int.from_bytes(ip_port[-2:])
-            elif response[3] == 3:
-                # host
-                host_len = int.from_bytes(s.recv(1))
-                ipaddr   = s.recv(host_len).decode('utf-8')
-                port    = int.from_bytes(s.recv(2), byteorder='big')
+        data = bytearray([5,1,0])
+        data.extend(self.get_hostport_bytes(host, port))
+        s.send(data)
 
-            return s, (ipaddr, port)
+        response = s.recv(4)
+        
+        status_code = response[1]
+        if status_code == 0:
+            pass
+        elif status_code in Socks5ProxyError.ERROR_MESSAGES.keys():
+            raise Socks5ProxyError(status_code)
+        else:
+            raise Socks5ProxyError(Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR, status_code=status_code)
 
-        except Exception as e:
-            self.info(f"连接发生错误，错误信息为： {e}")
+        if response[3] == 1:
+            # ipv4
+            ip_port = s.recv(6)
+            ipaddr  = str(ip_address(ip_port[:-2]))
+            port    = int.from_bytes(ip_port[-2:])
+        elif response[3] == 4:
+            # ipv6
+            ip_port = s.recv(18)
+            ipaddr  = str(ip_address(ip_port[:-2]))
+            port    = int.from_bytes(ip_port[-2:])
+        elif response[3] == 3:
+            # host
+            host_len = int.from_bytes(s.recv(1))
+            ipaddr   = s.recv(host_len).decode('utf-8')
+            port    = int.from_bytes(s.recv(2), byteorder='big')
+
+        return s, (ipaddr, port)
 
     def get_hostport_bytes(self, host: str, port: int) -> bytearray:
         data = bytearray()
