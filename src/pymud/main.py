@@ -274,7 +274,7 @@ def startApp(args):
     app = PyMudApp(cfg_data)
 
     # 内存追踪默认按文件名，待各json加载完毕，PyMudApp对象创建之后再启动
-    setattr(app, "._tracemalloc_mode", "filename")
+    setattr(app, "_tracemalloc_mode", "filename")
     if args.tracemalloc:
         setattr(app, "_tracemalloc", True)
         tracemalloc.start()

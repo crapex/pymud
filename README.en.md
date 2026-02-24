@@ -39,7 +39,57 @@
 
 ## UPDATE HISTORIES
 
-0.22.3 (2026-01-18)
+### 0.22.4 (2026-02-24)
+
++ New Features:
+    - When a device has multiple network adapters and IP addresses, you can specify which local IP to use for the connection.
+    - Added direct SOCKS5 proxy connection support, including both no-auth proxies (for example, a SOCKS5 proxy created by `ssh -D`) and username/password authenticated proxies.
+    - The two capabilities above are implemented through the new `network` configuration dictionary, and can also be specified directly in `#session` and `#connect`. Usage is shown below.
++ Bug Fixes:
+    - Fixed incorrect display of function name, file name, and line number in error location output.
+    - Fixed a bug in memory monitor startup logic that could prevent memory monitoring from working.
++ Other Changes:
+    - Further cleaned up all code style issues reported by basedpyright and adjusted code to better align with the coding standard.
+    - The default value of `remain_last_input` is now `True`.
+    - Confirmed the new `SessionBuffer` implementation is stable and removed the old implementation.
+    - Removed all unnecessary imports.
+    - When all sessions are closed, the bottom status window is now cleared.
+
+#### Multi-IP / SOCKS5 proxy connection usage
+
++ First, add a `network` field in `pymud.cfg` as shown below (remove comments if you copy it directly):
+
+    ```jsonc
+    {
+        // Put this inside the root object
+        "network" : {
+            "ipv6": false,              // Whether to enable IPv6, accepts true|false, default false. This only affects auto mode (whether IPv6 addresses are auto-discovered).
+            "local_addr": "auto",       // Local bind IP, accepts auto|preset. Default auto (discover IPs from all local network devices). When set to preset, IPs in ip_list will be used.
+            "ip_list": [                // Required when local_addr is preset; used to specify which IP can be selected for connection.
+                "192.168.1.100",
+                "192.168.2.100",
+            ],
+            "proxy": true,              // Whether to enable proxy, accepts true|false, default false.
+            "proxies": {                // SOCKS5 proxy list; supports multiple proxies, including no-auth and username/password-auth proxies.
+                "proxy1": "socks5://192.168.6.66:1080",                         // no-auth proxy identified as proxy1
+                "proxy2": "socks5://user:password@yoursock5proxy.site:1080",    // username/password proxy identified as proxy2
+            }
+        }
+    }
+    ```
+
++ After configuration is completed, when PyMUD starts, each character under the World menu will have a submenu. IP entries and proxy entries are added as submenu items. You can connect either from the character menu itself or from those submenu items.
++ Clicking the character menu itself still uses the system default network interface.
++ Clicking an IP item in the character submenu binds to that specific local IP. For example, if one machine has two NICs (e.g., Telecom and Unicom), even when the OS default route uses NIC-1, you can still connect via NIC-2 by binding its IP.
++ Clicking a proxy item in the character submenu connects through that proxy. For example, if `proxy1` is configured, clicking `proxy1` uses that proxy for the connection.
++ You can also specify IP/proxy in `#session` / `#connect`. Syntax is the same for both: append `>>` followed by the selector at the end. Note: there must be no space after `>>`.
+    + `#session pkuxkx.newstart >>#2`             # use the 2nd IP (index starts from 1) from `ip_list` (when `local_addr=preset`) or from the auto-discovered IP list shown in menu
+    + `#session pkuxkx.newstart >>@proxy1`        # `@` means using proxy `proxy1` defined in `proxies`
+    + `#con >>>#1`                                # after a session is disconnected (for example with `#dis`), reconnect temporarily using the 1st IP
+    + `#con >>socks5://192.168.6.67:1080`         # you can also directly specify a new SOCKS5 proxy in command (IP can only be selected by index, not by manual IP literal)
++ `#con` also supports three greater-than signs `>>>`. The difference is: with `>>`, the specified network setting becomes the new default for the current session; with `>>>`, it is only used this time and does not overwrite the session default.
+
+### 0.22.3 (2026-01-18)
 
 + Bug Fixes:
     - Removed unnecessary imports from various code files. Verified to work normally with Python 3.8.

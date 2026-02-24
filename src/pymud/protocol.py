@@ -1,10 +1,11 @@
+import asyncio
 import logging
 import re
 from datetime import datetime
 from socket import socket
 from ipaddress import ip_address, IPv4Address, IPv6Address, AddressValueError
-from asyncio import BaseTransport, Protocol
-from typing import Tuple
+from asyncio import BaseTransport, Protocol, Transport
+from typing import Optional, Tuple, cast
 
 from .settings import Settings
 
@@ -1184,8 +1185,8 @@ class Socks5Proxy:
         self.proxy_host = host
         self.proxy_port = int(port)
         self.requires_auth = username is not None and password is not None
-        self.username = username if self.requires_auth else None
-        self.password = password if self.requires_auth else None
+        self.username: Optional[str] = username if self.requires_auth else None
+        self.password: Optional[str] = password if self.requires_auth else None
 
     def connect(self, host: str, port: int) -> Tuple[socket, Tuple[str, int]]:
         """
@@ -1206,11 +1207,14 @@ class Socks5Proxy:
             if not self.requires_auth:
                 raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS)
             
+            username = self.username or ""
+            password = self.password or ""
+
             auth_data = bytearray([1])
-            auth_data.append(len(self.username))
-            auth_data.extend(self.username.encode('utf-8'))
-            auth_data.append(len(self.password))
-            auth_data.extend(self.password.encode('utf-8'))
+            auth_data.append(len(username))
+            auth_data.extend(username.encode("utf-8"))
+            auth_data.append(len(password))
+            auth_data.extend(password.encode("utf-8"))
             s.send(auth_data)
             
             auth_resp = s.recv(2)
@@ -1235,17 +1239,21 @@ class Socks5Proxy:
             # ipv4
             ip_port = s.recv(6)
             ipaddr  = str(ip_address(ip_port[:-2]))
-            port    = int.from_bytes(ip_port[-2:])
+            port    = int.from_bytes(ip_port[-2:], byteorder='big')
         elif response[3] == 4:
             # ipv6
             ip_port = s.recv(18)
             ipaddr  = str(ip_address(ip_port[:-2]))
-            port    = int.from_bytes(ip_port[-2:])
+            port    = int.from_bytes(ip_port[-2:], byteorder='big')
         elif response[3] == 3:
             # host
-            host_len = int.from_bytes(s.recv(1))
+            host_len = int.from_bytes(s.recv(1), byteorder='big')
             ipaddr   = s.recv(host_len).decode('utf-8')
             port    = int.from_bytes(s.recv(2), byteorder='big')
+        else:
+            raise Socks5ProxyError(
+                Socks5ProxyError.ERR_SERVER_ADDRESS_TYPE_NOT_SUPPORTED
+            )
 
         return s, (ipaddr, port)
 
@@ -1267,6 +1275,330 @@ class Socks5Proxy:
 
         data.extend(int.to_bytes(port, 2, byteorder='big'))
         return data
+
+
+class AsyncSocks5MudClientProtocol(MudClientProtocol):
+    """
+    异步SOCKS5代理握手协议。
+
+    该协议先与SOCKS5代理服务器完成协商/认证/CONNECT，成功后再切换到
+    MudClientProtocol 的TELNET/MUD协议处理。
+    """
+
+    _SOCKS5_VERSION = 5
+    _SOCKS5_CMD_CONNECT = 1
+    _SOCKS5_RSV = 0
+    _SOCKS5_ATYP_IPV4 = 1
+    _SOCKS5_ATYP_DOMAIN = 3
+    _SOCKS5_ATYP_IPV6 = 4
+    _SOCKS5_AUTH_NO_AUTH = 0
+    _SOCKS5_AUTH_USERNAME_PASSWORD = 2
+    _SOCKS5_AUTH_VERSION = 1
+
+    def __init__(
+        self,
+        session,
+        target_host: str,
+        target_port: int,
+        proxy: str,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(session, *args, **kwargs)
+
+        self._proxy = Socks5Proxy(proxy)
+        self._target_host = target_host
+        self._target_port = target_port
+
+        self._proxy_buffer = bytearray()
+        self._proxy_state = "wait_method_select"
+        self._proxy_reply_atyp: Optional[int] = None
+        self._proxy_domain_len = 0
+        self._proxy_error: Optional[Exception] = None
+        self._proxy_timeout = kwargs.get("socks5_timeout", 3)
+        self._proxy_timeout_handle = None
+
+        self.socks5_handshake_pending = True
+
+    def connection_made(self, transport: BaseTransport) -> None:
+        self._transport = transport
+
+        # 发送方法协商：声明支持无认证和用户名密码认证
+        self._transport_write(
+            bytes(
+                [
+                    self._SOCKS5_VERSION,
+                    2,
+                    self._SOCKS5_AUTH_NO_AUTH,
+                    self._SOCKS5_AUTH_USERNAME_PASSWORD,
+                ]
+            )
+        )
+        self._refresh_timeout()
+
+    def connection_lost(self, exc) -> None:
+        self._cancel_timeout()
+
+        if not self.socks5_handshake_pending:
+            super().connection_lost(exc)
+            return
+
+        self.connected = False
+
+        proxy_exc = exc or self._proxy_error
+        if proxy_exc is None:
+            self.session.feed_eof()
+        else:
+            self.session.set_exception(proxy_exc)
+
+        if self._transport:
+            self._transport.close()
+            self._transport = None
+
+        if self.on_connection_lost and callable(self.on_connection_lost):
+            self.on_connection_lost(self)
+
+    def data_received(self, data: bytes) -> None:
+        if not self.socks5_handshake_pending:
+            super().data_received(data)
+            return
+
+        # SOCKS5 握手阶段数据统一进入缓冲，按状态机解析
+        self._proxy_buffer.extend(data)
+        self._refresh_timeout()
+
+        try:
+            while self.socks5_handshake_pending:
+                if self._proxy_state == "wait_method_select":
+                    response = self._read_exact(2)
+                    if response is None:
+                        break
+                    self._handle_method_select_response(response)
+
+                elif self._proxy_state == "wait_auth_response":
+                    response = self._read_exact(2)
+                    if response is None:
+                        break
+                    self._handle_auth_response(response)
+
+                elif self._proxy_state == "wait_connect_response_head":
+                    response = self._read_exact(4)
+                    if response is None:
+                        break
+                    self._handle_connect_response_head(response)
+
+                elif self._proxy_state == "wait_connect_response_domain_len":
+                    response = self._read_exact(1)
+                    if response is None:
+                        break
+                    self._proxy_domain_len = response[0]
+                    self._proxy_state = "wait_connect_response_addr"
+
+                elif self._proxy_state == "wait_connect_response_addr":
+                    if self._proxy_reply_atyp == self._SOCKS5_ATYP_IPV4:
+                        need = 6
+                    elif self._proxy_reply_atyp == self._SOCKS5_ATYP_IPV6:
+                        need = 18
+                    elif self._proxy_reply_atyp == self._SOCKS5_ATYP_DOMAIN:
+                        need = self._proxy_domain_len + 2
+                    else:
+                        raise Socks5ProxyError(
+                            Socks5ProxyError.ERR_SERVER_ADDRESS_TYPE_NOT_SUPPORTED
+                        )
+
+                    response = self._read_exact(need)
+                    if response is None:
+                        break
+                    self._handle_connect_response_addr(response)
+
+                else:
+                    raise RuntimeError(
+                        Settings.gettext("msg_socks5_unknown_state", self._proxy_state)
+                    )
+
+            if not self.socks5_handshake_pending and self._proxy_buffer:
+                payload = bytes(self._proxy_buffer)
+                self._proxy_buffer.clear()
+                # 握手结束后，遗留数据交给MUD协议处理
+                super().data_received(payload)
+
+        except Exception as ex:
+            self._abort_proxy(ex)
+
+    def _read_exact(self, size: int) -> Optional[bytes]:
+        if len(self._proxy_buffer) < size:
+            return None
+
+        data = bytes(self._proxy_buffer[:size])
+        del self._proxy_buffer[:size]
+        return data
+
+    def _handle_method_select_response(self, response: bytes) -> None:
+        # 代理端选择了认证方式
+        if response[0] != self._SOCKS5_VERSION:
+            raise Socks5ProxyError(
+                Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR,
+                status_code=response[0],
+            )
+
+        method = response[1]
+        if method == self._SOCKS5_AUTH_NO_AUTH:
+            # 无认证直接发起 CONNECT
+            self._send_connect_request()
+            self._proxy_state = "wait_connect_response_head"
+            return
+
+        if method == self._SOCKS5_AUTH_USERNAME_PASSWORD:
+            if not self._proxy.requires_auth:
+                raise Socks5ProxyError(
+                    Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS
+                )
+            # 用户名密码认证
+            self._send_auth_request()
+            self._proxy_state = "wait_auth_response"
+            return
+
+        raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_REQUIRED_NO_CREDENTIALS)
+
+    def _send_auth_request(self) -> None:
+        # 构造 RFC1929 用户名密码认证请求
+        username = self._proxy.username or ""
+        password = self._proxy.password or ""
+
+        auth_data = bytearray([self._SOCKS5_AUTH_VERSION])
+        auth_data.append(len(username))
+        auth_data.extend(username.encode("utf-8"))
+        auth_data.append(len(password))
+        auth_data.extend(password.encode("utf-8"))
+
+        self._transport_write(bytes(auth_data))
+
+    def _handle_auth_response(self, response: bytes) -> None:
+        # 认证失败直接终止
+        if response[1] != 0:
+            raise Socks5ProxyError(Socks5ProxyError.ERR_AUTH_FAILED)
+
+        self._send_connect_request()
+        self._proxy_state = "wait_connect_response_head"
+
+    def _send_connect_request(self) -> None:
+        # 发送 CONNECT 请求
+        request = bytearray(
+            [
+                self._SOCKS5_VERSION,
+                self._SOCKS5_CMD_CONNECT,
+                self._SOCKS5_RSV,
+            ]
+        )
+        request.extend(self._proxy.get_hostport_bytes(self._target_host, self._target_port))
+        self._transport_write(bytes(request))
+
+    def _handle_connect_response_head(self, response: bytes) -> None:
+        # 解析 CONNECT 响应头
+        if response[0] != self._SOCKS5_VERSION:
+            raise Socks5ProxyError(
+                Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR,
+                status_code=response[0],
+            )
+
+        status_code = response[1]
+        if status_code != 0:
+            if status_code in (
+                Socks5ProxyError.ERR_SERVER_GENERAL_FAILURE,
+                Socks5ProxyError.ERR_SERVER_CONNECTION_NOT_ALLOWED,
+                Socks5ProxyError.ERR_SERVER_NETWORK_UNREACHABLE,
+                Socks5ProxyError.ERR_SERVER_HOST_UNREACHABLE,
+                Socks5ProxyError.ERR_SERVER_CONNECTION_REFUSED,
+                Socks5ProxyError.ERR_SERVER_TTL_EXPIRED,
+                Socks5ProxyError.ERR_SERVER_COMMAND_NOT_SUPPORTED,
+                Socks5ProxyError.ERR_SERVER_ADDRESS_TYPE_NOT_SUPPORTED,
+            ):
+                raise Socks5ProxyError(status_code)
+
+            raise Socks5ProxyError(
+                Socks5ProxyError.ERR_SERVER_UNKNOWN_ERROR,
+                status_code=status_code,
+            )
+
+        self._proxy_reply_atyp = response[3]
+        if self._proxy_reply_atyp == self._SOCKS5_ATYP_DOMAIN:
+            self._proxy_state = "wait_connect_response_domain_len"
+        else:
+            self._proxy_state = "wait_connect_response_addr"
+
+    def _handle_connect_response_addr(self, response: bytes) -> None:
+        # 读取代理返回的绑定地址与端口
+        if self._proxy_reply_atyp == self._SOCKS5_ATYP_IPV4:
+            proxy_host = str(ip_address(response[:4]))
+            proxy_port = int.from_bytes(response[4:6], byteorder="big")
+        elif self._proxy_reply_atyp == self._SOCKS5_ATYP_IPV6:
+            proxy_host = str(ip_address(response[:16]))
+            proxy_port = int.from_bytes(response[16:18], byteorder="big")
+        else:
+            proxy_host = response[: self._proxy_domain_len].decode("utf-8")
+            proxy_port = int.from_bytes(response[-2:], byteorder="big")
+
+        self._extra["socks5_proxy"] = (self._proxy.proxy_host, self._proxy.proxy_port)
+        self._extra["socks5_bind"] = (proxy_host, proxy_port)
+        self._extra["socks5_target"] = (self._target_host, self._target_port)
+
+        self.socks5_handshake_pending = False
+        self._proxy_state = "connected"
+        self._cancel_timeout()
+
+        if self._transport is None:
+            raise ConnectionError(
+                Settings.gettext("msg_socks5_transport_closed_before_mud")
+            )
+
+        self.session._transport = self._transport
+        self.session._protocol = self
+        self.session._state = "RUNNING"
+
+        super().connection_made(cast(BaseTransport, self._transport))
+        self.session.info(Settings.gettext("msg_socks5_connect", proxy_host, proxy_port))
+        self.session.onConnected()
+
+    def _transport_write(self, data: bytes) -> None:
+        if self._transport is None:
+            raise ConnectionError(Settings.gettext("msg_socks5_transport_not_ready"))
+
+        transport = cast(Transport, self._transport)
+        transport.write(data)
+
+    def _abort_proxy(self, ex: Exception) -> None:
+        self._proxy_error = ex
+        self._cancel_timeout()
+        # 失败时记录原因并关闭连接
+        self.log.warning(Settings.gettext("msg_socks5_handshake_failed", ex))
+        if self._transport:
+            self._transport.close()
+
+    def _refresh_timeout(self) -> None:
+        if self.socks5_handshake_pending:
+            self._cancel_timeout()
+            self._proxy_timeout_handle = self.session.loop.call_later(
+                self._proxy_timeout, self._on_proxy_timeout
+            )
+
+    def _cancel_timeout(self) -> None:
+        if self._proxy_timeout_handle:
+            self._proxy_timeout_handle.cancel()
+            self._proxy_timeout_handle = None
+
+    def _on_proxy_timeout(self) -> None:
+        if not self.socks5_handshake_pending:
+            return
+
+        self._abort_proxy(
+            TimeoutError(
+                Settings.gettext(
+                    "msg_socks5_handshake_timeout",
+                    self._proxy_timeout,
+                    self._proxy_state,
+                )
+            )
+        )
 
 
         

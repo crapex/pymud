@@ -36,7 +36,7 @@ from .objects import (
     Timer,
     Trigger,
 )
-from .protocol import MudClientProtocol, Socks5Proxy
+from .protocol import AsyncSocks5MudClientProtocol, MudClientProtocol, Socks5Proxy
 from .settings import Settings
 
 
@@ -271,30 +271,48 @@ class Session:
                 encoding_errors=Settings.server["encoding_errors"],
             )
 
+        def _proxy_protocol_factory(proxy_addr: str):
+            return AsyncSocks5MudClientProtocol(
+                self,
+                target_host=self.host,
+                target_port=self.port,
+                proxy=proxy_addr,
+                socks5_timeout=3,
+                onDisconnected=self.onDisconnected,
+                encoding=self.encoding,
+                encoding_errors=Settings.server["encoding_errors"],
+            )
+
         try:
             if proxy:
                 sock5proxy = Socks5Proxy(proxy)
-                socket, (ip, port) = sock5proxy.connect(self.host, self.port)
-                self.info(Settings.gettext("msg_socks5_connect", ip, port))
-
-                transport, protocol = await self.loop.create_connection(
-                    _protocol_factory, sock = socket
+                await self.loop.create_connection(
+                    lambda: _proxy_protocol_factory(proxy),
+                    sock5proxy.proxy_host,
+                    sock5proxy.proxy_port,
                 )
             elif local_addr:
                 transport, protocol = await self.loop.create_connection(
                     _protocol_factory, self.host, self.port, local_addr = (local_addr, 0)
                 )
+
+                self._transport = transport
+                self._protocol = protocol
+                self._state = "RUNNING"
+                # self.initialize()
+
+                self.onConnected()
             else:
                 transport, protocol = await self.loop.create_connection(
                     _protocol_factory, self.host, self.port
-                )               
+                )
 
-            self._transport = transport
-            self._protocol = protocol
-            self._state = "RUNNING"
-            # self.initialize()
+                self._transport = transport
+                self._protocol = protocol
+                self._state = "RUNNING"
+                # self.initialize()
 
-            self.onConnected()
+                self.onConnected()
 
         except Exception as ex:
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
