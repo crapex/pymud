@@ -41,8 +41,7 @@ dependencies = [
   "wcwidth",
   "pyperclip",
   "pygments",
-  "prompt-toolkit>=3.0.51",
-  "recommonmark>=0.7.1",
+  "prompt-toolkit>=3.0.51"
 ]
 
 [project.urls]  # Optional

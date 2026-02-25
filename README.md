@@ -12,7 +12,7 @@
 + 交流QQ群：554672580
 
 
-### 北大侠客行Mud (www.pkuxkx.net)，最好的中文Mud游戏！
+### 北大侠客行Mud ( https://www.pkuxkx.net )，最好玩的中文MUD游戏！
 ### PyMUD是我为了更好的玩北大侠客行，特意自行开发的MUD客户端。PyMUD具有以下特点：
 + 原生Python开发，除 `prompt-toolkit <https://python-prompt-toolkit.readthedocs.io>` 及其依赖库 wcwidth, pygments, pyperclip 外，不需要其他第三方库支持
 + 原生Python的asyncio实现的通信协议处理，支持async/await语法在脚本中直接应用，脚本实现的同步异步两种模式由你自己选择
