@@ -342,10 +342,9 @@ class BaseObject:
     def __init__(self, session, *args, **kwargs):
         from .session import Session
 
-        if isinstance(session, Session):
-            self.session = session
-        else:
-            assert Settings.gettext("exception_session_type_fail")
+        assert isinstance(session, Session), Settings.gettext("exception_session_type_fail")
+        self.session = session
+
 
         self._enabled = True  # give a default value
         self.log = logging.getLogger(f"pymud.{self.__class__.__name__}")

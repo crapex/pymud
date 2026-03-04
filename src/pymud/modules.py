@@ -34,9 +34,9 @@ class ModuleInfo:
 
     def __init__(self, module_name: str, session):
         from .session import Session
+        assert isinstance(session, Session), Settings.gettext("exception_session_type_fail")
 
-        if isinstance(session, Session):
-            self.session = session
+        self.session = session
         self._name = module_name
         self._ismainmodule = False
         self.load()
@@ -170,8 +170,9 @@ class IConfigBase(metaclass=PymudMeta):
         if session is None and "session" in kwargs:
             session = kwargs.pop("session")
 
-        if isinstance(session, Session):
-            self.session = session
+        assert isinstance(session, Session), Settings.gettext("exception_session_type_fail")
+        self.session = session
+
         self.__inline_objects__ = DotDict()
 
         if hasattr(self, "_decorator_funcs"):
