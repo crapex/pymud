@@ -39,12 +39,6 @@
 
 ## UPDATE HISTORIES
 
-### 0.22.5 (Not Released Yet)
-
-+ New Feature: Add Module Cache Mechanism, when multiple sessions share the same module, it will only be loaded once, and subsequent sessions will use the cached module.
-+ Bug Fix: Fix the incorrect import of recommark.
-
-
 ### 0.22.4 (2026-02-24)
 
 + New Features:

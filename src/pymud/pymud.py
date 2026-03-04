@@ -135,7 +135,6 @@ class PyMudApp:
 
         self._background_tasks = set()
         self._mouse_support = True
-        self._modules_cache = DotDict()
         self._plugins = DotDict()  # 增加 插件 字典
         self._globals = DotDict()  # 增加所有session使用的全局变量
         self._onTimerCallbacks = dict()
@@ -1657,11 +1656,6 @@ class PyMudApp:
     def plugins(self):
         "所有已加载的插件列表，快捷点访问器"
         return self._plugins
-
-    @property
-    def modules_cache(self):
-        "模块缓存，快捷点访问器"
-        return self._modules_cache
 
     def show_message(self, title, text, modal=True):
         "显示一个消息对话框"

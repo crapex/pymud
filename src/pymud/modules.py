@@ -34,36 +34,19 @@ class ModuleInfo:
 
     def __init__(self, module_name: str, session):
         from .session import Session
-        assert isinstance(session, Session), "session must be a Session instance"
 
-        self.session = session
-        self._modules_cache = session.application.modules_cache
-
+        if isinstance(session, Session):
+            self.session = session
         self._name = module_name
         self._ismainmodule = False
         self.load()
 
     def _load(self, reload=False):
         result = True
-        if self._name in self._modules_cache.keys():
-            module = self._modules_cache[self._name]
-            if reload:
-                module = importlib.reload(module)
-
-            self._module = module
+        if reload:
+            self._module = importlib.reload(self._module)
         else:
-            if reload:
-                self._module = importlib.reload(self._module)
-            else:
-                self._module = importlib.import_module(self.name)
-
-        self._modules_cache[self._name] = self._module
-
-        # if reload:
-        #     self._module = importlib.reload(self._module)
-        # else:
-        #     self._module = importlib.import_module(self.name)
-        
+            self._module = importlib.import_module(self.name)
         self._config = {}
         for attr_name in dir(self._module):
             attr = getattr(self._module, attr_name)
