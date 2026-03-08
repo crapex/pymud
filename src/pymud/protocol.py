@@ -207,8 +207,8 @@ class MudClientProtocol(Protocol):
         # self._waiter_connected.set_result(True)
 
     def connection_lost(self, exc) -> None:
-        # if not self.connected:
-        #     return
+        if not self.connected:
+            return
 
         self.connected = False
 
