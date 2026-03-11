@@ -664,6 +664,10 @@ class Session:
             self._line_count += 1
             self.log.log(self.newline_cli)
 
+        # 调整屏幕刷新时机，减少屏幕刷新次数，以降低CPU/GPU占用
+        if self == self.application.current_session:
+            self.application.invalidate()
+
     def feed_data(self, data) -> None:
         """
         由协议对象调用，将收到的远程数据加入会话缓冲。永远只会传递1个字节的数据，以bytes形式。 **脚本中无需调用。**

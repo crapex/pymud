@@ -778,7 +778,9 @@ class SessionBuffer(BufferBase):
                 self._appendLine(line, True)
 
             self._appendLine(lines[-1], newline_after_append)
-        get_app().invalidate()
+        
+        # 屏幕刷新交给Session控制，Buffer不处理这些
+        #get_app().invalidate()
 
     @property
     def lineCount(self) -> int:
