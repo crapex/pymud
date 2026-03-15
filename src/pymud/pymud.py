@@ -133,6 +133,7 @@ class PyMudApp:
                     Settings.auto_chars.clear()
                     Settings.auto_chars.extend(cfg_data[key])
 
+        self.in_background = False
         self._background_tasks = set()
         self._mouse_support = True
         self._plugins = DotDict()  # 增加 插件 字典
@@ -285,6 +286,7 @@ class PyMudApp:
     async def onSystemTimerTick(self):
         while True:
             await asyncio.sleep(1)
+            asyncio.create_task(self.is_tmux_background())
             self.app.invalidate()
 
             # Create a copy of values to avoid RuntimeError when dict is modified during iteration
@@ -1794,6 +1796,41 @@ class PyMudApp:
         for session in self.sessions.values():
             plugin.onSessionCreate(session)
 
+
+    async def is_tmux_background(self):
+        "判断是否在tmux后台运行"
+        if 'TMUX' not in os.environ:
+            self.in_background = False
+            return self.in_background
+        
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                'tmux', 'display-message', '-p', '#{session_attached}:#{window_active}',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=1.0)
+            output = stdout.decode().strip()
+            if not output:
+                self.in_background = False
+                return False
+            
+            parts = output.split(':')
+            if len(parts) != 2:
+                self.in_background = False
+                return False
+            
+            session_attached, window_active = parts
+            if session_attached == '0':
+                self.in_background = True
+                return True
+            if window_active == '0':
+                self.in_background = True
+                return True
+            return False
+        except (asyncio.TimeoutError, FileNotFoundError, ValueError, OSError):
+            self.in_background = False
+            return False
 
 def startApp(cfg_data=None):
     app = PyMudApp(cfg_data)

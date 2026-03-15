@@ -620,6 +620,11 @@ class Session:
         "本会话的GMCP辅助访问器"
         return self._gmcp
 
+    def invalidate(self):
+        "仅当本会话为前台时，刷新窗口显示"
+        if (self == self.application.current_session) and not self.application.in_background:
+            self.application.invalidate()
+
     def get_status(self):
         "返回状态窗口内容的真实函数。 **脚本中无需调用。**"
         text = Settings.gettext("msg_default_statuswindow", self.name, self.connected)
@@ -665,8 +670,7 @@ class Session:
             self.log.log(self.newline_cli)
 
         # 调整屏幕刷新时机，减少屏幕刷新次数，以降低CPU/GPU占用
-        if self == self.application.current_session:
-            self.application.invalidate()
+        self.invalidate()
 
     def feed_data(self, data) -> None:
         """
