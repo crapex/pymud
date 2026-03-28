@@ -676,7 +676,9 @@ class PyMudApp:
 
     def invalidate(self):
         "刷新显示界面"
-        self.app.invalidate()
+        #if not self.in_background:
+        if True:
+            self.app.invalidate()
 
     def scroll(self, lines=1):
         "内容滚动指定行数，小于0为向上滚动，大于0为向下滚动"
@@ -743,7 +745,7 @@ class PyMudApp:
         else:
             self.console.move_split(-1)
 
-        self.invalidate()
+        self.app.invalidate()
 
     def copy_selection(self, event: KeyPressEvent, raw: bool = False) -> None:
         """快捷键Ctrl+C/Ctrl+R: 复制选择内容。根据按键不同选择文本复制方式和RAW复制方式"""
@@ -1571,7 +1573,10 @@ class PyMudApp:
             if self.current_session:
                 self.current_session.last_command = cmd_line
 
-        if cmd_line.startswith("#session"):
+        if cmd_line.startswith(Settings.client["noparser"]):
+            self.current_session.writeline(cmd_line[1:])
+
+        elif cmd_line.startswith("#session"):
             cmd_tuple = cmd_line[1:].split()
             self.handle_session(*cmd_tuple[1:])
 

@@ -622,7 +622,7 @@ class Session:
 
     def invalidate(self):
         "仅当本会话为前台时，刷新窗口显示"
-        if (self == self.application.current_session) and not self.application.in_background:
+        if self == self.application.current_session:
             self.application.invalidate()
 
     def get_status(self):

@@ -72,6 +72,7 @@ class Settings:
         "naws_height": 40,  # 客户端NAWS高度
         "newline": "\n",  # 客户端换行符
         "tabstop": 8,  # 制表符改成空格
+        "noparser": "/", # 当以此字符开头时，输入行命令不进行任何处理，原样发送到服务器
         "seperator": ";",  # 多个命令分隔符（默认;）
         "appcmdflag": "#",  # app命令标记（默认#）
         "var_eval": "@",  # 变量取值标记
