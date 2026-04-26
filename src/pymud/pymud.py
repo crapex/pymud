@@ -62,6 +62,7 @@ from .modules import Plugin
 from .objects import CodeBlock
 from .session import Session
 from .settings import Settings
+from pymud import settings
 
 
 class STATUS_DISPLAY(Enum):
@@ -175,6 +176,8 @@ class PyMudApp:
             lambda event: webbrowser.open(Settings.__website__)
         )
         self.keybindings.add(Keys.F2, is_global=True)(self.toggle_mousesupport)
+        self.keybindings.add(Keys.F3, is_global=True)(self.toggle_verbatim)
+        self.keybindings.add(Keys.F4, is_global=True)(self.toggle_lazymode)
 
         used_keys = [
             Keys.PageUp,
@@ -193,6 +196,8 @@ class PyMudApp:
             Keys.Delete,
             Keys.F1,
             Keys.F2,
+            Keys.F3,
+            Keys.F4,
         ]
 
         for key, binding in Settings.keys.items():
@@ -677,7 +682,7 @@ class PyMudApp:
     def invalidate(self):
         "刷新显示界面"
         #if not self.in_background:
-        if True:
+        if not Settings.client["lazy_mode"]:
             self.app.invalidate()
 
     def scroll(self, lines=1):
@@ -798,6 +803,14 @@ class PyMudApp:
             self.app.renderer.output.enable_mouse_support()
         else:
             self.app.renderer.output.disable_mouse_support()
+
+    def toggle_verbatim(self, event: KeyPressEvent):
+        """快捷键F3: 切换verbatim模式。用于向服务器发送特殊字符不会被本地解释"""
+        Settings.client["verbatim"] = not Settings.client["verbatim"] 
+
+    def toggle_lazymode(self, event: KeyPressEvent):
+        """快捷键F4: 切换lazy_mode模式，此时服务器数据不是实时刷新，而是每秒刷新，用于后台挂机时减少CPU占用"""
+        Settings.client["lazy_mode"] = not Settings.client["lazy_mode"] 
 
     def copy(self, raw=False):
         """
@@ -1315,7 +1328,13 @@ class PyMudApp:
 
     def get_statusbar_right_text(self):
         "状态栏右侧内容"
-        con_str, mouse_support, tri_status, beautify = "", "", "", ""
+        verbatim, lazymode, con_str, mouse_support, tri_status, beautify = "", "", "", "", "", ""
+        if Settings.client["verbatim"]:
+            verbatim = "VERB" + " "
+
+        if Settings.client["lazy_mode"]:
+            lazymode = "LAZY" + " "
+
         if not Settings.client["beautify"]:
             beautify = Settings.gettext("status_nobeautify") + " "
 
@@ -1376,7 +1395,9 @@ class PyMudApp:
                         "status_connected"
                     ) + ": {:.0f}{}".format(sec, Settings.gettext("Second"))
 
-        return "{}{}{}{} {} {} ".format(
+        return "{}{}{}{}{}{} {} {} ".format(
+            verbatim,
+            lazymode,
             beautify,
             mouse_support,
             tri_status,
@@ -1569,40 +1590,96 @@ class PyMudApp:
         "命令行回车按键处理"
         cmd_line = buffer.text
 
-        if (len(cmd_line) >= 1) and (cmd_line[0] != Settings.client["appcmdflag"]):
-            if self.current_session:
-                self.current_session.last_command = cmd_line
-
-        if cmd_line.startswith(Settings.client["noparser"]):
-            self.current_session.writeline(cmd_line[1:])
-
-        elif cmd_line.startswith("#session"):
+        # #session、#exit命令不在意是否有会话
+        if cmd_line.startswith("#session"):
             cmd_tuple = cmd_line[1:].split()
             self.handle_session(*cmd_tuple[1:])
 
-        else:
-            if self.current_session:
-                if len(cmd_line) == 0:
-                    self.current_session.writeline("")
+        elif cmd_line == "#exit":
+            self.act_exit()
 
-                else:
-                    try:
-                        self.current_session.log.log(
-                            f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n"
-                        )
+        # 在会话下处理命令
+        elif self.current_session:
+            # 空白回车直接向服务器发送回车
+            if len(cmd_line) == 0:
+                self.current_session.writeline("")
+            
+            # verbatim 模式下，直接发送命令
+            elif Settings.client["verbatim"]:
+                self.current_session.last_command = cmd_line
+                self.current_session.writeline(cmd_line)
 
-                        cb = CodeBlock(cmd_line)
-                        cb.execute(self.current_session)
-                    except Exception as e:
-                        self.current_session.warning(e)
-                        self.current_session.exec_command(cmd_line)
+            # 以noparser开头时，直接发送命令
+            elif cmd_line.startswith(Settings.client["noparser"]):
+                self.current_session.last_command = cmd_line[1:]
+                self.current_session.writeline(cmd_line[1:])
+
             else:
-                if cmd_line == "#exit":
-                    self.act_exit()
-                elif (cmd_line == "#close") and self.showLog:
-                    self.act_close_session()
-                else:
-                    self.set_status(Settings.gettext("msg_no_session"))
+                # 系统命令（默认#开头）不保存为上次命令
+                if not cmd_line.startswith(Settings.client["appcmdflag"]):
+                    self.current_session.last_command = cmd_line
+
+                try:
+                    self.current_session.log.log(
+                        f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n"
+                    )
+
+                    cb = CodeBlock(cmd_line)
+                    cb.execute(self.current_session)
+                except Exception as e:
+                    self.current_session.warning(e)
+                    self.current_session.exec_command(cmd_line)
+
+        # 在LOG模式下处理命令，此时特殊支处理的仅 #close 命令，其他命令时，提示无会话
+        elif self.showLog:
+            if cmd_line == "#close":
+                self.act_close_session()
+            else:
+                self.set_status(Settings.gettext("msg_no_session"))
+
+        # 应该没有需要处理的了，仅提示无会话
+        else:
+            self.set_status(Settings.gettext("msg_no_session"))
+
+
+        # # 关于 last_command 的保存，可能还需要和新的 noparser / verbatim 一并处理
+        # if (len(cmd_line) >= 1) and (cmd_line[0] != Settings.client["appcmdflag"]):
+        #     if self.current_session:
+        #         self.current_session.last_command = cmd_line
+
+        # if Settings.client["verbatim"]:
+        #     self.current_session.writeline(cmd_line)
+
+        # elif cmd_line.startswith(Settings.client["noparser"]):
+        #     self.current_session.writeline(cmd_line[1:])
+
+        # elif cmd_line.startswith("#session"):
+        #     cmd_tuple = cmd_line[1:].split()
+        #     self.handle_session(*cmd_tuple[1:])
+
+        # else:
+        #     if self.current_session:
+        #         if len(cmd_line) == 0:
+        #             self.current_session.writeline("")
+
+        #         else:
+        #             try:
+        #                 self.current_session.log.log(
+        #                     f"{Settings.gettext('msg_cmdline_input')} {cmd_line}\n"
+        #                 )
+
+        #                 cb = CodeBlock(cmd_line)
+        #                 cb.execute(self.current_session)
+        #             except Exception as e:
+        #                 self.current_session.warning(e)
+        #                 self.current_session.exec_command(cmd_line)
+        #     else:
+        #         if cmd_line == "#exit":
+        #             self.act_exit()
+        #         elif (cmd_line == "#close") and self.showLog:
+        #             self.act_close_session()
+        #         else:
+        #             self.set_status(Settings.gettext("msg_no_session"))
 
         # 配置：命令行内容保留
         if Settings.client["remain_last_input"]:

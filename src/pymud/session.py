@@ -2677,6 +2677,8 @@ class Session:
             for line in lines:
                 self.writetobuffer(line, newline=True)
 
+            del lines
+
         elif len(args) == 1:
             if args[0].endswith("*"):
                 filter_vars = DotDict()
@@ -2691,6 +2693,8 @@ class Session:
 
                 for line in lines:
                     self.writetobuffer(line, newline=True)
+                
+                del lines
 
             elif args[0].startswith("*"):
                 filter_vars = DotDict()
@@ -2704,6 +2708,8 @@ class Session:
                 )
                 for line in lines:
                     self.writetobuffer(line, newline=True)
+                
+                del lines
 
             else:  # if args[0] in self._variables.keys():
                 obj = self.getVariable(args[0])
@@ -2714,6 +2720,8 @@ class Session:
 
                 for line in lines:
                     self.writetobuffer(line, newline=True)
+                
+                del lines
 
             # else:
             #    self.warning(Settings.gettext("msg_no_object", args[0], Settings.gettext("variable")))
@@ -2765,6 +2773,8 @@ class Session:
 
             for line in lines:
                 self.writetobuffer(line, newline=True)
+                
+            del lines
 
         elif len(args) == 1:
             var = args[0]
@@ -2776,6 +2786,8 @@ class Session:
 
                 for line in lines:
                     self.writetobuffer(line, newline=True)
+                
+                del lines
             else:
                 self.warning(
                     Settings.gettext(
@@ -2838,6 +2850,8 @@ class Session:
                 self.writetobuffer("  %r" % objs[id], newline=True)
 
             self.writetobuffer("=" * width, newline=True)
+
+            del display_objs
 
         elif len(args) == 2:
             if args[0].startswith(">"):
