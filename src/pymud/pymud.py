@@ -1090,7 +1090,6 @@ class PyMudApp:
                     self.statusView.text = ""
 
                 import gc
-
                 gc.collect()
 
         if name is None:

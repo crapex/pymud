@@ -237,6 +237,13 @@ class Session:
     def __del__(self):
         self.clean()
         self.closeLoggers()
+        del self._triggers
+        del self._aliases
+        del self._commands
+        del self._timers
+        del self._gmcp
+        del self._variables
+        del self.buffer
 
     def initialize(self):
         "初始化Session有关对象。 **无需脚本调用。**"
