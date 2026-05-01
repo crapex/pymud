@@ -149,7 +149,6 @@ class Session:
         self.local_address = local_addr
         self.proxy = proxy
 
-
         self.name = name
         self._transport = None
         self._protocol = None
@@ -2396,8 +2395,10 @@ class Session:
         """
 
         if not self.connected:
+            # 不带参数，表示使用原设定参数进行访问
             if len(code.code) == 2:
-                self.open()
+                self.open(self.local_address, self.proxy)
+
             elif len(code.code) == 3:
                 param = code.code[2]
                 if param.startswith(">>>"):
@@ -2428,6 +2429,7 @@ class Session:
                             self.local_address = ip
                             self.proxy = None
                         self.open(local_addr = ip)
+
                 elif param.startswith("@"):
                     param = param[1:]
                     proxy = Settings.get_preset_proxy(param)
@@ -2438,12 +2440,14 @@ class Session:
                         self.local_address = None
                         self.proxy = proxy
                     self.open(proxy = proxy)
+
                 elif param.startswith("socks5://"):
                     socks5_proxy = param
                     if store:
                         self.local_address = None
                         self.proxy = socks5_proxy
                     self.open(proxy = socks5_proxy)
+
                 else:
                     from ipaddress import ip_address, AddressValueError
                     try:
