@@ -49,6 +49,7 @@
 + New Feature: Added "cmd_prefix" setting. When configured, command echo in the window or log records will display commands with this prefix. Default is empty, can be overridden via `cmd_prefix` in pymud.cfg. Also adjusted command display style to match the default info style.
 + Improvement: After executing commands like #var, temporary lists created are deleted using `del` to speed up memory release.
 + Improvement: When a session is closed, related objects in the session are cleared synchronously using `del`, and garbage collection is triggered programmatically (however, testing showed no significant effect on memory usage).
++ Bug Fix: Fixed the issue where after disconnecting, when you using #con, the default network configuration is used instead of the one you specified.
 
 ### 0.22.4 (2026-02-24)
 
