@@ -924,9 +924,9 @@ class Session:
             lines = line.split(self.seperator)
             for ln in lines:
                 if Settings.client["echo_input"]:
-                    self.writetobuffer(f"\x1b[32m{ln}\x1b[0m", True)
+                    self.writetobuffer(f"\x1b[48;5;22m\x1b[38;5;252m{Settings.client['cmd_prefix']}{ln}\x1b[0m", True)
                 else:
-                    self.log.log(f"\x1b[32m{ln}\x1b[0m\n")
+                    self.log.log(f"\x1b[48;5;22m\x1b[38;5;252m{Settings.client['cmd_prefix']}{ln}\x1b[0m\n")
 
                 self.record_command(line)
                 cmd = ln + self.newline
@@ -936,10 +936,10 @@ class Session:
 
         else:
             if Settings.client["echo_input"]:
-                self.writetobuffer(f"\x1b[32m{line}\x1b[0m", True)
+                self.writetobuffer(f"\x1b[48;5;22m\x1b[38;5;252m{Settings.client['cmd_prefix']}{line}\x1b[0m", True)
 
             else:
-                self.log.log(f"\x1b[32m{line}\x1b[0m\n")
+                self.log.log(f"\x1b[48;5;22m\x1b[38;5;252m{Settings.client['cmd_prefix']}{line}\x1b[0m\n")
 
             # 当输入空行命令后，本地强制新行
             if len(line) == 0:

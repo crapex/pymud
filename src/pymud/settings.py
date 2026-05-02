@@ -67,9 +67,8 @@ class Settings:
 
     client = {
         "verbatim": False,  # 是否启用verbatim模式. 当启用时，客户端会将所有发送到服务器的命令都原样发送，不进行任何处理.
-        "cmd_log_prefix": "",  # 命令日志前缀, 默认为空字符串. 该前缀会添加到所有发送到日志中记录下来的命令的开头.
         "lazy_mode": False,  # 是否启用懒模式. 当启用时，客户端不会在数据变化时自动刷新窗口，而改为定时刷新窗口
-        "lazy_interval": 1,  # 懒模式刷新间隔时间, 默认1秒
+        "cmd_prefix": "",  # 命令前缀, 默认为空字符串. 该前缀会添加到所有发送到窗口或日志中记录下来的命令的开头.
         "cursor": "BLINKING_BEAM",  # 光标形状
         "buffer_lines": 5000,  # 保留缓冲行数
         "naws_width": 150,  # 客户端NAWS宽度

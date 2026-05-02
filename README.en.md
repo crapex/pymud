@@ -39,6 +39,17 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.5 (2026-05-02)
+
++ New Feature: Added `invalidate` method to Session class. When called, it only triggers `PyMudApp.invalidate()` for refresh if the current session is the active session.
++ Note: For `session.application.invalidate()` calls in personal scripts, it is recommended to change to `session.invalidate()`. Because session refresh checks for foreground status, while application refresh forces a refresh.
++ New Feature: Added lazy mode. When lazy mode is enabled, even `PyMudApp.invalidate()` calls will not trigger display refresh. The system only refreshes when switching sessions or on a 1-second timer. This mode can be toggled with the F4 hotkey. In lazy mode, "LAZY" is displayed on the right side of the bottom status bar. This mode can be used to reduce CPU usage when running in the background.
++ New Feature: Added verbatim mode. When verbatim mode is enabled, all commands entered in the command line are sent directly to the server without any parsing. This mode can be toggled with the F3 hotkey. In verbatim mode, "VERB" is displayed on the right side of the bottom status bar.
++ New Feature: Added a non-parsing prefix "/". When this prefix is used at the beginning of a command line, all subsequent commands are sent directly to the server without any parsing. This prefix can be overridden via `noparser` in pymud.cfg. This prefix is equivalent to temporarily using verbatim mode.
++ New Feature: Added "cmd_prefix" setting. When configured, command echo in the window or log records will display commands with this prefix. Default is empty, can be overridden via `cmd_prefix` in pymud.cfg. Also adjusted command display style to match the default info style.
++ Improvement: After executing commands like #var, temporary lists created are deleted using `del` to speed up memory release.
++ Improvement: When a session is closed, related objects in the session are cleared synchronously using `del`, and garbage collection is triggered programmatically (however, testing showed no significant effect on memory usage).
+
 ### 0.22.4 (2026-02-24)
 
 + New Features:
