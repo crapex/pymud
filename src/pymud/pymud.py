@@ -1085,10 +1085,6 @@ class PyMudApp:
                     self.activate_session(new_sess)
                     # self.set_status(f"当前会话已切换为 {self.current_session.name}")
 
-                else:
-                    # 若不再有会话，清空下面的session_status的信息
-                    self.statusView.text = ""
-
                 import gc
                 gc.collect()
 
@@ -1412,6 +1408,9 @@ class PyMudApp:
         try:
             if self.current_session:
                 text = self.current_session.get_status()
+            else:
+                text = ""
+
         except Exception as e:
             text = f"{e}"
 
