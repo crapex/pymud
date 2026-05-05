@@ -1078,13 +1078,16 @@ class PyMudApp:
                 # self.consoleView.buffer = SessionBuffer()
                 self.consoleView.buffer = None
                 closesession = self.sessions.pop(name)
-                del closesession
+                
                 # self.set_status(f"会话 {name} 已关闭")
                 if len(self.sessions.keys()) > 0:
                     new_sess = list(self.sessions.keys())[0]
                     self.activate_session(new_sess)
                     # self.set_status(f"当前会话已切换为 {self.current_session.name}")
+                else:
+                    self.current_session = None
 
+                del closesession
                 import gc
                 gc.collect()
 
@@ -1408,8 +1411,6 @@ class PyMudApp:
         try:
             if self.current_session:
                 text = self.current_session.get_status()
-            else:
-                text = ""
 
         except Exception as e:
             text = f"{e}"
