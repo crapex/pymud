@@ -82,7 +82,7 @@ class Logger:
             else:
                 self._queue.put_nowait(None)
                 if self._thread:
-                    self._thread.join()
+                    self._thread.join(2)
                     self._thread = None
                 self._closeFile()
 

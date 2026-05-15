@@ -39,6 +39,12 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.6 (2026-05-15)
+
++ Bug Fix: Fixed the issue where the status window becomes unresponsive after closing all sessions.
++ Bug Fix: Fixed the issue where the program hangs or crashes when there are unclosed loggers.
+
+
 ### 0.22.5 (2026-05-02)
 
 + New Feature: Added `invalidate` method to Session class. When called, it only triggers `PyMudApp.invalidate()` for refresh if the current session is the active session.

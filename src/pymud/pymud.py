@@ -1230,6 +1230,9 @@ class PyMudApp:
                     for ss_name in con_sessions:
                         ss = self.sessions[ss_name]
                         ss.disconnect()
+                        # 增加日志记录器处置
+                        ss.clean()
+                        ss.closeLoggers()
 
                         # 增加延时等待确保会话关闭
                         wait_time = 0
@@ -1799,6 +1802,10 @@ class PyMudApp:
         asyncio.create_task(self._persistent_timer_tick())
         # self.create_background_task(self._persistent_timer_tick())
         await self.app.run_async(set_exception_handler=False)
+
+        # 退出时，首先处理所有Logger关闭，等待所有线程完成
+        for log in self.loggers.values():
+            log.enabled = False
 
         # 当应用退出时，运行插件销毁应用
         for plugin in self._plugins.values():
