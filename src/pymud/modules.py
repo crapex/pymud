@@ -10,7 +10,7 @@ from .settings import Settings
 class PymudMeta(type):
     def __new__(cls, name, bases, attrs):
         decorator_funcs = {}
-        for name, value in attrs.items():
+        for _, value in attrs.items():
             if hasattr(value, "__pymud_decorators__"):
                 decorator_funcs[value.__name__] = getattr(
                     value, "__pymud_decorators__", []

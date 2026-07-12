@@ -39,6 +39,11 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.7 (2026-07-12)
+
++ Bug Fix: Fixed the issue where #{sessionname} cannot change the current session.
++ Buf Fix: Change the names of some variables in modules.py to avoid ambiguity.
+
 ### 0.22.6 (2026-05-15)
 
 + Bug Fix: Fixed the issue where the status window becomes unresponsive after closing all sessions.

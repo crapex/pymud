@@ -1600,6 +1600,10 @@ class PyMudApp:
         elif cmd_line == "#exit":
             self.act_exit()
 
+        elif cmd_line[1:] in self.sessions.keys():
+            # 以#开头的会话名称，切换到该会话
+            self.activate_session(cmd_line[1:])
+
         # 在会话下处理命令
         elif self.current_session:
             # 空白回车直接向服务器发送回车
