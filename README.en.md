@@ -39,6 +39,12 @@
 
 ## UPDATE HISTORIES
 
+### 0.22.8 (2026-08-09)
+
++ Bug Fix: Fixed the issue where "#var" cannot be printed properly where the value of the variable has ANSI color code.
++ Bug Fix: Fixed the issue where "#var" cannot be printed properly where the key of the variable is a number.
++ Thanks @hhyzz for providing the bug fix code :)
+
 ### 0.22.7 (2026-07-12)
 
 + Bug Fix: Fixed the issue where #{sessionname} cannot change the current session.

@@ -1172,8 +1172,17 @@ class DStr(str):
     """增强的字符串类型，使用显示宽度进行对齐操作"""
 
     def __len__(self):
-        """返回字符串的显示宽度，而不是字符数量"""
-        return wcswidth(self.__str__())
+        """返回字符串的显示宽度，而不是字符数量
+        #return wcswidth(self.__str__())
+        注意: 字符串中若含有 ANSI 颜色等控制字符，wcswidth 会返回 -1，
+        导致 len() 抛出 ValueError。此处先剥离 ANSI 转义序列再计算宽度，
+        并对仍返回 -1 的情况兜底为 0。
+        """
+        from .session import Session
+        clean = Session.PLAIN_TEXT_REGX.sub("", self.__str__())
+        w = wcswidth(clean)
+        return w if w >= 0 else 0
+
 
     def ljust(self, width, fillchar=" "):
         """左对齐字符串，使用显示宽度进行计算"""

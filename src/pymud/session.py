@@ -2493,7 +2493,8 @@ class Session:
         self.disconnect()
 
     def getMaxLength(self, iter: Iterable):
-        return wcswidth(sorted(iter, key=lambda s: wcswidth(s), reverse=True)[0])
+        #return wcswidth(sorted(iter, key=lambda s: wcswidth(s), reverse=True)[0])
+        return len(DStr(sorted(iter, key=lambda s: len(DStr(s)), reverse=True)[0]))
 
     def splitByPrintableWidth(self, str, printable_length):
         strlist = []
